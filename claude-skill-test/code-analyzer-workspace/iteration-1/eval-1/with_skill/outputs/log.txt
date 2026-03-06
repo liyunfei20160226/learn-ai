@@ -1,0 +1,23 @@
+Analyzing directory: .
+Analysis completed!
+Scan directory: D:\dev\learn-ai\claude-skill-test
+Time taken: 33ms
+
+Summary statistics:
+  Total files: 12
+  Total lines: 1497
+  Code lines: 946
+  Comment lines: 278
+  Blank lines: 273
+  Total functions: 48
+
+Language distribution:
+  json: 5 files
+  python: 2 files
+  java: 1 files
+  go: 1 files
+  javascript: 1 files
+  typescript: 1 files
+  markdown: 1 files
+
+Detailed results saved to: code-analyzer-workspace/iteration-1/eval-1/with_skill/outputs/analysis.json

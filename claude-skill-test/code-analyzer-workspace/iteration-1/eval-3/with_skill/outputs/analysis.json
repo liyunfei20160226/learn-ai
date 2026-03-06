@@ -1,0 +1,167 @@
+{
+  "summary": {
+    "total_files": 14,
+    "total_lines": 1801,
+    "code_lines": 1250,
+    "comment_lines": 278,
+    "blank_lines": 273,
+    "total_functions": 48,
+    "analyzed_languages": {
+      "java": 1,
+      "go": 1,
+      "javascript": 1,
+      "json": 7,
+      "python": 2,
+      "typescript": 1,
+      "markdown": 1
+    }
+  },
+  "files": [
+    {
+      "file_path": "TestJava.java",
+      "language": "java",
+      "total_lines": 69,
+      "code_lines": 30,
+      "comment_lines": 26,
+      "blank_lines": 13,
+      "function_count": 5,
+      "error": null
+    },
+    {
+      "file_path": "test_go.go",
+      "language": "go",
+      "total_lines": 75,
+      "code_lines": 42,
+      "comment_lines": 17,
+      "blank_lines": 16,
+      "function_count": 7,
+      "error": null
+    },
+    {
+      "file_path": "test_javascript.js",
+      "language": "javascript",
+      "total_lines": 82,
+      "code_lines": 47,
+      "comment_lines": 21,
+      "blank_lines": 14,
+      "function_count": 8,
+      "error": null
+    },
+    {
+      "file_path": "test_output.json",
+      "language": "json",
+      "total_lines": 96,
+      "code_lines": 96,
+      "comment_lines": 0,
+      "blank_lines": 0,
+      "function_count": 0,
+      "error": null
+    },
+    {
+      "file_path": "test_python.py",
+      "language": "python",
+      "total_lines": 57,
+      "code_lines": 26,
+      "comment_lines": 15,
+      "blank_lines": 16,
+      "function_count": 6,
+      "error": null
+    },
+    {
+      "file_path": "test_typescript.ts",
+      "language": "typescript",
+      "total_lines": 98,
+      "code_lines": 51,
+      "comment_lines": 28,
+      "blank_lines": 19,
+      "function_count": 4,
+      "error": null
+    },
+    {
+      "file_path": "code-analyzer\\SKILL.md",
+      "language": "markdown",
+      "total_lines": 237,
+      "code_lines": 160,
+      "comment_lines": 27,
+      "blank_lines": 50,
+      "function_count": 0,
+      "error": null
+    },
+    {
+      "file_path": "code-analyzer\\evals\\evals.json",
+      "language": "json",
+      "total_lines": 23,
+      "code_lines": 23,
+      "comment_lines": 0,
+      "blank_lines": 0,
+      "function_count": 0,
+      "error": null
+    },
+    {
+      "file_path": "code-analyzer\\scripts\\analyzer.py",
+      "language": "python",
+      "total_lines": 742,
+      "code_lines": 453,
+      "comment_lines": 144,
+      "blank_lines": 145,
+      "function_count": 18,
+      "error": null
+    },
+    {
+      "file_path": "code-analyzer-workspace\\iteration-1\\eval-1\\eval_metadata.json",
+      "language": "json",
+      "total_lines": 6,
+      "code_lines": 6,
+      "comment_lines": 0,
+      "blank_lines": 0,
+      "function_count": 0,
+      "error": null
+    },
+    {
+      "file_path": "code-analyzer-workspace\\iteration-1\\eval-1\\with_skill\\outputs\\analysis.json",
+      "language": "json",
+      "total_lines": 147,
+      "code_lines": 147,
+      "comment_lines": 0,
+      "blank_lines": 0,
+      "function_count": 0,
+      "error": null
+    },
+    {
+      "file_path": "code-analyzer-workspace\\iteration-1\\eval-2\\eval_metadata.json",
+      "language": "json",
+      "total_lines": 6,
+      "code_lines": 6,
+      "comment_lines": 0,
+      "blank_lines": 0,
+      "function_count": 0,
+      "error": null
+    },
+    {
+      "file_path": "code-analyzer-workspace\\iteration-1\\eval-2\\with_skill\\outputs\\analysis.json",
+      "language": "json",
+      "total_lines": 157,
+      "code_lines": 157,
+      "comment_lines": 0,
+      "blank_lines": 0,
+      "function_count": 0,
+      "error": null
+    },
+    {
+      "file_path": "code-analyzer-workspace\\iteration-1\\eval-3\\eval_metadata.json",
+      "language": "json",
+      "total_lines": 6,
+      "code_lines": 6,
+      "comment_lines": 0,
+      "blank_lines": 0,
+      "function_count": 0,
+      "error": null
+    }
+  ],
+  "warnings": [],
+  "metadata": {
+    "scan_directory": "D:\\dev\\learn-ai\\claude-skill-test",
+    "scan_time": "2026-03-06 15:13:26",
+    "duration_ms": 20
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "expectations": [
+    {
+      "text": "输出应该是有效的JSON格式",
+      "passed": false,
+      "evidence": "输出是文本响应，不是JSON格式"
+    },
+    {
+      "text": "输出应该包含元数据（如扫描目录、时间）",
+      "passed": false,
+      "evidence": "输出没有结构化元数据"
+    },
+    {
+      "text": "输出应该包含语言分布信息",
+      "passed": false,
+      "evidence": "输出提到语言类型，但没有详细的分布统计"
+    },
+    {
+      "text": "输出应该包含详细的文件统计",
+      "passed": false,
+      "evidence": "输出提供估计值，但没有每个文件的详细统计"
+    }
+  ]
+}

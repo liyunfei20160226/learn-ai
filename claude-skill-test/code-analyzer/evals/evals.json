@@ -1,0 +1,94 @@
+{
+  "skill_name": "code-analyzer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "请分析当前目录的代码统计信息，给我一个详细的报告。",
+      "expected_output": "应该返回JSON格式的代码统计报告，包含汇总统计和每个文件的详细统计。报告应包括总文件数、总行数、代码行数、注释行数、空行数和函数总数。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "output_is_json",
+          "description": "输出应该是有效的JSON格式",
+          "type": "programmatic"
+        },
+        {
+          "name": "contains_summary_field",
+          "description": "JSON应该包含summary字段",
+          "type": "programmatic"
+        },
+        {
+          "name": "summary_has_total_files",
+          "description": "summary应该包含total_files字段",
+          "type": "programmatic"
+        },
+        {
+          "name": "summary_has_total_lines",
+          "description": "summary应该包含total_lines字段",
+          "type": "programmatic"
+        },
+        {
+          "name": "contains_files_array",
+          "description": "JSON应该包含files数组",
+          "type": "programmatic"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "统计一下这个项目的代码行数和函数数量。",
+      "expected_output": "应该返回代码统计信息，包括总行数、代码行数、注释行数、空行数和函数数量。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "output_is_json",
+          "description": "输出应该是有效的JSON格式",
+          "type": "programmatic"
+        },
+        {
+          "name": "contains_summary",
+          "description": "输出应该包含汇总统计信息",
+          "type": "programmatic"
+        },
+        {
+          "name": "has_function_count",
+          "description": "输出应该包含函数数量统计",
+          "type": "programmatic"
+        },
+        {
+          "name": "has_line_counts",
+          "description": "输出应该包含代码行数统计",
+          "type": "programmatic"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "生成一个代码质量报告，显示这个项目的代码度量指标。",
+      "expected_output": "应该返回详细的代码质量报告，包含各种代码度量指标和统计信息。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "output_is_json",
+          "description": "输出应该是有效的JSON格式",
+          "type": "programmatic"
+        },
+        {
+          "name": "contains_metadata",
+          "description": "输出应该包含元数据（如扫描目录、时间）",
+          "type": "programmatic"
+        },
+        {
+          "name": "has_language_distribution",
+          "description": "输出应该包含语言分布信息",
+          "type": "programmatic"
+        },
+        {
+          "name": "has_detailed_file_stats",
+          "description": "输出应该包含详细的文件统计",
+          "type": "programmatic"
+        }
+      ]
+    }
+  ]
+}

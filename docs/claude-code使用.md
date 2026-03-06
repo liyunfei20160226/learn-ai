@@ -106,3 +106,12 @@ ccx run deepseek-chat
 # 使用本地qwen2.5-coder:3b模型
 ccx run local-qwen3
 ```
+
+# 安装skills
+```shell
+# 添加插件市场：claude对话框中输入：
+/plugin marketplace add anthropics/skills
+# 安装技能包示例
+/plugin install example-skills@anthropic-agent-skills
+# 建议选择全局安装：Install for you (user scope)
+```

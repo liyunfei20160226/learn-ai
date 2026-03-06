@@ -1,0 +1,27 @@
+{
+  "eval_id": 2,
+  "eval_name": "basic-code-stats",
+  "prompt": "统计一下这个项目的代码行数和函数数量。",
+  "assertions": [
+    {
+      "name": "output_is_json",
+      "description": "Output should be valid JSON format",
+      "type": "programmatic"
+    },
+    {
+      "name": "contains_summary",
+      "description": "Output should contain summary statistics",
+      "type": "programmatic"
+    },
+    {
+      "name": "has_function_count",
+      "description": "Output should contain function count statistics",
+      "type": "programmatic"
+    },
+    {
+      "name": "has_line_counts",
+      "description": "Output should contain line count statistics",
+      "type": "programmatic"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "eval_id": 3,
+  "eval_name": "code-quality-report",
+  "prompt": "生成一个代码质量报告，显示这个项目的代码度量指标。",
+  "assertions": [
+    {
+      "name": "output_is_json",
+      "description": "Output should be valid JSON format",
+      "type": "programmatic"
+    },
+    {
+      "name": "contains_metadata",
+      "description": "Output should contain metadata (scan directory, time, etc.)",
+      "type": "programmatic"
+    },
+    {
+      "name": "has_language_distribution",
+      "description": "Output should contain language distribution information",
+      "type": "programmatic"
+    },
+    {
+      "name": "has_detailed_file_stats",
+      "description": "Output should contain detailed file statistics",
+      "type": "programmatic"
+    }
+  ]
+}

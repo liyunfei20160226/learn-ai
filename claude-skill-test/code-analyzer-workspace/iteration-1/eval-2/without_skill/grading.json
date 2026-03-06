@@ -1,0 +1,24 @@
+{
+  "expectations": [
+    {
+      "text": "输出应该是有效的JSON格式",
+      "passed": false,
+      "evidence": "输出是文本响应，不是JSON格式"
+    },
+    {
+      "text": "输出应该包含汇总统计信息",
+      "passed": false,
+      "evidence": "输出提供估计值，但不是结构化的汇总统计"
+    },
+    {
+      "text": "输出应该包含函数数量统计",
+      "passed": false,
+      "evidence": "输出提供估计范围（40-60个函数），但不是精确统计"
+    },
+    {
+      "text": "输出应该包含代码行数统计",
+      "passed": false,
+      "evidence": "输出提供估计范围（1200-1600行），但不是精确统计"
+    }
+  ]
+}

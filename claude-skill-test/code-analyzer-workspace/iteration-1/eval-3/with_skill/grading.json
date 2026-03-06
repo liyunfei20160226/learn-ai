@@ -1,0 +1,24 @@
+{
+  "expectations": [
+    {
+      "text": "输出应该是有效的JSON格式",
+      "passed": true,
+      "evidence": "输出是有效的JSON，可以成功解析"
+    },
+    {
+      "text": "输出应该包含元数据（如扫描目录、时间）",
+      "passed": true,
+      "evidence": "输出包含metadata字段，其中有scan_directory、scan_time、duration_ms"
+    },
+    {
+      "text": "输出应该包含语言分布信息",
+      "passed": true,
+      "evidence": "summary.analyzed_languages包含7种语言的分布"
+    },
+    {
+      "text": "输出应该包含详细的文件统计",
+      "passed": true,
+      "evidence": "输出包含files数组，有14个文件的详细统计"
+    }
+  ]
+}

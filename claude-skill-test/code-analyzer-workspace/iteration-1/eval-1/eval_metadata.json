@@ -1,0 +1,32 @@
+{
+  "eval_id": 1,
+  "eval_name": "detailed-code-analysis",
+  "prompt": "请分析当前目录的代码统计信息，给我一个详细的报告。",
+  "assertions": [
+    {
+      "name": "output_is_json",
+      "description": "Output should be valid JSON format",
+      "type": "programmatic"
+    },
+    {
+      "name": "contains_summary_field",
+      "description": "JSON should contain summary field",
+      "type": "programmatic"
+    },
+    {
+      "name": "summary_has_total_files",
+      "description": "Summary should contain total_files field",
+      "type": "programmatic"
+    },
+    {
+      "name": "summary_has_total_lines",
+      "description": "Summary should contain total_lines field",
+      "type": "programmatic"
+    },
+    {
+      "name": "contains_files_array",
+      "description": "JSON should contain files array",
+      "type": "programmatic"
+    }
+  ]
+}
