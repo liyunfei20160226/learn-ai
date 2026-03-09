@@ -14,3 +14,6 @@ wheels/
 
 # Claude Code configuration
 .claude/
+
+# Skills CLI tool directory
+skills/
