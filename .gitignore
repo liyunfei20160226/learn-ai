@@ -14,7 +14,7 @@ wheels/
 
 # Claude Code configuration
 .claude/
-claude-skill-test/code-analyzer-workspace/ 
+my-claude-skill/code-analyzer-workspace/ 
 
 # Skills CLI tool directory
 skills/
