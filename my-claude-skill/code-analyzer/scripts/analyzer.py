@@ -1352,8 +1352,8 @@ def ensure_result_directory() -> str:
     # 1. 当前目录下的result目录
     possible_paths.append(os.path.join(os.getcwd(), "result"))
 
-    # 2. 当前目录下的claude-skill-test/result目录
-    possible_paths.append(os.path.join(os.getcwd(), "claude-skill-test", "result"))
+    # 2. 当前目录下的my-claude-skill/result目录
+    possible_paths.append(os.path.join(os.getcwd(), "my-claude-skill", "result"))
 
     # 3. 如果当前脚本在code-analyzer/scripts目录中，尝试找到项目根目录
     script_dir = os.path.dirname(os.path.abspath(__file__))

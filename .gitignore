@@ -17,4 +17,4 @@ wheels/
 my-claude-skill/code-analyzer-workspace/ 
 
 # Skills CLI tool directory
-skills/
+skills/claude-skill-test/code-analyzer-workspace/
