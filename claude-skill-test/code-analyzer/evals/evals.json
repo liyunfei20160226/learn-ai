@@ -89,6 +89,62 @@
           "type": "programmatic"
         }
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "分析这个项目的代码，并生成多语言HTML报告。",
+      "expected_output": "应该生成JSON格式的代码统计，并默认生成中文、英文、日文三种语言的HTML报告，支持页面内语言切换功能。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "output_is_json",
+          "description": "输出应该是有效的JSON格式",
+          "type": "programmatic"
+        },
+        {
+          "name": "generates_html_reports",
+          "description": "应该生成HTML报告文件",
+          "type": "programmatic"
+        },
+        {
+          "name": "generates_multilingual_reports",
+          "description": "应该生成至少三种语言的HTML报告（zh, en, ja）",
+          "type": "programmatic"
+        },
+        {
+          "name": "html_reports_have_language_selector",
+          "description": "HTML报告应该包含语言选择器",
+          "type": "programmatic"
+        },
+        {
+          "name": "json_contains_summary",
+          "description": "JSON输出应该包含summary字段",
+          "type": "programmatic"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "请用英文生成代码分析报告。",
+      "expected_output": "应该生成JSON格式的代码统计，并生成英文版本的HTML报告。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "output_is_json",
+          "description": "输出应该是有效的JSON格式",
+          "type": "programmatic"
+        },
+        {
+          "name": "generates_english_html_report",
+          "description": "应该生成英文HTML报告（_en.html后缀）",
+          "type": "programmatic"
+        },
+        {
+          "name": "html_report_in_english",
+          "description": "HTML报告应该是英文内容",
+          "type": "programmatic"
+        }
+      ]
     }
   ]
 }

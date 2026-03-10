@@ -28,6 +28,7 @@ description: |
 3. **多语言支持**：支持主流编程语言的代码分析
 4. **详细统计**：提供行数、注释、函数数量等指标
 5. **JSON输出**：生成结构化的JSON格式报告
+6. **多语言HTML报告**：默认生成中文、英文、日文三种语言的HTML报告，支持页面内语言切换
 
 ## 使用方式
 
@@ -111,6 +112,40 @@ description: |
 }
 ```
 
+## HTML报告特性
+
+除了JSON格式的输出外，技能还会生成美观的HTML报告，具有以下特性：
+
+### 多语言支持
+- **默认行为**：自动生成中文 (`_zh.html`)、英文 (`_en.html`)、日文 (`_ja.html`) 三种语言的HTML报告
+- **语言切换**：HTML报告包含语言选择器，用户可以在页面内实时切换语言
+- **单语言模式**：如需只生成特定语言报告，可使用 `--lang` 参数（如 `--lang en`）
+
+### 报告内容
+- **统计概览**：以卡片形式展示总文件数、总行数、代码行、注释行、空行、函数总数
+- **语言分布**：可视化显示项目中各种编程语言的文件数量分布
+- **文件详情**：表格展示每个文件的详细统计信息
+- **对比分析**：如果存在历史分析数据，会自动显示与上一次分析的对比
+- **警告信息**：显示分析过程中遇到的任何问题或跳过的文件
+
+### 输出文件
+HTML报告文件保存在 `result/` 目录中，命名格式为：
+- `code_analysis_YYYYMMDD_HHMMSS_zh.html` - 中文报告
+- `code_analysis_YYYYMMDD_HHMMSS_en.html` - 英文报告
+- `code_analysis_YYYYMMDD_HHMMSS_ja.html` - 日文报告
+
+### 使用示例
+```bash
+# 默认生成所有语言版本（推荐）
+python code-analyzer/scripts/analyzer.py .
+
+# 只生成英文报告
+python code-analyzer/scripts/analyzer.py . --lang en
+
+# 不生成HTML报告
+python code-analyzer/scripts/analyzer.py . --no-html
+```
+
 ## 实现细节
 
 ### 文件识别
@@ -185,13 +220,27 @@ description: |
 
 ```bash
 cd "当前目录"
-python "code-analyzer/scripts/analyzer.py" --output "code_analysis_result.json"
+python "code-analyzer/scripts/analyzer.py"
 ```
 
-或者，如果你想在输出中包含汇总信息：
+默认情况下，脚本会：
+1. 生成JSON格式的详细数据文件（保存在 `result/` 目录）
+2. 生成中文、英文、日文三种语言的HTML报告
+3. 自动与之前的结果进行对比（如果存在）
 
+如需自定义输出，可以使用以下参数：
 ```bash
-python "code-analyzer/scripts/analyzer.py" --summary --output "code_analysis_result.json"
+# 指定输出文件名
+python "code-analyzer/scripts/analyzer.py" --output "my_analysis.json"
+
+# 只生成特定语言的报告
+python "code-analyzer/scripts/analyzer.py" --lang en
+
+# 不生成HTML报告
+python "code-analyzer/scripts/analyzer.py" --no-html
+
+# 只显示汇总信息
+python "code-analyzer/scripts/analyzer.py" --summary
 ```
 
 ### 3. 读取和分析结果
@@ -221,6 +270,12 @@ with open('code_analysis_result.json', 'r', encoding='utf-8') as f:
 
 4. **提供JSON数据**：
    - 将完整的JSON结果呈现给用户，方便进一步处理
+
+5. **提供HTML报告**：
+   - 告知用户已生成多语言HTML报告
+   - 提供HTML报告的文件路径
+   - 说明HTML报告的语言切换功能
+   - 建议用户打开HTML报告查看可视化结果
 
 ### 5. 清理临时文件
 如果需要，可以删除临时生成的JSON文件：
