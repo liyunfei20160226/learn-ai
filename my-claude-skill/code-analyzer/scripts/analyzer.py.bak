@@ -13,11 +13,6 @@ import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set
 import time
-# Fix Windows console encoding issue
-import io
-if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="ignore")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="ignore")
 
 class CodeAnalyzer:
     """代码分析器主类"""

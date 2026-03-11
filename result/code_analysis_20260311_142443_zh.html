@@ -1,0 +1,636 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码分析报告 - 2026-03-11 14:24:43</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .stat-card h3 {
+            margin-top: 0;
+            font-size: 14px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stat-diff {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .stat-diff.positive {
+            color: #27ae60;
+        }
+        .stat-diff.negative {
+            color: #e74c3c;
+        }
+        .language-chart {
+            margin: 30px 0;
+        }
+        .language-bar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .language-name {
+            width: 120px;
+            font-weight: bold;
+        }
+        .language-bar-inner {
+            flex-grow: 1;
+            height: 20px;
+            background-color: #ecf0f1;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .language-bar-fill {
+            height: 100%;
+            background-color: #3498db;
+            border-radius: 3px;
+        }
+        .language-count {
+            width: 80px;
+            text-align: right;
+        }
+        .file-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .file-table th, .file-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .file-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .file-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .warning-box {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .comparison-section {
+            background-color: #e8f4fd;
+            border: 1px solid #b3e0ff;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #b3e0ff;
+        }
+        .comparison-table th {
+            background-color: #d1ecf1;
+        }
+        .timestamp {
+            color: #7f8c8d;
+            font-size: 12px;
+            text-align: right;
+            margin-top: 30px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .language-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .language-selector label {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .language-selector select {
+            padding: 5px 10px;
+            border: 1px solid #3498db;
+            border-radius: 4px;
+            background-color: white;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        .language-selector select:focus {
+            outline: none;
+            border-color: #2980b9;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+        .language-selector option {
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 代码分析报告</h1>
+        <div class="language-selector">
+            <label for="language-select">语言:</label>
+            <select id="language-select" onchange="changeLanguage(this.value)">
+                <option value="zh" selected>中文</option>
+                <option value="en" >English</option>
+                <option value="ja" >日本語</option>
+            </select>
+        </div>
+        <p><strong>扫描目录:</strong> D:\dev\learn-ai</p>
+        <p><strong>扫描时间:</strong> 2026-03-11 14:24:43</p>
+        <p><strong>耗时:</strong> 71ms</p>
+
+        <h2>📈 统计概览</h2>
+        <div class="summary-grid">
+            <div class="stat-card">
+                <h3>总文件数</h3>
+                <div class="stat-value">24</div>
+                
+            </div>
+            <div class="stat-card">
+                <h3>总行数</h3>
+                <div class="stat-value">3289</div>
+                
+            </div>
+            <div class="stat-card">
+                <h3>代码行</h3>
+                <div class="stat-value">2230</div>
+                
+            </div>
+            <div class="stat-card">
+                <h3>注释行</h3>
+                <div class="stat-value">582</div>
+                
+            </div>
+            <div class="stat-card">
+                <h3>空行</h3>
+                <div class="stat-value">477</div>
+                
+            </div>
+            <div class="stat-card">
+                <h3>总函数数</h3>
+                <div class="stat-value">54</div>
+                
+            </div>
+        </div>
+
+        
+
+        <h2>🌐 语言分布</h2>
+        <div class="language-chart">
+            
+            <div class="language-bar">
+                <div class="language-name">markdown</div>
+                <div class="language-bar-inner">
+                    <div class="language-bar-fill" style="width: 50.0%"></div>
+                </div>
+                <div class="language-count">12 文件 (50.0%)</div>
+            </div>
+            
+            <div class="language-bar">
+                <div class="language-name">python</div>
+                <div class="language-bar-inner">
+                    <div class="language-bar-fill" style="width: 16.666666666666664%"></div>
+                </div>
+                <div class="language-count">4 文件 (16.7%)</div>
+            </div>
+            
+            <div class="language-bar">
+                <div class="language-name">json</div>
+                <div class="language-bar-inner">
+                    <div class="language-bar-fill" style="width: 8.333333333333332%"></div>
+                </div>
+                <div class="language-count">2 文件 (8.3%)</div>
+            </div>
+            
+            <div class="language-bar">
+                <div class="language-name">html</div>
+                <div class="language-bar-inner">
+                    <div class="language-bar-fill" style="width: 4.166666666666666%"></div>
+                </div>
+                <div class="language-count">1 文件 (4.2%)</div>
+            </div>
+            
+            <div class="language-bar">
+                <div class="language-name">shell</div>
+                <div class="language-bar-inner">
+                    <div class="language-bar-fill" style="width: 4.166666666666666%"></div>
+                </div>
+                <div class="language-count">1 文件 (4.2%)</div>
+            </div>
+            
+            <div class="language-bar">
+                <div class="language-name">java</div>
+                <div class="language-bar-inner">
+                    <div class="language-bar-fill" style="width: 4.166666666666666%"></div>
+                </div>
+                <div class="language-count">1 文件 (4.2%)</div>
+            </div>
+            
+            <div class="language-bar">
+                <div class="language-name">go</div>
+                <div class="language-bar-inner">
+                    <div class="language-bar-fill" style="width: 4.166666666666666%"></div>
+                </div>
+                <div class="language-count">1 文件 (4.2%)</div>
+            </div>
+            
+            <div class="language-bar">
+                <div class="language-name">javascript</div>
+                <div class="language-bar-inner">
+                    <div class="language-bar-fill" style="width: 4.166666666666666%"></div>
+                </div>
+                <div class="language-count">1 文件 (4.2%)</div>
+            </div>
+            
+            <div class="language-bar">
+                <div class="language-name">typescript</div>
+                <div class="language-bar-inner">
+                    <div class="language-bar-fill" style="width: 4.166666666666666%"></div>
+                </div>
+                <div class="language-count">1 文件 (4.2%)</div>
+            </div>
+            
+        </div>
+
+        <h2>📄 文件详情</h2>
+        <p>共分析了 24 个文件</p>
+        <table class="file-table">
+            <thead>
+                <tr>
+                    <th>文件路径</th>
+                    <th>语言</th>
+                    <th>总行数</th>
+                    <th>代码行</th>
+                    <th>注释行</th>
+                    <th>空行</th>
+                    <th>函数数</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            <tr>
+                <td>agent-write-file-test\agent_write_file.py</td>
+                <td>python</td>
+                <td>185</td>
+                <td>64</td>
+                <td>87</td>
+                <td>34</td>
+                <td>1</td>
+            </tr>
+            
+            <tr>
+                <td>agent-write-file-test\code_analysis_result.json</td>
+                <td>json</td>
+                <td>63</td>
+                <td>63</td>
+                <td>0</td>
+                <td>0</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>agent-write-file-test\index.html</td>
+                <td>html</td>
+                <td>149</td>
+                <td>136</td>
+                <td>5</td>
+                <td>8</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>agent-write-file-test\main.py</td>
+                <td>python</td>
+                <td>6</td>
+                <td>4</td>
+                <td>0</td>
+                <td>2</td>
+                <td>1</td>
+            </tr>
+            
+            <tr>
+                <td>agent-write-file-test\README.md</td>
+                <td>markdown</td>
+                <td>4</td>
+                <td>3</td>
+                <td>1</td>
+                <td>0</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>docs\claude-code使用.md</td>
+                <td>markdown</td>
+                <td>117</td>
+                <td>87</td>
+                <td>26</td>
+                <td>4</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>docs\claude-code安装.md</td>
+                <td>markdown</td>
+                <td>5</td>
+                <td>4</td>
+                <td>1</td>
+                <td>0</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>docs\ruff使用.md</td>
+                <td>markdown</td>
+                <td>63</td>
+                <td>39</td>
+                <td>16</td>
+                <td>8</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>docs\uv使用.md</td>
+                <td>markdown</td>
+                <td>20</td>
+                <td>11</td>
+                <td>9</td>
+                <td>0</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>docs\vscode扩展.md</td>
+                <td>markdown</td>
+                <td>10</td>
+                <td>0</td>
+                <td>10</td>
+                <td>0</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>docs\安装uv.md</td>
+                <td>markdown</td>
+                <td>9</td>
+                <td>6</td>
+                <td>1</td>
+                <td>2</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>docs\安装本地大模型.md</td>
+                <td>markdown</td>
+                <td>7</td>
+                <td>4</td>
+                <td>2</td>
+                <td>1</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>docs\提高编码效率方案三核心架构图.md</td>
+                <td>markdown</td>
+                <td>62</td>
+                <td>56</td>
+                <td>0</td>
+                <td>6</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>docs\提高编码效率方案二工作流时序图.md</td>
+                <td>markdown</td>
+                <td>45</td>
+                <td>38</td>
+                <td>0</td>
+                <td>7</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\code-analyzer\DEVELOPMENT.md</td>
+                <td>markdown</td>
+                <td>105</td>
+                <td>62</td>
+                <td>18</td>
+                <td>25</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\code-analyzer\install.sh</td>
+                <td>shell</td>
+                <td>63</td>
+                <td>43</td>
+                <td>9</td>
+                <td>11</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\code-analyzer\SKILL.md</td>
+                <td>markdown</td>
+                <td>292</td>
+                <td>191</td>
+                <td>39</td>
+                <td>62</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\code-analyzer\evals\evals.json</td>
+                <td>json</td>
+                <td>150</td>
+                <td>150</td>
+                <td>0</td>
+                <td>0</td>
+                <td>0</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\code-analyzer\scripts\analyzer.py</td>
+                <td>python</td>
+                <td>1553</td>
+                <td>1073</td>
+                <td>251</td>
+                <td>229</td>
+                <td>22</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\test-samples\code-analyzer\TestJava.java</td>
+                <td>java</td>
+                <td>69</td>
+                <td>30</td>
+                <td>26</td>
+                <td>13</td>
+                <td>5</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\test-samples\code-analyzer\test_go.go</td>
+                <td>go</td>
+                <td>75</td>
+                <td>42</td>
+                <td>17</td>
+                <td>16</td>
+                <td>7</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\test-samples\code-analyzer\test_javascript.js</td>
+                <td>javascript</td>
+                <td>82</td>
+                <td>47</td>
+                <td>21</td>
+                <td>14</td>
+                <td>8</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\test-samples\code-analyzer\test_python.py</td>
+                <td>python</td>
+                <td>57</td>
+                <td>26</td>
+                <td>15</td>
+                <td>16</td>
+                <td>6</td>
+            </tr>
+            
+            <tr>
+                <td>my-claude-skill\test-samples\code-analyzer\test_typescript.ts</td>
+                <td>typescript</td>
+                <td>98</td>
+                <td>51</td>
+                <td>28</td>
+                <td>19</td>
+                <td>4</td>
+            </tr>
+            
+            </tbody>
+        </table>
+
+        
+
+        <div class="timestamp">
+            报告生成时间 2026-03-11 14:24:43
+        </div>
+    </div>
+    <script>
+        function changeLanguage(selectedLang) {
+            // 获取当前文件名
+            const currentFile = window.location.pathname.split('/').pop();
+            // 移除语言后缀和扩展名
+            const baseName = currentFile.replace(/_(en|zh|ja)\.html$/i, '').replace(/\.html$/i, '');
+
+            // 构建新文件名（标准格式：基础名_语言.html）
+            const newFileName = baseName + '_' + selectedLang + '.html';
+
+            // 尝试加载新语言的文件
+            const newFileUrl = newFileName;
+
+            // 检查文件是否存在（通过尝试加载）
+            fetch(newFileUrl, { method: 'HEAD' })
+                .then(response => {
+                    if (response.ok) {
+                        window.location.href = newFileUrl;
+                    } else {
+                        // 文件不存在，显示提示信息
+                        const langNames = {'zh': '中文', 'en': 'English', 'ja': '日本語'};
+                        const langName = langNames[selectedLang] || 'Unknown';
+
+                        // 根据当前语言选择消息
+                        const currentLang = document.getElementById('language-select')?.value || 'zh';
+                        let message;
+
+                        if (currentLang === 'zh') {
+                            message = langName + '版本的报告不存在。\n\n要生成它，请运行：\npython analyzer.py . --lang ' + selectedLang;
+                        } else if (currentLang === 'ja') {
+                            message = langName + 'バージョンのレポートは存在しません。\n\n生成するには、次を実行してください：\npython analyzer.py . --lang ' + selectedLang;
+                        } else {
+                            message = 'The ' + langName + ' version of this report does not exist.\n\nTo generate it, run:\npython analyzer.py . --lang ' + selectedLang;
+                        }
+
+                        alert(message);
+                    }
+                })
+                .catch(() => {
+                    const langNames = {'zh': '中文', 'en': 'English', 'ja': '日本語'};
+                    const langName = langNames[selectedLang] || 'Unknown';
+
+                    // 根据当前语言选择消息
+                    const currentLang = document.getElementById('language-select')?.value || 'zh';
+                    let message;
+
+                    if (currentLang === 'zh') {
+                        message = langName + '版本的报告不存在。\n\n要生成它，请运行：\npython analyzer.py . --lang ' + selectedLang;
+                    } else if (currentLang === 'ja') {
+                        message = langName + 'バージョンのレポートは存在しません。\n\n生成するには、次を実行してください：\npython analyzer.py . --lang ' + selectedLang;
+                    } else {
+                        message = 'The ' + langName + ' version of this report does not exist.\n\nTo generate it, run:\npython analyzer.py . --lang ' + selectedLang;
+                    }
+
+                    alert(message);
+                });
+        }
+
+        // 页面加载时显示当前语言
+        document.addEventListener('DOMContentLoaded', function() {
+            const langSelect = document.getElementById('language-select');
+            if (langSelect) {
+                const currentLang = langSelect.value;
+                const langNames = {'zh': '中文', 'en': 'English', 'ja': '日本語'};
+                console.log('Code Analysis Report - ' + langNames[currentLang] + ' version');
+            }
+        });
+    </script>
+</body>
+</html>
+        
