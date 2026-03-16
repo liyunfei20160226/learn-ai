@@ -115,3 +115,8 @@ ccx run local-qwen3
 /plugin install example-skills@anthropic-agent-skills
 # 建议选择全局安装：Install for you (user scope)
 ```
+
+# 启动claude并安装mcp服务
+```shell
+claude --mcp-config D:\dev\learn-ai\mcp-todo-server-py\mcp-config.json
+```
