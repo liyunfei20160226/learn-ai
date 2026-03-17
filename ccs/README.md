@@ -6,8 +6,9 @@
 
 ```
 ccs/
-├── 设计书/            # 功能详细设计文档
-├── frontend/          # Next.js 前端工程 (TypeScript + Tailwind CSS)
+├── 设计书/            # 功能详细设计文档（包含日文原版Excel界面定义书）
+├── ccs_mcp/          # MCP 服务器 - PostgreSQL 数据库访问
+├── frontend/          # Next.js 15 前端工程 (TypeScript + Tailwind CSS)
 ├── backend/           # FastAPI 后端工程 (Python + uv 包管理)
 └── README.md          # 项目说明
 ```
@@ -16,6 +17,12 @@ ccs/
 
 - **前端**: Next.js 15 + TypeScript + Tailwind CSS
 - **后端**: FastAPI + SQLAlchemy + uv (包管理)
+- **MCP 服务器**: FastMCP + MCP Protocol - 提供 AI 数据库访问能力
+  - `ccs_list_tables` - 列出所有表
+  - `ccs_describe_table` - 查看表结构
+  - `ccs_query` - 只读查询
+  - `ccs_execute` - 写操作
+  - `ccs_get_schema_info` - Schema 概览
 - **数据库**: PostgreSQL 18
 
 ## 数据库信息
