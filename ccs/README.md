@@ -6,10 +6,10 @@
 
 ```
 ccs/
-├── 设计书/            # 功能详细设计文档
-├── frontend/          # Next.js 前端工程 (TypeScript + Tailwind CSS)
-├── backend/           # FastAPI 后端工程 (Python + uv 包管理)
-└── README.md          # 项目说明
+├── 设计书/                      # 功能详细设计文档（日文原版Excel）
+├── frontend/                  # Next.js 15 前端工程 (TypeScript + Tailwind CSS)
+├── backend/                   # FastAPI 后端工程 (Python + uv 包管理)
+└── README.md                  # 项目说明
 ```
 
 ## 技术栈
@@ -17,6 +17,10 @@ ccs/
 - **前端**: Next.js 15 + TypeScript + Tailwind CSS
 - **后端**: FastAPI + SQLAlchemy + uv (包管理)
 - **数据库**: PostgreSQL 18
+
+## 设计文档
+
+- `设计书/` - 日文原版 Excel 格式功能详细设计文档
 
 ## 数据库信息
 

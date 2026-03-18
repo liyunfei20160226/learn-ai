@@ -1,0 +1,12 @@
+[project]
+name = "ccs-mcp"
+version = "0.1.0"
+description = "MCP Server for reading CCS design documents (Excel)"
+authors = []
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "openpyxl>=3.1.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+]
+requires-python = ">=3.10"
