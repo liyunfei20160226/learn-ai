@@ -1,0 +1,52 @@
+"""
+FastAPI 路由
+自动生成由 ccs-generate
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List
+from app.core.database import get_db
+from app.schemas.{{ table_name }} import {{ class_name }}Response, {{ class_name }}Create, {{ class_name }}Update
+from app.services.{{ table_name }} import {{ class_name }}Service
+
+router = APIRouter(prefix="/{{ table_name }}", tags=["{{ table_name }}"])
+
+
+@router.get("/", response_model=List[{{ class_name }}Response])
+async def list_{{ table_name }}(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+    """获取{{ feature_name }}列表"""
+    return await {{ class_name }}Service.get_all(db, skip, limit)
+
+
+@router.get("/{id}", response_model={{ class_name }}Response)
+async def get_{{ table_name }}(id: int, db: AsyncSession = Depends(get_db)):
+    """根据ID获取{{ feature_name }}"""
+    obj = await {{ class_name }}Service.get_by_id(db, id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="{{ class_name }} not found")
+    return obj
+
+
+@router.post("/", response_model={{ class_name }}Response)
+async def create_{{ table_name }}(data: {{ class_name }}Create, db: AsyncSession = Depends(get_db)):
+    """创建{{ feature_name }}"""
+    return await {{ class_name }}Service.create(db, data)
+
+
+@router.put("/{id}", response_model={{ class_name }}Response)
+async def update_{{ table_name }}(id: int, data: {{ class_name }}Update, db: AsyncSession = Depends(get_db)):
+    """更新{{ feature_name }}"""
+    obj = await {{ class_name }}Service.update(db, id, data)
+    if not obj:
+        raise HTTPException(status_code=404, detail="{{ class_name }} not found")
+    return obj
+
+
+@router.delete("/{id}")
+async def delete_{{ table_name }}(id: int, db: AsyncSession = Depends(get_db)):
+    """删除{{ feature_name }}"""
+    success = await {{ class_name }}Service.delete(db, id)
+    if not success:
+        raise HTTPException(status_code=404, detail="{{ class_name }} not found")
+    return {"success": True}

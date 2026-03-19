@@ -1,0 +1,30 @@
+/**
+ * TypeScript 类型定义
+ * 自动生成由 ccs-generate
+ */
+
+export interface {{ interface_name }} {
+  id: number;
+{% for column in columns %}
+  {{ column.name }}: {{ column.ts_type }};
+{% endfor %}
+  created_at: string;
+  updated_at: string;
+}
+
+export interface {{ interface_name }}Create {
+{% for column in columns %}
+  {{ column.name }}: {{ column.ts_type }};
+{% endfor %}
+}
+
+export interface {{ interface_name }}Update {
+{% for column in columns %}
+  {{ column.name }}?: {{ column.ts_type }};
+{% endfor %}
+}
+
+export interface ListResponse<T> {
+  items: T[];
+  total: number;
+}

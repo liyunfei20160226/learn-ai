@@ -1,0 +1,55 @@
+"""
+业务逻辑 Service
+自动生成由 ccs-generate
+"""
+
+from typing import List, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.models.{{ table_name }} import {{ class_name }}
+from app.schemas.{{ table_name }} import {{ class_name }}Create, {{ class_name }}Update
+
+
+class {{ class_name }}Service:
+    @staticmethod
+    async def get_all(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[{{ class_name }}]:
+        """获取所有列表"""
+        result = await db.execute(select({{ class_name }}).offset(skip).limit(limit))
+        return result.scalars().all()
+
+    @staticmethod
+    async def get_by_id(db: AsyncSession, id: int) -> Optional[{{ class_name }}]:
+        """根据ID获取"""
+        result = await db.execute(select({{ class_name }}).where({{ class_name }}.id == id))
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def create(db: AsyncSession, data: {{ class_name }}Create) -> {{ class_name }}:
+        """创建"""
+        obj = {{ class_name }}(**data.model_dump())
+        db.add(obj)
+        await db.commit()
+        await db.refresh(obj)
+        return obj
+
+    @staticmethod
+    async def update(db: AsyncSession, id: int, data: {{ class_name }}Update) -> Optional[{{ class_name }}]:
+        """更新"""
+        obj = await {{ class_name }}Service.get_by_id(db, id)
+        if not obj:
+            return None
+        for key, value in data.model_dump(exclude_unset=True).items():
+            setattr(obj, key, value)
+        await db.commit()
+        await db.refresh(obj)
+        return obj
+
+    @staticmethod
+    async def delete(db: AsyncSession, id: int) -> bool:
+        """删除"""
+        obj = await {{ class_name }}Service.get_by_id(db, id)
+        if not obj:
+            return False
+        await db.delete(obj)
+        await db.commit()
+        return True

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-CCS MCP Server - Read CCS design documents (Excel).
+CCS MCP Server - Read CCS design documents (Excel) and execute database operations.
 
 This MCP server provides tools to:
 1. List all Excel design documents in the design directory
 2. Read specific worksheet data from a design file
 3. Extract embedded UI images from Excel
 4. Get design file information (sheet list, image count)
+5. Execute SQL statements on PostgreSQL database (CREATE TABLE, etc.)
+6. List tables and describe table structure
 """
 
 import sys
@@ -14,6 +16,9 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 import os
 import json
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 from dotenv import load_dotenv
 from openpyxl import load_workbook
@@ -34,6 +39,13 @@ DESIGN_DIR = Path(os.getenv("CCS_DESIGN_DIR", "D:/dev/learn-ai/ccs/设计书"))
 OUTPUT_DIR = Path(os.getenv("CCS_OUTPUT_DIR", "D:/dev/learn-ai/ccs/设计书/output"))
 IMAGE_OUTPUT_DIR = OUTPUT_DIR / "images"
 
+# Database configuration
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = int(os.getenv("DB_PORT", "5432"))
+DB_NAME = os.getenv("DB_NAME", "ccs")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+
 # Ensure output directories exist
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 IMAGE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -41,6 +53,18 @@ IMAGE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Initialize MCP server
 mcp = FastMCP("ccs-mcp")
+
+
+# Database connection helper
+def _get_db_connection():
+    """Get a PostgreSQL database connection."""
+    return psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD
+    )
 
 
 # Helper functions
@@ -518,6 +542,223 @@ async def ccs_get_output_paths(ctx: Context) -> str:
         "output_dir": str(OUTPUT_DIR.absolute()),
         "image_output_dir": str(IMAGE_OUTPUT_DIR.absolute())
     }, indent=2, ensure_ascii=False)
+
+
+# Database operation input models
+class ExecuteSqlInput(BaseModel):
+    """Input model for executing SQL statements."""
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        validate_assignment=True,
+        extra='forbid'
+    )
+
+    sql: str = Field(
+        ...,
+        description="SQL statement to execute (e.g., CREATE TABLE, DROP TABLE, ALTER TABLE)",
+        min_length=1
+    )
+
+
+class DescribeTableInput(BaseModel):
+    """Input model for describing a table structure."""
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        validate_assignment=True,
+        extra='forbid'
+    )
+
+    table_name: str = Field(
+        ...,
+        description="Name of the table to describe",
+        min_length=1
+    )
+
+
+# Database tool definitions
+@mcp.tool(
+    name="ccs_execute",
+    annotations={
+        "title": "Execute SQL Statement",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+        "openWorldHint": True,
+    }
+)
+async def ccs_execute(params: ExecuteSqlInput, ctx: Context) -> str:
+    """Execute a SQL statement on the PostgreSQL database (e.g., CREATE TABLE, DROP TABLE, ALTER TABLE).
+
+    Use this to create database tables based on design specifications.
+
+    Args:
+        params: Validated input parameters containing:
+            - sql (str): SQL statement to execute
+
+    Returns:
+        str: JSON formatted result with execution status
+    """
+    conn = None
+    try:
+        conn = _get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(params.sql)
+        conn.commit()
+
+        row_count = cursor.rowcount
+
+        return json.dumps({
+            "success": True,
+            "rows_affected": row_count,
+            "message": "SQL executed successfully"
+        }, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return json.dumps({
+            "error": f"SQL execution failed: {str(e)}",
+            "success": False
+        }, ensure_ascii=False)
+    finally:
+        if conn:
+            conn.close()
+
+
+@mcp.tool(
+    name="ccs_list_tables",
+    annotations={
+        "title": "List All Tables in Database",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+)
+async def ccs_list_tables(ctx: Context) -> str:
+    """List all user-created tables in the public schema of the database.
+
+    Returns:
+        str: JSON formatted list of tables with their basic information
+    """
+    conn = None
+    try:
+        conn = _get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        sql = """
+        SELECT table_name,
+               (SELECT pg_total_relation_size(quote_ident(table_name)) / 1024 / 1024) as size_mb
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_type = 'BASE TABLE'
+        ORDER BY table_name;
+        """
+        cursor.execute(sql)
+        tables = cursor.fetchall()
+
+        return json.dumps({
+            "database": DB_NAME,
+            "total_tables": len(tables),
+            "tables": tables
+        }, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({
+            "error": f"Failed to list tables: {str(e)}",
+            "success": False
+        }, ensure_ascii=False)
+    finally:
+        if conn:
+            conn.close()
+
+
+@mcp.tool(
+    name="ccs_describe_table",
+    annotations={
+        "title": "Describe Table Structure",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+)
+async def ccs_describe_table(params: DescribeTableInput, ctx: Context) -> str:
+    """Get detailed structure information about a specific table.
+
+    This includes column names, data types, constraints, nullability, etc.
+
+    Args:
+        params: Validated input parameters containing:
+            - table_name (str): Name of the table to describe
+
+    Returns:
+        str: JSON formatted table structure information
+    """
+    conn = None
+    try:
+        conn = _get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Get column information
+        sql = """
+        SELECT column_name,
+               data_type,
+               character_maximum_length,
+               is_nullable,
+               column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = %s
+        ORDER BY ordinal_position;
+        """
+        cursor.execute(sql, (params.table_name,))
+        columns = cursor.fetchall()
+
+        # Get primary key information
+        pk_sql = """
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+         AND tc.table_name = kcu.table_name
+        WHERE tc.constraint_type = 'PRIMARY KEY'
+          AND tc.table_schema = 'public'
+          AND tc.table_name = %s;
+        """
+        cursor.execute(pk_sql, (params.table_name,))
+        primary_keys = [row['column_name'] for row in cursor.fetchall()]
+
+        if not columns:
+            return json.dumps({
+                "error": f"Table '{params.table_name}' does not exist in public schema",
+                "success": False
+            }, ensure_ascii=False)
+
+        # Get table comment
+        comment_sql = """
+        SELECT obj_description(%s::regclass);
+        """
+        cursor.execute(comment_sql, (params.table_name,))
+        comment = cursor.fetchone()[0]
+
+        return json.dumps({
+            "table_name": params.table_name,
+            "success": True,
+            "columns": columns,
+            "primary_keys": primary_keys,
+            "comment": comment
+        }, indent=2, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({
+            "error": f"Failed to describe table: {str(e)}",
+            "success": False
+        }, ensure_ascii=False)
+    finally:
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":
