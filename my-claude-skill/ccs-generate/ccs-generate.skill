@@ -1,0 +1,41 @@
+---
+name: ccs-generate
+description: CCS 端到端全栈代码生成 - 根据设计书自动生成后端 API + 前端页面
+author: Claude
+icon: code
+trigger:
+  - "生成代码"
+  - "ccs 生成"
+  - "生成 页面"
+  - "生成 api"
+  - "根据设计书生成"
+version: 1.0.0
+schema_version: 1
+---
+
+# CCS Generate Skill
+
+根据 Excel 设计书自动完成端到端全栈代码生成。
+
+## 工作流程
+
+1. **解析设计书**: 读取 Excel 文件，提取表格数据
+2. **翻译转换**: 日文翻译为中文文档，转换命名为英文 snake_case
+3. **数据库设计分析**: 提取表结构和字段
+4. **创建数据库表**: 在 PostgreSQL 中执行 CREATE TABLE
+5. **生成后端代码**: model, schema, service, router
+6. **生成前端代码**: types, API client, page 组件
+7. **生成测试代码**: 覆盖率 100%
+8. **输出结果**: 汇总所有生成的文件
+
+## 使用方法
+
+在 Claude Code 中输入触发词，如：
+```
+根据 小箱状况一览 设计书生成代码
+```
+
+或者直接指定文件：
+```
+ccs 生成 【CCS】画面定義書_小箱状況一覧_1.0.xlsx
+```
