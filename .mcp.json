@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "baidu-search-mcp": {
+      "command": "node",
+      "args": [
+        "D:/dev/learn-ai/baidu-search-mcp/dist/index.js"
+      ]
+    },
+    "sequential-thinking-mcp": {
+      "command": "D:/dev/learn-ai/sequential-thinking-mcp/.venv/Scripts/python.exe",
+      "args": [
+        "D:/dev/learn-ai/sequential-thinking-mcp/run_server.py"
+      ],
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    },
+    "memory-mcp": {
+      "command": "node",
+      "args": [
+        "D:/dev/learn-ai/memory-mcp/dist/index.js"
+      ]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "D:/dev/learn-ai"
+      ]
+    }
+  }
+}
