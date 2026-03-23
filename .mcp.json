@@ -28,6 +28,15 @@
         "@modelcontextprotocol/server-filesystem",
         "D:/dev/learn-ai"
       ]
+    },
+    "puppeteer": {
+      "command": "node",
+      "args": [
+        "C:/Users/liyf/AppData/Roaming/npm/node_modules/puppeteer-mcp-server/dist/index.js"
+      ],
+      "env": {
+        "PUPPETEER_EXECUTABLE_PATH": "C:/Users/liyf/.cache/puppeteer/chrome/win64-131.0.6778.204/chrome-win64/chrome.exe"
+      }
     }
   }
 }
