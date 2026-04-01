@@ -1,41 +1,43 @@
 {
   "mcpServers": {
     "baidu-search-mcp": {
+      "description": "百度网页搜索 - 让 Claude 能搜索互联网获取最新信息",
       "command": "node",
       "args": [
-        "D:/dev/learn-ai/baidu-search-mcp/dist/index.js"
+        "C:/work/learn-ai/baidu-search-mcp/dist/index.js"
       ]
     },
-    "sequential-thinking-mcp": {
-      "command": "D:/dev/learn-ai/sequential-thinking-mcp/.venv/Scripts/python.exe",
-      "args": [
-        "D:/dev/learn-ai/sequential-thinking-mcp/run_server.py"
-      ],
-      "env": {
-        "PYTHONIOENCODING": "utf-8"
-      }
-    },
-    "memory-mcp": {
+    "sequential-thinking": {
+      "description": "系统化多步思维 - 帮助 Claude 分解复杂问题逐步思考",
       "command": "node",
       "args": [
-        "D:/dev/learn-ai/memory-mcp/dist/index.js"
+        "C:/work/learn-ai/sequential-thinking-mcp/src/sequentialthinking/dist/index.js"
+      ]
+    },
+    "memory-mcp": {
+      "description": "长期记忆存储 - 在知识图中存储和检索记忆",
+      "command": "node",
+      "args": [
+        "C:/work/learn-ai/memory-mcp/dist/index.js"
       ]
     },
     "filesystem": {
+      "description": "文件系统访问 - 读写本地项目文件",
       "command": "npx",
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "D:/dev/learn-ai"
+        "C:/work/learn-ai"
       ]
     },
     "puppeteer": {
+      "description": "浏览器自动化 - 控制 Chrome 浏览网页、点击交互、截图",
       "command": "node",
       "args": [
-        "C:/Users/liyf/AppData/Roaming/npm/node_modules/puppeteer-mcp-server/dist/index.js"
+        "C:/Users/liyun/AppData/Roaming/npm/node_modules/puppeteer-mcp-server/dist/index.js"
       ],
       "env": {
-        "PUPPETEER_EXECUTABLE_PATH": "C:/Users/liyf/.cache/puppeteer/chrome/win64-131.0.6778.204/chrome-win64/chrome.exe"
+        "PUPPETEER_EXECUTABLE_PATH": "C:/Users/liyun/.cache/puppeteer/chrome/win64-131.0.6778.204/chrome-win64/chrome.exe"
       }
     }
   }

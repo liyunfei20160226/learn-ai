@@ -31,7 +31,7 @@ os.environ["OPENAI_BASE_URL"] = base_url
 
 # 初始化大语言模型
 llm = ChatOpenAI(
-    model="deepseek-chat",  # 使用DeepSeek模型
+    model="Qwen/Qwen3.5-397B-A17B",  # 使用DeepSeek模型
     temperature=0,  # 温度=0，输出最确定性（每次都差不多）
     request_timeout=60,  # 60秒超时，避免卡住
 )
@@ -123,9 +123,9 @@ if __name__ == "__main__":
 
     try:
         # 准备输入 - 新版本的 agent 使用 messages 格式
+        # 注意：create_agent 已经通过 system_prompt 参数添加了系统消息，这里只需要用户消息
         inputs = {
             "messages": [
-                SystemMessage(content=system_prompt), # 系统消息：角色设定
                 HumanMessage(content=user_request),   # 用户消息：具体请求
             ]
         }
