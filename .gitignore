@@ -25,3 +25,5 @@ skills/claude-skill-test/code-analyzer-workspace/
 # node
 node_modules
 
+# test
+.coverage

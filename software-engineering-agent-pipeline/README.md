@@ -42,6 +42,15 @@ uv run pytest tests/integration/ -v -m integration
 uv run pytest tests/se_pipeline/agents/ --cov=src/se_pipeline/agents --cov-report=term
 ```
 
+### pipeline_graph 模块测试
+```bash
+# 运行 graph 模块所有单元测试
+uv run python -m pytest tests/se_pipeline/graph/test_pipeline_graph_functions.py -v
+
+# 查看 graph 模块覆盖率
+uv run python -m pytest tests/se_pipeline/graph/test_pipeline_graph_functions.py --cov=se_pipeline.graph.pipeline_graph --cov-report=term-missing
+```
+
 ## 测试覆盖率
 
 当前覆盖率：
@@ -51,4 +60,5 @@ uv run pytest tests/se_pipeline/agents/ --cov=src/se_pipeline/agents --cov-repor
 | `requirements_analyst.py` | 100% |
 | `requirements_verifier.py` | 100% |
 | `requirements_final.py` | 100% |
-| **Total** | **99%** |
+| `pipeline_graph.py` | **94%** |
+| **Total** | **~98%** |
