@@ -1,0 +1,8 @@
+# 需求分析阶段质量检查清单
+
+- complete 是否覆盖了用户所有明确提到的需求？ error
+- clear 每个需求描述是否清晰无歧义？ error
+- scope 是否明确界定了范围？哪些做哪些明确不做？ error
+- testable 每个需求是否可测试验证？ warning
+- roles 是否明确了所有用户角色及其职责？ warning
+- prioritized 需求是否区分了优先级？ info

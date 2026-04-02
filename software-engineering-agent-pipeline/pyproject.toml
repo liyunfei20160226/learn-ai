@@ -1,0 +1,31 @@
+[project]
+name = "se-pipeline"
+version = "0.1.0"
+description = "Software Engineering Multi-Agent Pipeline - 软件工程多Agent流水线系统"
+authors = [
+  { name = "Your Name", email = "your.email@example.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+  "langgraph>=0.2.0",
+  "pydantic>=2.0.0",
+  "langchain-openai>=0.2.0",
+  "langchain-core>=0.3.0",
+  "openai>=1.0.0",
+  "mcp>=1.0.0",
+  "python-dotenv>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0.0",
+  "black>=24.0.0",
+  "ruff>=0.5.0",
+  "pytest-cov>=7.1.0",
+  "python-dotenv>=1.2.2",
+]
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: Mark integration tests that require LLM API access",
+]

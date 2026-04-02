@@ -1,0 +1,25 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>开始</p>]):::first
+	analyst(需求分析师<br/><font size=-1>分析需求 → 生成问题</font>)
+	wait_user(等待用户<br/><font size=-1>用户回答问题<br/>支持断点续问</font>)
+	verifier(需求验证官<br/><font size=-1>独立验证 → 检查遗漏</font>)
+	final(生成规格<br/><font size=-1>整理生成需求文档</font>)
+	quality_gate(质量闸门<br/><font size=-1>自动评审 → 质量检查</font>)
+	__end__([<p>结束</p>]):::last
+	__start__ --> analyst;
+	analyst -.-> verifier;
+	analyst -.-> wait_user;
+	final --> quality_gate;
+	quality_gate -.-> __end__;
+	quality_gate -.-> analyst;
+	verifier -.-> analyst;
+	verifier -.-> final;
+	wait_user --> verifier;
+	classDef default fill:#f2f0ff,line-height:1.6
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
