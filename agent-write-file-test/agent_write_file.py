@@ -31,7 +31,7 @@ os.environ["OPENAI_BASE_URL"] = base_url
 
 # 初始化大语言模型
 llm = ChatOpenAI(
-    model="Qwen/Qwen3.5-397B-A17B",  # 使用DeepSeek模型
+    model="Pro/MiniMaxAI/MiniMax-M2.5",
     temperature=0,  # 温度=0，输出最确定性（每次都差不多）
     request_timeout=60,  # 60秒超时，避免卡住
 )
