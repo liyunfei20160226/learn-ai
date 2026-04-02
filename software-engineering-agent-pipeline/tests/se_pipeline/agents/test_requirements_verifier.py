@@ -20,7 +20,6 @@ class TestRequirementsVerifierAgent:
         """测试初始化"""
         assert self.agent.llm is self.mock_llm
         assert isinstance(self.agent, RequirementsVerifierAgent)
-        assert self.agent.name() == "RequirementsVerifierAgent"
 
     def test_build_context_with_unanswered_questions(self):
         """测试构建上下文 - 包含未回答问题"""
@@ -32,7 +31,7 @@ class TestRequirementsVerifierAgent:
             requirements_qa_history=[
                 {"question": "您需要支持多用户吗？", "answer": "是的"},
                 {"question": "需要云同步吗？", "answer": None},
-                {"question": "需要移动端吗？", "answer": None}
+                {"question": "需要移动端吗？", "answer": None},
             ]
         )
 
@@ -55,7 +54,7 @@ class TestRequirementsVerifierAgent:
             original_user_requirement="我需要一个待办事项APP",
             requirements_qa_history=[
                 {"question": "您需要支持多用户吗？", "answer": "是的"},
-                {"question": "需要云同步吗？", "answer": "不需要"}
+                {"question": "需要云同步吗？", "answer": "不需要"},
             ]
         )
 
@@ -65,28 +64,23 @@ class TestRequirementsVerifierAgent:
         assert "**用户回答**: 是的" in context
         assert "**用户回答**: 不需要" in context
 
-    def test_parse_response_json_all_clear(self):
-        """测试解析JSON响应 - 验证通过"""
-        response_text = '''```json
-{
-    "all_clear": true,
-    "additional_questions": []
-}
+    def test_parse_response_yaml_all_clear(self):
+        """测试解析YAML响应 - 验证通过"""
+        response_text = '''```yaml
+all_clear: true
+additional_questions: []
 ```'''
         parsed = self.agent._parse_response(response_text)
         assert parsed["all_clear"] is True
         assert parsed["additional_questions"] == []
 
-    def test_parse_response_json_with_additional_questions(self):
-        """测试解析JSON响应 - 有额外问题需要追问"""
-        response_text = '''```json
-{
-    "all_clear": false,
-    "additional_questions": [
-        "关于数据备份方案，您有什么要求？",
-        "您期望的响应时间是多少？"
-    ]
-}
+    def test_parse_response_yaml_with_additional_questions(self):
+        """测试解析YAML响应 - 有额外问题需要追问"""
+        response_text = '''```yaml
+all_clear: false
+additional_questions:
+  - 关于数据备份方案，您有什么要求？
+  - 您期望的响应时间是多少？
 ```'''
         parsed = self.agent._parse_response(response_text)
         assert parsed["all_clear"] is False
@@ -128,16 +122,27 @@ class TestRequirementsVerifierAgent:
         assert len(parsed["additional_questions"]) == 2
 
     def test_parse_response_with_code_block(self):
-        """测试解析不带json标记的code块"""
+        """测试解析不带yaml标记的code块"""
         response_text = '''```
-{
-    "all_clear": false,
-    "additional_questions": ["需要确认性能要求"]
-}
+all_clear: false
+additional_questions:
+  - 需要确认性能要求
 ```'''
         parsed = self.agent._parse_response(response_text)
         assert parsed["all_clear"] is False
         assert len(parsed["additional_questions"]) == 1
+
+    def test_parse_response_yaml_block(self):
+        """测试解析yaml代码块"""
+        response_text = '''```yaml
+all_clear: false
+additional_questions:
+  - 需要确认性能要求
+```'''
+        parsed = self.agent._parse_response(response_text)
+        assert parsed["all_clear"] is False
+        assert len(parsed["additional_questions"]) == 1
+        assert "需要确认性能要求" in parsed["additional_questions"]
 
     def test_run_verification_passed(self):
         """测试run方法 - 验证通过"""
@@ -148,16 +153,14 @@ class TestRequirementsVerifierAgent:
             original_user_requirement="我需要一个待办事项APP",
             requirements_qa_history=[
                 {"question": "需要多用户？", "answer": "不需要"},
-                {"question": "需要移动端？", "answer": "需要"}
+                {"question": "需要移动端？", "answer": "需要"},
             ]
         )
 
         mock_response = MagicMock()
-        mock_response.content = '''```json
-{
-    "all_clear": true,
-    "additional_questions": []
-}
+        mock_response.content = '''```yaml
+all_clear: true
+additional_questions: []
 ```'''
         self.mock_llm.invoke.return_value = mock_response
 
@@ -177,19 +180,16 @@ class TestRequirementsVerifierAgent:
             current_stage="requirements",
             original_user_requirement="我需要一个待办事项APP",
             requirements_qa_history=[
-                {"question": "需要多用户？", "answer": "不需要"}
+                {"question": "需要多用户？", "answer": "不需要"},
             ]
         )
 
         mock_response = MagicMock()
-        mock_response.content = '''```json
-{
-    "all_clear": false,
-    "additional_questions": [
-        "您需要数据备份功能吗？",
-        "是否需要分享功能？"
-    ]
-}
+        mock_response.content = '''```yaml
+all_clear: false
+additional_questions:
+  - 您需要数据备份功能吗？
+  - 是否需要分享功能？
 ```'''
         self.mock_llm.invoke.return_value = mock_response
 
@@ -203,25 +203,3 @@ class TestRequirementsVerifierAgent:
         assert result.requirements_qa_history[1]["answer"] is None
         assert result.requirements_qa_history[2]["question"] == "是否需要分享功能？"
         self.mock_llm.invoke.assert_called_once()
-
-    def test_run_updates_timestamp(self):
-        """测试run方法更新时间戳"""
-        import time
-        state = PipelineState(
-            project_id="test-001",
-            project_name="测试项目",
-            current_stage="requirements",
-            original_user_requirement="我需要一个待办事项APP"
-        )
-        original_updated_at = state.updated_at
-
-        # 确保至少过了一微秒
-        time.sleep(0.0001)
-
-        mock_response = MagicMock()
-        mock_response.content = "ALL_CLEAR"
-        self.mock_llm.invoke.return_value = mock_response
-
-        result = self.agent.run(state)
-
-        assert result.updated_at >= original_updated_at

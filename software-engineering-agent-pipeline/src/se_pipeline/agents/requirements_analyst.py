@@ -1,7 +1,7 @@
 """
 需求分析师Agent - 分析模糊需求，主动提问逐步澄清
 """
-import json
+import yaml
 from typing import Dict
 from langchain_openai import ChatOpenAI
 
@@ -76,42 +76,45 @@ class RequirementsAnalystAgent(BaseAgent):
         return "\n".join(lines)
 
     def _parse_response(self, response_text: str) -> Dict:
-        """解析Claude响应"""
-        # 尝试提取JSON
+        """解析响应"""
+        # 尝试提取YAML
         try:
-            # 查找JSON块
-            if "```json" in response_text:
-                start = response_text.find("```json") + 7
+            # 查找YAML块
+            if "```yaml" in response_text:
+                start = response_text.find("```yaml") + 7
                 end = response_text.find("```", start)
-                json_text = response_text[start:end].strip()
+                yaml_text = response_text[start:end].strip()
             elif "```" in response_text:
                 start = response_text.find("```") + 3
                 end = response_text.find("```", start)
-                json_text = response_text[start:end].strip()
+                yaml_text = response_text[start:end].strip()
             else:
-                json_text = response_text.strip()
+                yaml_text = response_text.strip()
 
-            data = json.loads(json_text)
-            return data
-        except json.JSONDecodeError:
-            # 非JSON，尝试文本解析
-            if "ALL_CLEAR" in response_text or "所有问题" in response_text and "澄清" in response_text:
-                return {"all_clear": True}
+            data = yaml.safe_load(yaml_text)
+            if isinstance(data, dict):
+                return data
+        except yaml.YAMLError:
+            pass
 
-            # 提取问题，按行分割
-            questions = []
-            for line in response_text.splitlines():
-                line = line.strip()
-                if line.startswith(("-", "*", "1.", "2.", "3.", "4.", "5.")) and len(line) > 10:
-                    # 去掉列表标记
-                    q = line.lstrip("-* 1234567890.").strip()
-                    questions.append(q)
+        # YAML解析失败，尝试文本解析
+        if "ALL_CLEAR" in response_text or "所有问题" in response_text and "澄清" in response_text:
+            return {"all_clear": True}
 
-            if not questions:
-                # 整段就是一个问题
-                questions = [response_text[:200]]
+        # 提取问题，按行分割
+        questions = []
+        for line in response_text.splitlines():
+            line = line.strip()
+            if line.startswith(("-", "*", "1.", "2.", "3.", "4.", "5.")) and len(line) > 10:
+                # 去掉列表标记
+                q = line.lstrip("-* 1234567890.").strip()
+                questions.append(q)
 
-            return {
-                "all_clear": False,
-                "questions": questions
-            }
+        if not questions:
+            # 整段就是一个问题
+            questions = [response_text[:200]]
+
+        return {
+            "all_clear": False,
+            "questions": questions
+        }

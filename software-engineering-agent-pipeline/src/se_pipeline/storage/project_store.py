@@ -1,7 +1,7 @@
 """
 项目存储 - 按项目分目录保存所有阶段制品到本地文件
 """
-import json
+import yaml
 from typing import Optional
 from pathlib import Path
 
@@ -25,18 +25,18 @@ class ProjectStore:
         project_dir = self.get_project_dir(project_id)
         project_dir.mkdir(parents=True, exist_ok=True)
 
-        state_file = project_dir / "pipeline_state.json"
+        state_file = project_dir / "pipeline_state.yaml"
         with open(state_file, "w", encoding="utf-8") as f:
-            json.dump(state.model_dump(), f, indent=2, default=str)
+            yaml.dump(state.model_dump(), f, default_flow_style=False, sort_keys=False)
 
     def load_state(self, project_id: str) -> Optional[PipelineState]:
         """加载流水线状态"""
-        state_file = self.get_project_dir(project_id) / "pipeline_state.json"
+        state_file = self.get_project_dir(project_id) / "pipeline_state.yaml"
         if not state_file.exists():
             return None
 
         with open(state_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            data = yaml.safe_load(f)
 
         from ..types.pipeline import PipelineState
         return PipelineState(**data)
@@ -46,21 +46,21 @@ class ProjectStore:
         project_dir = self.get_project_dir(project_id)
         project_dir.mkdir(parents=True, exist_ok=True)
 
-        # 保存JSON
-        json_file = project_dir / "01-requirements.json"
-        with open(json_file, "w", encoding="utf-8") as f:
-            json.dump(spec.model_dump(), f, indent=2, default=str)
+        # 保存YAML
+        yaml_file = project_dir / "01-requirements.yaml"
+        with open(yaml_file, "w", encoding="utf-8") as f:
+            yaml.dump(spec.model_dump(), f, default_flow_style=False, sort_keys=False)
 
         # 生成Markdown文档
         md = self._generate_requirements_markdown(spec)
         md_file = project_dir / "01-requirements-spec.md"
-        with open(md_file, "w", encoding="utf-utf-8") as f:
+        with open(md_file, "w", encoding="utf-8") as f:
             f.write(md)
 
         # 保存问答历史单独文件
-        qa_file = project_dir / "qa-history.json"
+        qa_file = project_dir / "qa-history.yaml"
         with open(qa_file, "w", encoding="utf-8") as f:
-            json.dump(spec.qa_history.model_dump(), f, indent=2, default=str)
+            yaml.dump(spec.qa_history.model_dump(), f, default_flow_style=False, sort_keys=False)
 
     def _generate_requirements_markdown(self, spec: RequirementsSpec) -> str:
         """生成Markdown格式的需求规格文档"""

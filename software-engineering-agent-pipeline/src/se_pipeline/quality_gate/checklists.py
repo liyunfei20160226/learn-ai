@@ -12,22 +12,12 @@ def load_checklist_from_text(text: str) -> list[CheckItem]:
         if not line or line.startswith("#"):
             continue
         # 格式: "- id 问题描述 severity
+        # 跳过开头的列表标记 '-'
+        if line.startswith("-"):
+            line = line[1:].strip()
         # 最后一个词是 severity
         parts = line.rsplit(None, 1)
         if len(parts) != 2:
-            # 尝试另一种格式
-            parts = line.split()
-            if len(parts) >= 2:
-                *rest, sev = parts
-                question = " ".join(rest[1:])
-                item_id = parts[0]
-                if sev in ["error", "warning", "info"]:
-                    severity = Severity(sev)
-                    items.append(CheckItem(
-                        id=item_id,
-                        question=question,
-                        severity=severity
-                    ))
             continue
 
         rest, sev = parts

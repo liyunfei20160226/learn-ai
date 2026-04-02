@@ -1,7 +1,7 @@
 """
 最终需求生成Agent - 问答澄清验证通过后，整理生成标准化需求规格文档
 """
-import json
+import yaml
 from datetime import datetime
 from langchain_openai import ChatOpenAI
 
@@ -35,7 +35,7 @@ class RequirementsFinalAgent(BaseAgent):
         response = self.llm.invoke(full_prompt)
         response_text = response.content.strip()
 
-        # 解析JSON格式的需求规格
+        # 解析YAML格式的需求规格
         parsed = self._parse_response(response_text)
 
         # 构建RequirementsSpec制品
@@ -75,35 +75,43 @@ class RequirementsFinalAgent(BaseAgent):
             lines.append("")
 
         lines.append("# 任务")
-        lines.append("请根据上面完整的问答历史，整理生成一份标准化的需求规格文档，输出JSON格式。")
+        lines.append("请根据上面完整的问答历史，整理生成一份标准化的需求规格文档，输出YAML格式。")
 
         return "\n".join(lines)
 
     def _parse_response(self, response_text: str) -> dict:
-        """解析响应，提取JSON"""
+        """解析响应，提取YAML"""
         try:
-            if "```json" in response_text:
-                start = response_text.find("```json") + 7
+            if "```yaml" in response_text:
+                start = response_text.find("```yaml") + 7
                 end = response_text.find("```", start)
-                json_text = response_text[start:end].strip()
+                yaml_text = response_text[start:end].strip()
             elif "```" in response_text:
                 start = response_text.find("```") + 3
                 end = response_text.find("```", start)
-                json_text = response_text[start:end].strip()
+                yaml_text = response_text[start:end].strip()
             else:
-                json_text = response_text.strip()
+                yaml_text = response_text.strip()
 
-            return json.loads(json_text)
-        except json.JSONDecodeError:
+            data = yaml.safe_load(yaml_text)
+            if isinstance(data, dict):
+                return data
+            # 如果不是dict，YAML解析失败
+            raise yaml.YAMLError("Parsed result is not a dict")
+        except yaml.YAMLError:
             # 尝试修复常见问题
             cleaned = response_text
             # 去掉markdown
-            for marker in ["```json", "```"]:
+            for marker in ["```yaml", "```"]:
                 cleaned = cleaned.replace(marker, "")
             cleaned = cleaned.strip()
             try:
-                return json.loads(cleaned)
-            except json.JSONDecodeError:
+                data = yaml.safe_load(cleaned)
+                if isinstance(data, dict):
+                    return data
+                # 如果不是dict，YAML解析失败
+                raise yaml.YAMLError("Parsed result is not a dict")
+            except yaml.YAMLError:
                 # 返回空结构
                 return {
                     "title": "",

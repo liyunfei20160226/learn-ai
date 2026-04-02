@@ -1,7 +1,7 @@
 """
 需求验证官Agent - 独立验证需求是否足够清晰，发现遗漏则要求继续提问
 """
-import json
+import yaml
 from typing import Dict
 from langchain_openai import ChatOpenAI
 
@@ -90,21 +90,24 @@ class RequirementsVerifierAgent(BaseAgent):
     def _parse_response(self, response_text: str) -> Dict:
         """解析验证结果"""
         try:
-            # 尝试提取JSON
-            if "```json" in response_text:
-                start = response_text.find("```json") + 7
+            # 尝试提取YAML
+            if "```yaml" in response_text:
+                start = response_text.find("```yaml") + 7
                 end = response_text.find("```", start)
-                json_text = response_text[start:end].strip()
+                yaml_text = response_text[start:end].strip()
             elif "```" in response_text:
                 start = response_text.find("```") + 3
                 end = response_text.find("```", start)
-                json_text = response_text[start:end].strip()
+                yaml_text = response_text[start:end].strip()
             else:
-                json_text = response_text.strip()
+                yaml_text = response_text.strip()
 
-            data = json.loads(json_text)
-            return data
-        except json.JSONDecodeError:
+            data = yaml.safe_load(yaml_text)
+            if isinstance(data, dict):
+                return data
+            # 如果不是dict，YAML解析失败，走文本解析路径
+            raise yaml.YAMLError("Parsed result is not a dict")
+        except yaml.YAMLError:
             # 文本解析
             if "ALL_CLEAR" in response_text or "已经清晰" in response_text or "所有问题" in response_text and "澄清" in response_text:
                 return {"all_clear": True, "additional_questions": []}

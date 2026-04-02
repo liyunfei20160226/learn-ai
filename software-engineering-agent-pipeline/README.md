@@ -51,6 +51,33 @@ uv run python -m pytest tests/se_pipeline/graph/test_pipeline_graph_functions.py
 uv run python -m pytest tests/se_pipeline/graph/test_pipeline_graph_functions.py --cov=se_pipeline.graph.pipeline_graph --cov-report=term-missing
 ```
 
+### quality_gate 自动评审模块测试
+```bash
+# 运行 auto_reviewer 单元测试
+uv run pytest tests/se_pipeline/quality_gate/test_auto_reviewer.py -v
+
+# 查看 quality_gate 模块覆盖率
+uv run pytest tests/se_pipeline/quality_gate/test_auto_reviewer.py --cov=se_pipeline.quality_gate --cov-report=term
+```
+
+### storage 项目存储模块测试
+```bash
+# 运行 project_store 单元测试
+uv run pytest tests/se_pipeline/storage/test_project_store.py -v
+
+# 查看 project_store 模块覆盖率
+uv run pytest tests/se_pipeline/storage/test_project_store.py --cov=se_pipeline.storage.project_store --cov-report=term
+```
+
+### knowledge 知识图谱模块测试
+```bash
+# 运行 memory_mcp_client 单元测试
+uv run pytest tests/se_pipeline/knowledge/test_memory_mcp_client.py -v
+
+# 查看 memory_mcp_client 模块覆盖率
+uv run pytest tests/se_pipeline/knowledge/test_memory_mcp_client.py --cov=se_pipeline.knowledge.memory_mcp_client --cov-report=term
+```
+
 ## 测试覆盖率
 
 当前覆盖率：
@@ -61,4 +88,8 @@ uv run python -m pytest tests/se_pipeline/graph/test_pipeline_graph_functions.py
 | `requirements_verifier.py` | 100% |
 | `requirements_final.py` | 100% |
 | `pipeline_graph.py` | **94%** |
+| `auto_reviewer.py` | **100%** |
+| `checklists.py` | 96% |
+| `project_store.py` | **99%** |
+| `memory_mcp_client.py` | **100%** |
 | **Total** | **~98%** |

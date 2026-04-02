@@ -96,24 +96,22 @@ flowchart LR
 ## 概述
 ...文字描述...
 
-## 结构化输出（JSON）
-```json
-{
-  "version": "1.0",
-  "stageId": "requirements",
-  "projectId": "...",
-  "timestamp": "2026-...",
-  "data": {
-    // 具体结构化数据
-  }
-}
+## 结构化输出（YAML）
+```yaml
+version: 1.0
+stageId: requirements
+projectId: "..."
+timestamp: "2026-..."
+data:
+  # 具体结构化数据
 ```
 ````
 
 优势：
 - Markdown 让人读
-- JSON 让下一Agent机器读
+- YAML 让下一Agent机器读
 - 简单易解析，不需要复杂格式处理
+- 比 JSON 更易读，支持注释
 
 ---
 
@@ -121,17 +119,17 @@ flowchart LR
 
 | 序号 | Agent | 职责 | 输入 | 输出制品 | 质量检查要点 |
 |:--:|:-------|:-----|:-----|:---------|:-------------|
-| 1a | **需求分析师** | 通过交互式询问逐步澄清用户模糊需求，挖掘真实需求 | 用户原始需求 + 历史问答 | `intermediate/qa-history.json`<br/>`intermediate/draft-requirements.md` | - |
+| 1a | **需求分析师** | 通过交互式询问逐步澄清用户模糊需求，挖掘真实需求 | 用户原始需求 + 历史问答 | `intermediate/qa-history.yaml`<br/>`intermediate/draft-requirements.md` | - |
 | 1b | **需求验证官** | 独立重新阅读所有问答，验证需求是否足够清晰，若仍有疑问则要求继续提问 | 完整问答历史 + 草案需求 | 验证结论 + 是否需要继续提问 | 发现遗漏<br/>发现歧义 |
-| 1 | **需求分析（输出）** | 所有问题澄清后，整理生成最终标准化需求规格 | 完整问答历史 + 验证通过 | `01-requirements-spec.md`<br/>`requirements.json`<br/>`qa-history.json` | 完整性<br/>清晰性<br/>可测试性<br/>无歧义 |
-| 2 | **架构设计** | 设计整体架构、技术选型、模块划分、接口契约 | 需求规格 | `02-architecture-design.md`<br/>`architecture.json` | 模块化<br/>可扩展性<br/>技术选型适配<br/>依赖合理 |
-| 3 | **UI/原型** | 设计页面结构、组件划分、交互流程 | 需求+架构 | `03-ui-prototype.md`<br/>`wireframes.json` | 覆盖所有需求<br/>用户体验一致<br/>交互清晰 |
-| 4 | **数据库设计** | 设计表结构、关系、索引、约束 | 需求+架构+UI | `04-database-schema.md`<br/>`schema.sql`<br/>`er-diagram.json` | 范式遵守<br/>关系正确<br/>索引合理<br/>约束完整 |
-| 5 | **任务拆分** | 拆分成可开发的用户故事/开发任务 | 前序所有制品 | `05-task-backlog.md`<br/>`tasks.json` | 颗粒度适中<br/>依赖清晰<br/>可估算<br/>无重叠 |
+| 1 | **需求分析（输出）** | 所有问题澄清后，整理生成最终标准化需求规格 | 完整问答历史 + 验证通过 | `01-requirements-spec.md`<br/>`requirements.yaml`<br/>`qa-history.yaml` | 完整性<br/>清晰性<br/>可测试性<br/>无歧义 |
+| 2 | **架构设计** | 设计整体架构、技术选型、模块划分、接口契约 | 需求规格 | `02-architecture-design.md`<br/>`architecture.yaml` | 模块化<br/>可扩展性<br/>技术选型适配<br/>依赖合理 |
+| 3 | **UI/原型** | 设计页面结构、组件划分、交互流程 | 需求+架构 | `03-ui-prototype.md`<br/>`wireframes.yaml` | 覆盖所有需求<br/>用户体验一致<br/>交互清晰 |
+| 4 | **数据库设计** | 设计表结构、关系、索引、约束 | 需求+架构+UI | `04-database-schema.md`<br/>`schema.sql`<br/>`er-diagram.yaml` | 范式遵守<br/>关系正确<br/>索引合理<br/>约束完整 |
+| 5 | **任务拆分** | 拆分成可开发的用户故事/开发任务 | 前序所有制品 | `05-task-backlog.md`<br/>`tasks.yaml` | 颗粒度适中<br/>依赖清晰<br/>可估算<br/>无重叠 |
 | 6 | **代码生成** | 按照任务和设计生成完整代码实现 | 任务+设计 | 代码文件树<br/>`implementation-notes.md` | 符合架构设计<br/>遵守编码规范<br/>功能完整 |
-| 7 | **代码评审** | 评审代码质量、发现潜在问题 | 生成的代码 | `07-code-review-report.md`<br/>`issues.json` | 潜在bug<br/>可维护性<br/>安全问题<br/>符合设计 |
-| 8 | **测试验证** | 生成测试用例、执行测试、输出结果 | 代码+任务 | `08-test-report.md`<br/>`test-cases.json` | 覆盖率<br/>通过率<br/>边界覆盖 |
-| 9 | **预发布检查** | 整体一致性校验、完整性检查 | 所有前序制品 | `09-pre-release-check.md`<br/>`consistency-report.json` | 设计与实现一致<br/>所有需求都实现<br/>部署准备完成 |
+| 7 | **代码评审** | 评审代码质量、发现潜在问题 | 生成的代码 | `07-code-review-report.md`<br/>`issues.yaml` | 潜在bug<br/>可维护性<br/>安全问题<br/>符合设计 |
+| 8 | **测试验证** | 生成测试用例、执行测试、输出结果 | 代码+任务 | `08-test-report.md`<br/>`test-cases.yaml` | 覆盖率<br/>通过率<br/>边界覆盖 |
+| 9 | **预发布检查** | 整体一致性校验、完整性检查 | 所有前序制品 | `09-pre-release-check.md`<br/>`consistency-report.yaml` | 设计与实现一致<br/>所有需求都实现<br/>部署准备完成 |
 | 10 | **部署运维** | 生成部署配置、监控文档、运维指南 | 所有前序制品 | `10-deployment-config.md`<br/>配置文件 | 可部署性<br/>监控完整<br/>文档清晰 |
 
 ---
@@ -826,7 +824,7 @@ flowchart TD
      - 用户角色：有几类用户，每种用户权限是什么
      - 约束条件：性能、安全性、兼容性要求
      - 业务规则：具体的业务逻辑规则
-   - 每次提问和用户回答都**持久化保存到项目存储**（`qa-history.json`）
+   - 每次提问和用户回答都**持久化保存到项目存储**（`qa-history.yaml`）
 
 2. **需求验证官Agent**（独立验证）：
    - 在每一轮用户回答后，**独立重新阅读完整的问答历史**

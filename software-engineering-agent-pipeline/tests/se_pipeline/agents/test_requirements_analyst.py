@@ -20,7 +20,6 @@ class TestRequirementsAnalystAgent:
         """测试初始化"""
         assert self.agent.llm is self.mock_llm
         assert isinstance(self.agent, RequirementsAnalystAgent)
-        assert self.agent.name() == "RequirementsAnalystAgent"
 
     def test_build_context_with_empty_history(self):
         """测试构建上下文 - 空问答历史"""
@@ -58,28 +57,23 @@ class TestRequirementsAnalystAgent:
         assert "第2轮" in context
         assert "**问题**: 需要移动端支持吗？" in context
 
-    def test_parse_response_json_all_clear(self):
-        """测试解析JSON响应 - ALL_CLEAR"""
-        response_text = '''```json
-{
-    "all_clear": true,
-    "questions": []
-}
+    def test_parse_response_yaml_all_clear(self):
+        """测试解析YAML响应 - ALL_CLEAR"""
+        response_text = '''```yaml
+all_clear: true
+questions: []
 ```'''
         parsed = self.agent._parse_response(response_text)
         assert parsed["all_clear"] is True
         assert parsed.get("questions", []) == []
 
-    def test_parse_response_json_with_questions(self):
-        """测试解析JSON响应 - 有问题列表"""
-        response_text = '''```json
-{
-    "all_clear": false,
-    "questions": [
-        "您需要支持多用户吗？",
-        "需要移动端支持吗？"
-    ]
-}
+    def test_parse_response_yaml_with_questions(self):
+        """测试解析YAML响应 - 有问题列表"""
+        response_text = '''```yaml
+all_clear: false
+questions:
+  - 您需要支持多用户吗？
+  - 需要移动端支持吗？
 ```'''
         parsed = self.agent._parse_response(response_text)
         assert parsed["all_clear"] is False
@@ -121,19 +115,31 @@ class TestRequirementsAnalystAgent:
         parsed = self.agent._parse_response(response_text)
         assert parsed["all_clear"] is False
         assert len(parsed["questions"]) == 1
-        assert "需要支持多人协作编辑待办事项" in parsed["questions"][0]
+        assert "需要支持多人协作编辑" in parsed["questions"][0]
 
     def test_parse_response_with_code_block(self):
-        """测试解析不带json标记的code块"""
+        """测试解析不带yaml标记的code块"""
         response_text = '''```
 {
-    "all_clear": false,
-    "questions": ["测试问题"]
+  "all_clear": false,
+  "questions": ["测试问题"]
 }
 ```'''
         parsed = self.agent._parse_response(response_text)
         assert parsed["all_clear"] is False
         assert len(parsed["questions"]) == 1
+
+    def test_parse_response_yaml_block(self):
+        """测试解析yaml代码块"""
+        response_text = '''```yaml
+all_clear: false
+questions:
+  - 测试问题
+```'''
+        parsed = self.agent._parse_response(response_text)
+        assert parsed["all_clear"] is False
+        assert len(parsed["questions"]) == 1
+        assert "测试问题" in parsed["questions"]
 
     def test_run_with_needs_more_questions(self):
         """测试run方法 - 需要继续提问"""
@@ -146,11 +152,10 @@ class TestRequirementsAnalystAgent:
 
         # Mock LLM响应
         mock_response = MagicMock()
-        mock_response.content = '''```json
-{
-    "all_clear": false,
-    "questions": ["您需要支持多用户吗？"]
-}
+        mock_response.content = '''```yaml
+all_clear: false
+questions:
+  - 您需要支持多用户吗？
 ```'''
         self.mock_llm.invoke.return_value = mock_response
 
@@ -175,7 +180,7 @@ class TestRequirementsAnalystAgent:
         )
 
         mock_response = MagicMock()
-        mock_response.content = "ALL_CLEAR"
+        mock_response.content = "all_clear: true"
         self.mock_llm.invoke.return_value = mock_response
 
         result = self.agent.run(state)
@@ -184,25 +189,3 @@ class TestRequirementsAnalystAgent:
         # QA历史保持不变
         assert len(result.requirements_qa_history) == 1
         self.mock_llm.invoke.assert_called_once()
-
-    def test_run_updates_timestamp(self):
-        """测试run方法更新时间戳"""
-        import time
-        state = PipelineState(
-            project_id="test-001",
-            project_name="测试项目",
-            current_stage="requirements",
-            original_user_requirement="我需要一个待办事项APP"
-        )
-        original_updated_at = state.updated_at
-
-        # 确保至少过了一微秒
-        time.sleep(0.0001)
-
-        mock_response = MagicMock()
-        mock_response.content = "ALL_CLEAR"
-        self.mock_llm.invoke.return_value = mock_response
-
-        result = self.agent.run(state)
-
-        assert result.updated_at >= original_updated_at

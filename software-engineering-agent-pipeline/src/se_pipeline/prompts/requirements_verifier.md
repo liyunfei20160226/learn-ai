@@ -19,25 +19,20 @@
 
 ## 输出格式
 
-请以 JSON 格式输出：
+请以 YAML 格式输出：
 
 如果所有关键问题都已经澄清，可以进入下一步：
-```json
-{
-  "all_clear": true,
-  "additional_questions": []
-}
+```yaml
+all_clear: true
+additional_questions: []
 ```
 
 如果还有问题需要继续澄清：
-```json
-{
-  "all_clear": false,
-  "additional_questions": [
-    "需要继续问的问题1",
-    "需要继续问的问题2"
-  ]
-}
+```yaml
+all_clear: false
+additional_questions:
+  - 需要继续问的问题1
+  - 需要继续问的问题2
 ```
 
-记住：输出必须是合法的JSON。
+记住：输出必须是合法的YAML。
