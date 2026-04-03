@@ -75,10 +75,13 @@ def run_interactive(
 
     # 初始化LLM和所有Agent（手动步进，不使用编译后的app）
     llm = ChatOpenAI(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        model=os.getenv("OPENAI_MODEL"),
         temperature=0.0,
         api_key=os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL")
+        base_url=os.getenv("OPENAI_BASE_URL"),
+        extra_body={
+            "enable_thinking": False
+        }
     )
 
     # 检测知识图谱服务是否可用
