@@ -18,11 +18,29 @@
    ```bash
    cp .env.example .env
    # 编辑 .env 文件，设置 OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
+   # 如果要启用知识图谱，添加: MEMORY_MCP_BASE_URL=http://localhost:8000
    ```
 
 2. 安装依赖
    ```bash
    uv install
+   ```
+
+3. （可选）启动知识图谱HTTP服务
+   ```bash
+   cd memory-mcp
+   # Windows
+   start-http.bat
+   # Linux/macOS
+   ./start-http.sh
+   ```
+
+4. 运行交互式需求分析
+   ```bash
+   # 新建项目
+   uv run python examples/interactive_requirements_analysis.py --project-id "my-project" --project-name "我的项目"
+   # 继续已有项目（断点续问）
+   uv run python examples/interactive_requirements_analysis.py --project-id "my-project"
    ```
 
 ## 常用测试命令
@@ -76,6 +94,41 @@ uv run pytest tests/se_pipeline/knowledge/test_memory_mcp_client.py -v
 
 # 查看 memory_mcp_client 模块覆盖率
 uv run pytest tests/se_pipeline/knowledge/test_memory_mcp_client.py --cov=se_pipeline.knowledge.memory_mcp_client --cov-report=term
+```
+
+## 知识图谱集成
+
+本项目集成了 [memory-mcp](https://github.com/modelcontextprotocol/servers/tree/main/src/memory) 知识图谱，可以自动将项目和需求信息保存到知识图谱中，后续阶段可以读取上下文保持一致性。
+
+### 启动知识图谱 HTTP 服务
+
+```bash
+cd memory-mcp
+npm install
+npm run build
+
+# Windows
+start-http.bat
+
+# Linux/macOS
+./start-http.sh
+```
+
+默认端口 `8000`，指定端口：`./start-http.sh 8080`
+
+### 配置
+
+在 `.env` 中添加：
+```
+MEMORY_MCP_BASE_URL=http://localhost:8000
+```
+
+### 存储位置
+
+知识图谱默认持久化存储在 `memory-mcp/memory.jsonl`。可以通过环境变量自定义路径：
+```bash
+export MEMORY_FILE_PATH=/path/to/your/memory.jsonl
+./start-http.sh
 ```
 
 ## 测试覆盖率
