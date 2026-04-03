@@ -1,7 +1,6 @@
 """
 单元测试: 自动评审器 AutoReviewer
 """
-import pytest
 from unittest.mock import Mock, MagicMock
 from langchain_openai import ChatOpenAI
 from se_pipeline.quality_gate.auto_reviewer import AutoReviewer

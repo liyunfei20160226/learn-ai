@@ -23,7 +23,7 @@
 
 2. 安装依赖
    ```bash
-   uv install
+   uv sync
    ```
 
 3. （可选）启动知识图谱HTTP服务
@@ -37,8 +37,12 @@
 
 4. 运行交互式需求分析
    ```bash
-   # 新建项目
+   # 使用默认参数快速启动（project-id: interactive-001）
+   uv run python examples/interactive_requirements_analysis.py
+   
+   # 新建项目，指定项目ID和名称
    uv run python examples/interactive_requirements_analysis.py --project-id "my-project" --project-name "我的项目"
+   
    # 继续已有项目（断点续问）
    uv run python examples/interactive_requirements_analysis.py --project-id "my-project"
    ```
@@ -108,7 +112,7 @@ npm install
 npm run build
 
 # Windows
-start-http.bat
+./start-http.bat
 
 # Linux/macOS
 ./start-http.sh
@@ -131,18 +135,3 @@ export MEMORY_FILE_PATH=/path/to/your/memory.jsonl
 ./start-http.sh
 ```
 
-## 测试覆盖率
-
-当前覆盖率：
-
-| Module | Coverage |
-|--------|----------|
-| `requirements_analyst.py` | 100% |
-| `requirements_verifier.py` | 100% |
-| `requirements_final.py` | 100% |
-| `pipeline_graph.py` | **94%** |
-| `auto_reviewer.py` | **100%** |
-| `checklists.py` | 96% |
-| `project_store.py` | **99%** |
-| `memory_mcp_client.py` | **100%** |
-| **Total** | **~98%** |

@@ -1,7 +1,6 @@
 """
 单元测试: 需求分析师Agent RequirementsAnalystAgent
 """
-import pytest
 from unittest.mock import Mock, MagicMock
 from langchain_openai import ChatOpenAI
 from se_pipeline.agents.requirements_analyst import RequirementsAnalystAgent

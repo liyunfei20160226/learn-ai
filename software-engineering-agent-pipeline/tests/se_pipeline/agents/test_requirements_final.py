@@ -1,7 +1,6 @@
 """
 单元测试: 最终需求生成Agent RequirementsFinalAgent
 """
-import pytest
 from unittest.mock import Mock, MagicMock
 from datetime import datetime
 from langchain_openai import ChatOpenAI

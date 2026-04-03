@@ -70,7 +70,7 @@ class TestRequirementsFinalAgentLLM:
         assert len(qa.items) == 6
         assert qa.all_questions_answered is True
 
-        print(f"\n[生成结果]:")
+        print("\n[生成结果]:")
         print(f"  标题: {data.title}")
         print(f"  描述: {data.description[:100]}...")
         print(f"  功能需求数: {len(data.functional_requirements)}")

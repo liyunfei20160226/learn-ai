@@ -2,7 +2,6 @@
 单元测试: 项目存储 ProjectStore
 """
 import yaml
-from datetime import datetime
 from se_pipeline.storage.project_store import ProjectStore
 from se_pipeline.types.artifacts import RequirementsSpec
 from se_pipeline.types.pipeline import PipelineState
