@@ -27,7 +27,7 @@ class ProjectStore:
 
         state_file = project_dir / "pipeline_state.yaml"
         with open(state_file, "w", encoding="utf-8") as f:
-            yaml.dump(state.model_dump(), f, default_flow_style=False, sort_keys=False)
+            yaml.dump(state.model_dump(), f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
     def load_state(self, project_id: str) -> Optional[PipelineState]:
         """加载流水线状态"""
@@ -49,7 +49,7 @@ class ProjectStore:
         # 保存YAML
         yaml_file = project_dir / "01-requirements.yaml"
         with open(yaml_file, "w", encoding="utf-8") as f:
-            yaml.dump(spec.model_dump(), f, default_flow_style=False, sort_keys=False)
+            yaml.dump(spec.model_dump(), f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
         # 生成Markdown文档
         md = self._generate_requirements_markdown(spec)
@@ -60,7 +60,7 @@ class ProjectStore:
         # 保存问答历史单独文件
         qa_file = project_dir / "qa-history.yaml"
         with open(qa_file, "w", encoding="utf-8") as f:
-            yaml.dump(spec.qa_history.model_dump(), f, default_flow_style=False, sort_keys=False)
+            yaml.dump(spec.qa_history.model_dump(), f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
     def _generate_requirements_markdown(self, spec: RequirementsSpec) -> str:
         """生成Markdown格式的需求规格文档"""
