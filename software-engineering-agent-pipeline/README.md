@@ -24,6 +24,7 @@
 2. 安装依赖
    ```bash
    uv sync
+   uv pip install -e .
    ```
 
 3. （可选）启动知识图谱HTTP服务
