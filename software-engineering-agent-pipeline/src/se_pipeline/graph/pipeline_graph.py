@@ -15,6 +15,8 @@ from ..quality_gate import AutoReviewer
 
 
 def analyst_node(state: PipelineState, analyst: RequirementsAnalystAgent) -> PipelineState:
+    # 分析师总是基于完整问答历史重新分析，判断是否还需要提问
+    # 这符合设计：分析师自己判断直到没有问题，才交给验证官
     return analyst.run(state)
 
 
@@ -42,22 +44,46 @@ def quality_gate_node(state: PipelineState, reviewer: AutoReviewer) -> PipelineS
 
 def after_analyst(state: PipelineState) -> Literal["wait_user", "verifier"]:
     """分析师提问后，如果有未回答问题，等待用户回答
-    如果所有问题都回答了，进入验证
+    如果分析师已经没有问题要问，所有问题都回答了，进入验证
+
+    符合设计：分析师自己循环提问，直到觉得所有问题澄清，才交给验证官
     """
     has_unanswered = any(
         item["answer"] is None for item in state.requirements_qa_history
     )
     if has_unanswered:
-        return "wait_user"  # 外部暂停，等待用户回答 → 这是一个断点
+        return "wait_user"  # 有新问题需要用户回答 → 等待用户输入
     else:
+        if state.needs_more_questions:
+            # 所有问题都回答了，但分析师说还需要继续提问 → 回到分析师自己
+            # 分析师会基于新的问答历史，继续生成下一批问题
+            return "analyst"
+        else:
+            # 分析师真的没问题了 → 交给验证官
+            return "verifier"
+
+
+def after_verifier(state: PipelineState) -> Literal["analyst", "wait_user", "final"]:
+    """验证后：
+    流程分为两个独立循环：
+    1. 分析师循环：分析师提问→用户回答→分析师判断→循环直到分析师满意
+    2. 验证官循环：验证官验证→发现遗漏追加问题→用户回答→验证官判断→循环直到验证官满意
+
+    验证官开始后不再回分析师，独立完成验证循环。
+    """
+    has_unanswered = any(
+        item["answer"] is None for item in state.requirements_qa_history
+    )
+    if has_unanswered:
+        # 有未回答问题（刚添加的验证官追问）→ 去等待用户回答
+        # 用户回答完自动回到 verifier，验证官再次验证
+        return "wait_user"
+    elif state.needs_more_questions:
+        # 所有问题都回答了，但验证官判断还需要更多澄清 → 继续留在验证循环
+        # 回到 verifier 让验证官再次检查并添加新问题
         return "verifier"
-
-
-def after_verifier(state: PipelineState) -> Literal["analyst", "final"]:
-    """验证后，如果还需要提问，回到分析师，否则进入最终生成"""
-    if state.needs_more_questions:
-        return "analyst"
     else:
+        # 验证官也满意了 → 进入最终生成
         return "final"
 
 

@@ -141,15 +141,31 @@ def run_interactive(
 
     node = "analyst" if existing_state is None else after_analyst(state)
     steps = 0
-    max_steps = 20
 
-    while node != "__end__" and steps < max_steps:
+    # 节点名称转中文
+    node_name_map = {
+        "analyst": "需求分析师",
+        "wait_user": "等待用户回答",
+        "verifier": "需求验证官",
+        "final": "需求生成",
+        "quality_gate": "质量闸门",
+        "__end__": "结束"
+    }
+
+    while node != "__end__":
         steps += 1
-        print(f"🔄 步骤 {steps}, 当前: {node}...\n")
+        node_name = node_name_map.get(node, node)
+        print(f"🔄 步骤 {steps}, 当前: {node_name}...\n")
 
         if node == "analyst":
             state = analyst_node(state, analyst)
             node = after_analyst(state)
+            # 如果分析师判断所有问题已经澄清，直接进入下一阶段，给用户个提示
+            has_unanswered = any(item["answer"] is None for item in state.requirements_qa_history)
+            if not has_unanswered and state.needs_more_questions:
+                print("ℹ️  分析师检查确认所有问题已澄清，不需要继续提问，进入下一阶段...\n")
+            next_node_name = node_name_map.get(node, node)
+            print(f"➡️  下一步: {next_node_name}\n")
             continue
 
         if node == "wait_user":
@@ -179,16 +195,33 @@ def run_interactive(
                 print(f"   文件位置: {project_dir / 'pipeline_state.yaml'}")
                 print("   (即使退出，下次启动会自动继续)\n")
 
-            # wait_user -> verifier
+            # wait_user 只是等待用户输入，回答完后交给路由逻辑判断下一步
+            # 问题来自哪里，回答完回到哪里：
+            # - 如果分析师还没说 all_clear → 回到 analyst，让分析师继续
+            # - 如果分析师已经说 all_clear → 现在是验证官循环 → 回到 verifier，让验证官继续
             state = wait_user_node(state)
-            node = "verifier"
+
+            # 判断：当前是谁的循环？
+            # 关键：一旦分析师说 all_clear (requirements_verification_passed = False 但 needs_more_questions 是验证官需要)
+            # 就永远留在验证官循环，直到验证官也说 all_clear
+            if not state.requirements_verification_passed:
+                # 分析师还没通过验证 → 分析师循环，回到 analyst
+                node = "analyst"
+            else:
+                # 分析师已经通过，现在是验证官循环 → 回到 verifier
+                node = "verifier"
             continue
 
         if node == "verifier":
             print("🔍 需求验证中...\n")
             state = verifier_node(state, verifier)
             node = after_verifier(state)
-            print(f"➡️  下一步: {node}\n")
+            # 如果验证官判断所有问题已经澄清，直接进入下一阶段，给用户个提示
+            has_unanswered = any(item["answer"] is None for item in state.requirements_qa_history)
+            if not has_unanswered and state.needs_more_questions:
+                print("ℹ️  验证官检查确认所有问题已澄清，不需要继续提问，进入下一阶段...\n")
+            next_node_name = node_name_map.get(node, node)
+            print(f"➡️  下一步: {next_node_name}\n")
             # 保存状态
             project_dir = store.get_project_dir(project_id)
             project_dir.mkdir(parents=True, exist_ok=True)
@@ -199,6 +232,8 @@ def run_interactive(
             print("📝 生成最终需求规格...\n")
             state = final_node(state, finalizer)
             node = "quality_gate"
+            next_node_name = node_name_map.get(node, node)
+            print(f"➡️  下一步: {next_node_name}\n")
             # 保存状态
             project_dir = store.get_project_dir(project_id)
             project_dir.mkdir(parents=True, exist_ok=True)
@@ -207,9 +242,25 @@ def run_interactive(
 
         if node == "quality_gate":
             print("🛡️  质量闸门评审中...\n")
-            state = quality_gate_node(state, reviewer)
+            if state.requirements_spec is not None:
+                result = reviewer.review_requirements(state.requirements_spec)
+                # 打印评审结果
+                if result.passed:
+                    print("✅ 质量评审通过！\n")
+                else:
+                    print("❌ 质量评审不通过，需要进一步澄清：\n")
+                    print(result.feedback)
+                    print("\n⚠️  自动回流到需求分析师继续澄清...\n")
+                # 更新状态
+                if not result.passed:
+                    state = state.model_copy(update={
+                        "requirements_verification_passed": False,
+                        "needs_more_questions": True,
+                        "backflow_feedback": result.feedback
+                    })
             node = after_quality_gate(state)
-            print(f"➡️  下一步: {node}\n")
+            next_node_name = node_name_map.get(node, node)
+            print(f"➡️  下一步: {next_node_name}\n")
             # 保存状态
             project_dir = store.get_project_dir(project_id)
             project_dir.mkdir(parents=True, exist_ok=True)
@@ -221,7 +272,6 @@ def run_interactive(
     store.save_state(project_id, state)
     if state.requirements_spec is not None:
         store.save_requirements(project_id, state.requirements_spec)
-        store.generate_requirements_markdown(project_id, state.requirements_spec)
     project_dir = store.get_project_dir(project_id)
     print(f"✓ 所有文件已保存到: {project_dir}")
     print("  - pipeline_state.yaml - 当前流水线状态（包含完整问答历史）")

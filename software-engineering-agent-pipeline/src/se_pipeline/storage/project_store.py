@@ -46,10 +46,13 @@ class ProjectStore:
         project_dir = self.get_project_dir(project_id)
         project_dir.mkdir(parents=True, exist_ok=True)
 
-        # 保存YAML
+        # 保存YAML - 只保存需求规格数据，不保存完整问答历史
+        # 问答历史已经单独保存在 qa-history.yaml 中
+        data = spec.model_dump()
+        data.pop("qa_history", None)
         yaml_file = project_dir / "01-requirements.yaml"
         with open(yaml_file, "w", encoding="utf-8") as f:
-            yaml.dump(spec.model_dump(), f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
         # 生成Markdown文档
         md = self._generate_requirements_markdown(spec)
@@ -110,18 +113,6 @@ class ProjectStore:
             for item in spec.data.out_of_scope:
                 lines.append(f"- {item}")
             lines.append("")
-
-        if spec.qa_history.items:
-            lines.append("## 问答澄清历史")
-            lines.append("")
-            for i, item in enumerate(spec.qa_history.items, 1):
-                lines.append(f"### 问题 {i}")
-                lines.append(f"**问题**: {item.question}")
-                if item.answer:
-                    lines.append(f"**回答**: {item.answer}")
-                else:
-                    lines.append("**状态**: ⏸ 尚未回答")
-                lines.append("")
 
         return "\n".join(lines)
 

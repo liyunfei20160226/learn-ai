@@ -62,7 +62,19 @@ class RequirementsAnalystAgent(BaseAgent):
         lines.append("# 用户原始需求")
         lines.append(state.original_user_requirement)
         lines.append("")
+
+        # 如果有质量闸门回流反馈，先告诉分析师问题在哪里
+        if state.backflow_feedback:
+            lines.append("# 质量闸门评审反馈")
+            lines.append("质量闸门对之前生成的需求规格进行了评审，发现以下问题需要补充澄清：")
+            lines.append("")
+            lines.append(state.backflow_feedback)
+            lines.append("")
+            lines.append("请根据上述反馈，判断是否需要继续向用户提问以澄清这些问题。")
+            lines.append("")
+
         lines.append("# 当前问答历史")
+        lines.append("")
 
         for i, item in enumerate(state.requirements_qa_history, 1):
             q = item["question"]

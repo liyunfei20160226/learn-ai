@@ -61,7 +61,19 @@ class RequirementsVerifierAgent(BaseAgent):
         lines.append("# 用户原始需求")
         lines.append(state.original_user_requirement)
         lines.append("")
+
+        # 如果有质量闸门回流反馈，先告诉验证官问题在哪里
+        if state.backflow_feedback:
+            lines.append("# 质量闸门评审反馈")
+            lines.append("质量闸门对之前生成的需求规格进行了评审，发现以下问题需要补充澄清：")
+            lines.append("")
+            lines.append(state.backflow_feedback)
+            lines.append("")
+            lines.append("请根据上述反馈，结合完整问答历史，判断是否还有需要继续向用户澄清的问题。")
+            lines.append("")
+
         lines.append("# 完整问答历史")
+        lines.append("")
 
         unanswered = []
         for i, item in enumerate(state.requirements_qa_history, 1):

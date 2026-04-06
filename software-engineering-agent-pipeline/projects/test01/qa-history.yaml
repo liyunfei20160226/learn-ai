@@ -1,0 +1,357 @@
+items:
+- question_id: q1
+  question: 您期望的用户使用场景是什么？例如：是仅供个人使用的私有工具，还是支持多用户注册登录的公共平台？
+  answer: 个人使用
+  created_at: 2026-04-06 11:18:29.108140
+  answered_at: null
+- question_id: q2
+  question: 对于“极简”的核心功能边界，您认为哪些是必须包含的（如：增删改查、分类、截止日期），哪些是明确不需要做的（如：子任务、文件附件、团队协作）？
+  answer: 仅包括增删改查
+  created_at: 2026-04-06 11:18:29.108145
+  answered_at: null
+- question_id: q3
+  question: 数据持久化方面有什么偏好？是仅保存在浏览器本地（LocalStorage，刷新不丢失但换设备丢失），还是需要后端服务器存储以支持多端同步？
+  answer: LocalStorage
+  created_at: 2026-04-06 11:18:29.108146
+  answered_at: null
+- question_id: q4
+  question: 在“增删改查”的具体交互上，您是否需要对任务进行状态标记（例如：点击复选框标记为“已完成”，并支持在列表中隐藏或区分显示已完成任务）？
+  answer: 仅标记已完成，未完成
+  created_at: 2026-04-06 11:18:29.108148
+  answered_at: null
+- question_id: q5
+  question: 对于数据管理，考虑到使用 LocalStorage，您是否需要提供“一键清空所有数据”或“导出/导入数据（如 JSON 文件）”的功能，以防误删或更换浏览器？
+  answer: 不需要
+  created_at: 2026-04-06 11:18:29.108149
+  answered_at: null
+- question_id: q6
+  question: 在界面呈现上，除了任务列表本身，您是否希望包含简单的统计信息（如：今日待办数量）或深色模式切换？
+  answer: 不需要
+  created_at: 2026-04-06 11:18:29.108150
+  answered_at: null
+- question_id: q7
+  question: 关于任务的排序规则，您希望新添加的任务是默认显示在列表最上方（最新优先），还是按照某种特定顺序（如创建时间正序）排列？
+  answer: 按创建时间
+  created_at: 2026-04-06 11:18:29.108151
+  answered_at: null
+- question_id: q8
+  question: 在技术实现偏好上，您是否有指定的技术栈要求（例如：纯原生 HTML/JS、React、Vue 等），还是由开发者根据‘极简’原则自行选择最轻量的方案？
+  answer: next.js
+  created_at: 2026-04-06 11:18:29.108151
+  answered_at: null
+- question_id: q9
+  question: 对于部署环境，您是希望得到一个可直接在浏览器打开的静态文件（index.html），还是需要包含简单的本地服务器启动脚本？
+  answer: 本地服务
+  created_at: 2026-04-06 11:18:29.108153
+  answered_at: null
+- question_id: q10
+  question: 关于‘按创建时间’排序，您具体是指‘最新创建的在最上面’（倒序），还是‘最早创建的在最上面’（正序）？
+  answer: 倒序
+  created_at: 2026-04-06 11:18:29.108154
+  answered_at: null
+- question_id: q11
+  question: 在任务编辑功能上，考虑到极简原则，您是希望支持修改任务的全部文本内容，还是仅允许修改文字而不涉及其他属性（如之前确认无分类、无日期）？
+  answer: 可以修改任务文本内容，标记为已完成/未完成
+  created_at: 2026-04-06 11:18:29.108155
+  answered_at: null
+- question_id: q12
+  question: 对于 Next.js 项目结构，您是否需要包含代码格式化（如 Prettier）或基础 lint 检查配置，还是仅保留最核心的运行代码即可？
+  answer: 现在流行的Next.js项目架构
+  created_at: 2026-04-06 11:18:29.108156
+  answered_at: null
+- question_id: q13
+  question: 关于 UI 框架的选择，您希望使用 Next.js 生态中流行的组件库（如 Tailwind CSS + shadcn/ui 或 Mantine）来快速构建美观界面，还是坚持‘极简’原则仅使用原生
+    CSS 以确保零依赖和极致轻量？
+  answer: Tailwind CSS + shadcn/ui
+  created_at: 2026-04-06 11:18:29.108157
+  answered_at: null
+- question_id: q14
+  question: 在任务删除操作上，您是希望点击删除按钮后立即永久删除，还是需要增加一个简单的二次确认弹窗以防止误触？
+  answer: 立即永久删除
+  created_at: 2026-04-06 11:18:29.108158
+  answered_at: null
+- question_id: q15
+  question: 对于 Next.js 的版本选择，您是否指定使用最新的 App Router (app 目录) 架构，还是传统的 Pages Router
+    (pages 目录) 架构？
+  answer: App Router (app 目录) 架构
+  created_at: 2026-04-06 11:18:29.108159
+  answered_at: null
+- question_id: q16
+  question: 关于 shadcn/ui 组件的具体选型：考虑到极简原则，您希望任务列表使用哪种交互模式？是‘每行任务右侧常驻编辑/删除按钮’，还是‘点击任务进入编辑态/悬停显示操作按钮’以保持界面最干净？
+  answer: ‘点击任务进入编辑态/悬停显示操作按钮’以保持界面最干净
+  created_at: 2026-04-06 11:18:29.108160
+  answered_at: null
+- question_id: q17
+  question: 在‘修改任务文本’的交互细节上：您是希望点击任务文字直接变为输入框进行原地编辑（Inline Edit），还是点击后弹出一个模态框（Modal/Dialog）来进行修改？
+  answer: 点击任务文字直接变为输入框进行原地编辑（Inline Edit）
+  created_at: 2026-04-06 11:18:29.108161
+  answered_at: null
+- question_id: q18
+  question: 对于空状态（Empty State）的处理：当没有任何任务时，您希望页面仅显示空白，还是需要一句简单的提示语（如‘暂无待办事项’）或一个引导添加的视觉占位？
+  answer: 需要一句简单的提示语（如‘暂无待办事项’）
+  created_at: 2026-04-06 11:18:29.108162
+  answered_at: null
+- question_id: q19
+  question: 关于‘悬停显示操作按钮’的交互细节：在桌面端悬停显示删除按钮是明确的，但在移动端（无鼠标悬停状态）您希望如何触发删除或编辑操作？（例如：点击任务右侧的隐藏图标、左滑删除，还是点击任务进入编辑态时同时显示删除按钮？）
+  answer: 点击任务进入编辑态时同时显示删除按钮
+  created_at: 2026-04-06 11:18:29.108163
+  answered_at: null
+- question_id: q20
+  question: 对于输入体验，当用户在‘原地编辑’模式下完成修改时，您期望通过什么方式保存？（例如：失去焦点自动保存、按 Enter 键保存，还是需要显式的‘保存’按钮？）
+  answer: 失去焦点自动保存
+  created_at: 2026-04-06 11:18:29.108164
+  answered_at: null
+- question_id: q21
+  question: '"关于输入验证：当用户尝试添加空任务，或在编辑时将任务内容清空，系统应如何处理？（例如：禁止提交并提示、自动忽略、还是允许存在空任务？）",'
+  answer: 禁止提交并提示
+  created_at: 2026-04-06 11:18:29.108165
+  answered_at: null
+- question_id: q22
+  question: '"关于视觉反馈：在执行‘删除’或‘标记完成’操作时，您是否需要简单的过渡动画（如淡出、划除线效果）来提升体验，还是要求瞬间变化无任何动画？",'
+  answer: 划除线效果
+  created_at: 2026-04-06 11:18:29.108166
+  answered_at: null
+- question_id: q23
+  question: '"关于键盘快捷键：为了极致的操作效率，您是否希望支持常用快捷键？（例如：在输入框按 Enter 新增、在列表页按 Escape 取消编辑、或全局快捷键聚焦输入框？）"'
+  answer: 不需要
+  created_at: 2026-04-06 11:18:29.108167
+  answered_at: null
+- question_id: q24
+  question: 关于响应式设计：虽然明确了移动端的删除交互，但您是否希望整个页面布局在移动端（手机/平板）和桌面端有自适应调整（例如：输入框宽度、列表间距、字体大小随屏幕变化），还是固定为桌面端布局仅做简单缩放？
+  answer: 固定为桌面端布局
+  created_at: 2026-04-06 11:18:29.108168
+  answered_at: null
+- question_id: q25
+  question: 关于 PWA 支持：考虑到是 LocalStorage 存储的个人工具，您是否希望将其配置为 PWA（渐进式 Web 应用），以便用户可以‘安装’到桌面或手机主屏幕，并支持离线访问？
+  answer: 不需要
+  created_at: 2026-04-06 11:18:29.108169
+  answered_at: null
+- question_id: q26
+  question: '"关于‘禁止提交并提示’的具体交互形式：当用户尝试提交空任务时，您希望采用哪种反馈方式？（例如：输入框变红并抖动、在输入框下方显示红色文字提示、还是浏览器原生的
+    alert 弹窗？）",'
+  answer: 输入框变红并抖动、在输入框下方显示红色文字提示
+  created_at: 2026-04-06 11:18:29.108171
+  answered_at: null
+- question_id: q27
+  question: '"关于新增任务的输入框位置：您希望输入框始终固定在列表顶部（类似传统待办），还是希望它位于列表最上方（即最新任务之上），以便符合‘倒序’的视觉流？",'
+  answer: 输入框始终固定在列表顶部
+  created_at: 2026-04-06 11:18:29.108172
+  answered_at: null
+- question_id: q28
+  question: '"关于编辑状态的取消机制：在‘原地编辑’模式下，如果用户修改了内容但不想保存，除了‘失去焦点自动保存’外，是否需要支持按 Escape 键取消编辑并恢复原文本？（注：前序回答提到不需要快捷键，此处特指编辑场景下的常规取消操作是否保留）"'
+  answer: 不存在这种情况，如果用户改错了，再次修改即可
+  created_at: 2026-04-06 11:18:29.108173
+  answered_at: null
+- question_id: q29
+  question: '"关于输入框的初始状态：页面加载后，顶部的任务输入框是默认处于‘聚焦可输入’状态，还是需要用户先点击一下才能开始输入？",'
+  answer: 默认处于‘聚焦可输入’状态
+  created_at: 2026-04-06 11:18:29.108174
+  answered_at: null
+- question_id: q30
+  question: '"关于已完成任务的视觉层级：被标记为‘已完成’的任务（带划除线），在列表中是保持在原位置（按创建时间倒序），还是自动沉底移动到列表最下方？",'
+  answer: 保持在原位置
+  created_at: 2026-04-06 11:18:29.108175
+  answered_at: null
+- question_id: q31
+  question: '"关于编辑时的交互细节：当任务进入‘原地编辑’状态（变为输入框）时，如果用户点击了列表中的其他任务，当前编辑是立即保存并退出，还是保持编辑状态直到失去焦点？"'
+  answer: 当前编辑是立即保存并退出
+  created_at: 2026-04-06 11:18:29.108176
+  answered_at: null
+- question_id: q32
+  question: '"关于输入框的交互细节：当用户在顶部输入框按下 Enter 键新增任务后，您希望输入框是自动清空并继续保持聚焦（方便连续输入），还是清空后失去聚焦？",'
+  answer: 输入框自动清空并继续保持聚焦
+  created_at: 2026-04-06 11:18:29.108178
+  answered_at: null
+- question_id: q33
+  question: '"关于错误提示的消失机制：当输入框因‘空任务’变红并显示提示文字后，该错误状态和提示文字应在何时消失？（例如：用户一开始输入就立即消失，还是需要用户手动点击其他地方？）",'
+  answer: 用户一开始输入就立即消失
+  created_at: 2026-04-06 11:18:29.108178
+  answered_at: null
+- question_id: q34
+  question: '"关于数据结构的唯一性：虽然不需要复杂功能，但为了技术实现的稳定性，是否需要为每个任务生成一个唯一的 ID（如时间戳或 UUID），还是仅依赖文本内容和完成状态即可？"'
+  answer: 仅依赖文本内容和完成状态即可
+  created_at: 2026-04-06 11:18:29.108179
+  answered_at: null
+- question_id: q35
+  question: 关于数据唯一性的潜在冲突：您确认任务仅依赖‘文本内容’作为唯一标识（无独立 ID）。如果用户创建了两个完全相同的任务文本，系统是允许存在重复条目，还是自动合并/禁止添加重复项？
+  answer: 禁止添加重复项
+  created_at: 2026-04-06 11:18:29.108180
+  answered_at: null
+- question_id: q36
+  question: 关于编辑时的重复检测：在‘原地编辑’模式下，如果用户将任务 A 的文本修改为与列表中已存在的任务 B 完全一致，系统应如何处理（报错提示、自动合并、还是允许重复）？
+  answer: 报错提示
+  created_at: 2026-04-06 11:18:29.108181
+  answered_at: null
+- question_id: q37
+  question: 关于报错提示的具体形式：在‘原地编辑’发生重复冲突时，您希望采用与新增任务一致的‘输入框变红 + 下方文字提示’方式，还是其他特定的反馈形式？
+  answer: 采用与新增任务一致的‘输入框变红 + 下方文字提示’方式
+  created_at: 2026-04-06 11:18:29.108182
+  answered_at: null
+- question_id: q38
+  question: 关于编辑冲突时的状态保持：当编辑任务因‘重复’报错时，输入框是保持编辑状态（允许用户继续修改文本），还是立即退出编辑态恢复为普通文本显示？
+  answer: 输入框是保持编辑状态（允许用户继续修改文本）
+  created_at: 2026-04-06 11:18:29.108183
+  answered_at: null
+- question_id: q39
+  question: '"关于错误提示的消失机制（编辑场景）：在‘原地编辑’因重复报错（输入框变红 + 提示文字）后，该错误状态和提示文字应在何时消失？（是与新增任务一致的‘用户一开始输入就立即消失’，还是需要其他触发条件？）",'
+  answer: 与新增任务一致的‘用户一开始输入就立即消失’
+  created_at: 2026-04-06 11:18:29.108184
+  answered_at: null
+- question_id: q40
+  question: '"关于编辑保存的反馈：当‘原地编辑’因失去焦点或点击其他任务而自动保存成功时，您是否需要任何视觉反馈（如短暂的绿色高亮、对勾图标闪现），还是直接静默更新无任何提示？",'
+  answer: 不需要
+  created_at: 2026-04-06 11:18:29.108185
+  answered_at: null
+- question_id: q41
+  question: '"关于项目初始化：您希望我直接提供完整的核心代码文件（如 page.tsx, components 等），还是需要提供包含初始化命令（如
+    npx create-next-app... 及 shadcn 安装步骤）的完整搭建指南？"'
+  answer: 完整搭建指南
+  created_at: 2026-04-06 11:18:29.108186
+  answered_at: null
+- question_id: q42
+  question: '"关于重复检测的范围确认：您提到‘禁止添加重复项’，这个检测是严格区分大小写的（例如''Task''和''task''视为不同），还是忽略大小写视为相同？",'
+  answer: 忽略大小写视为相同
+  created_at: 2026-04-06 11:18:29.108187
+  answered_at: null
+- question_id: q43
+  question: '"关于空格的處理：在判断重复或提交任务时，是否需要自动去除文本首尾的空格（例如'' 任务 ''视为''任务''），还是保留用户输入的所有空格字符？",'
+  answer: 自动去除文本首尾的空格
+  created_at: 2026-04-06 11:18:29.108188
+  answered_at: null
+- question_id: q44
+  question: '"关于 shadcn/ui 的具体组件：为了构建界面，您希望明确使用 shadcn/ui 中的哪些具体组件？（例如：Input, Button,
+    Checkbox, Label, Toast/Sonner 用于提示等），还是由开发者根据最佳实践自行选择最匹配的组件？"'
+  answer: 由开发者根据最佳实践自行选择最匹配的组件
+  created_at: 2026-04-06 11:18:29.108189
+  answered_at: null
+- question_id: q45
+  question: '"关于数据持久化的时机：考虑到使用 LocalStorage，您希望数据是在每次操作（新增、删除、修改、标记状态）后实时同步保存，还是仅在特定时刻（如页面关闭前）统一保存？",'
+  answer: 实时同步保存
+  created_at: 2026-04-06 11:18:29.108189
+  answered_at: null
+- question_id: q46
+  question: '"关于极端异常处理：如果用户的浏览器禁用了 LocalStorage 或存储空间已满，导致无法保存数据，您希望系统如何反应？（例如：静默失败、在页面顶部显示永久性错误横幅、还是弹出阻断式警告？)",'
+  answer: 弹出阻断式警告
+  created_at: 2026-04-06 11:18:29.108190
+  answered_at: null
+- question_id: q47
+  question: '"关于多标签页同步：如果用户在同一个浏览器的多个标签页中同时打开此网站，在一个标签页修改数据后，您是否期望其他标签页的列表能自动实时更新，还是保持各自独立直到刷新页面？"'
+  answer: 保持各自独立直到刷新页面
+  created_at: 2026-04-06 11:18:29.108191
+  answered_at: null
+- question_id: q48
+  question: '"关于‘阻断式警告’的具体形式：当 LocalStorage 不可用或已满时，您希望使用浏览器原生的 alert 弹窗，还是使用 shadcn/ui
+    风格的模态对话框（Modal）来显示错误信息？",'
+  answer: 使用 shadcn/ui 风格的模态对话框（Modal）来显示错误信息
+  created_at: 2026-04-06 11:18:29.108192
+  answered_at: null
+- question_id: q49
+  question: '"关于错误提示的文案：对于‘禁止添加重复项’和‘禁止提交空任务’这两种情况，您是否有指定的提示文字内容，还是由开发者拟定通用的友好提示（如‘该任务已存在’、‘任务内容不能为空’）？",'
+  answer: ‘该任务已存在’、‘任务内容不能为空’
+  created_at: 2026-04-06 11:18:29.108193
+  answered_at: null
+- question_id: q50
+  question: '"关于页面标题与元数据：既然是个人使用的极简工具，您希望浏览器标签页标题（Title）显示什么内容（例如''My Todos''、''极简待办''），还是需要支持用户自定义标题？"'
+  answer: '''My Todos'''
+  created_at: 2026-04-06 11:18:29.108194
+  answered_at: null
+- question_id: q51
+  question: '"关于任务列表的分页或加载策略：考虑到任务按创建时间倒序排列且长期积累，您是否希望限制列表显示的数量（如仅显示最近 50 条），还是无论多少条任务都一次性全部渲染加载？",'
+  answer: 分页显示，每页20条
+  created_at: 2026-04-06 11:18:29.108195
+  answered_at: null
+- question_id: q52
+  question: '"关于‘极简’的视觉风格细节：在使用 Tailwind CSS + shadcn/ui 时，您偏好哪种预设主题风格？（例如：标准的黑白灰冷淡风、带圆角的柔和风格，还是其他特定色调偏好？）",'
+  answer: 带圆角的柔和风格
+  created_at: 2026-04-06 11:18:29.108196
+  answered_at: null
+- question_id: q53
+  question: '"关于浏览器兼容性：虽然主要面向个人使用，您是否需要考虑对旧版浏览器（如 Safari 旧版本、非 Chromium 内核浏览器）的兼容支持，还是仅针对现代主流浏览器（Chrome/Edge/Firefox
+    最新版）优化即可？"'
+  answer: 仅针对现代主流浏览器（Chrome/Edge/Firefox 最新版）优化即可
+  created_at: 2026-04-06 11:18:29.108196
+  answered_at: null
+- question_id: q54
+  question: '"关于分页交互细节：在任务列表底部，您希望分页器以何种形式呈现？（例如：显示‘上一页/下一页’按钮、具体的页码数字 [1, 2, 3...]，还是仅当数据超过
+    20 条时才显示简单的‘加载更多’按钮？）",'
+  answer: 显示‘上一页/下一页’按钮、具体的页码数字 [1, 2, 3...]
+  created_at: 2026-04-06 11:18:29.108197
+  answered_at: null
+- question_id: q55
+  question: '"关于分页时的状态保持：当用户翻到第 2 页或更后的页面时，如果执行了‘新增任务’（新任务会出现在第 1 页），您希望页面自动跳转回第 1
+    页以展示新任务，还是保持在当前页码不变？",'
+  answer: 页面自动跳转回第 1 页以展示新任务
+  created_at: 2026-04-06 11:18:29.108198
+  answered_at: null
+- question_id: q56
+  question: '"关于删除任务后的分页行为：如果在非第 1 页删除了该页的最后一个任务，导致当前页变为空，您希望系统自动跳转到上一页，还是停留在当前页显示‘暂无数据’提示？"'
+  answer: 系统自动跳转到上一页
+  created_at: 2026-04-06 11:18:29.108199
+  answered_at: null
+- question_id: q57
+  question: '"关于分页器的具体位置：您希望分页控件是固定在页面底部（始终可见），还是仅当任务列表滚动到底部时才出现，亦或是跟随在任务列表末尾（随内容滚动）？",'
+  answer: 始终可见
+  created_at: 2026-04-06 11:18:29.108200
+  answered_at: null
+- question_id: q58
+  question: '"关于‘上一页/下一页’按钮的禁用状态：当处于第 1 页时，‘上一页’按钮是隐藏不显示，还是显示但置灰（不可点击）？同理，最后一页的‘下一页’按钮如何处理？",'
+  answer: 置灰（不可点击）
+  created_at: 2026-04-06 11:18:29.108201
+  answered_at: null
+- question_id: q59
+  question: '"关于页码数字的显示策略：如果总页数很多（例如 50 页），您是希望显示所有页码数字，还是采用折叠策略（例如只显示''1 ... 4 5
+    6 ... 50''）以保持界面简洁？"'
+  answer: 折叠策略
+  created_at: 2026-04-06 11:18:29.108201
+  answered_at: null
+- question_id: q60
+  question: '"关于分页器的视觉细节：采用‘折叠策略’显示页码时，您希望当前页码高亮显示，还是仅通过不可点击的‘上一页/下一页’置灰状态来暗示位置？",'
+  answer: 当前页码高亮显示
+  created_at: 2026-04-06 11:18:29.108202
+  answered_at: null
+- question_id: q61
+  question: '"关于空状态的显示时机：当任务总数为 0（即第 1 页也无数据）时，页面是显示‘暂无待办事项’提示且不显示分页器，还是依然显示置灰的分页控件？",'
+  answer: 显示‘暂无待办事项’提示且不显示分页器
+  created_at: 2026-04-06 11:18:29.108203
+  answered_at: null
+- question_id: q62
+  question: '"关于质量闸门指出的''7 条功能需求’：回顾我们的对话，核心功能已明确为：1.新增任务、2.删除任务、3.编辑任务、4.标记完成状态、5.列表分页展示、6.数据本地持久化、7.输入验证与重复检测。您是否确认这
+    7 项即为最终锁定的功能清单，无需补充或调整？"'
+  answer: 确认
+  created_at: 2026-04-06 11:18:29.108204
+  answered_at: null
+- question_id: q63
+  question: '"关于分页的具体交互细节：当用户点击具体的页码数字（如从第 1 页跳到第 5 页）时，您希望页面滚动条自动回到列表顶部，还是保持在当前滚动位置？",'
+  answer: 自动回到列表顶部
+  created_at: 2026-04-06 11:18:29.108205
+  answered_at: null
+- question_id: q64
+  question: '"关于‘柔和圆角风格’的具体量化标准：您希望界面中的卡片、输入框和按钮的圆角半径（border-radius）统一设置为多少？（例如：sm(4px),
+    md(8px), lg(12px), 或 full/圆形）",'
+  answer: sm(4px)
+  created_at: 2026-04-06 11:18:29.108206
+  answered_at: null
+- question_id: q65
+  question: '"关于已完成任务的视觉层级补充：被标记为‘已完成’的任务在列表中是否需要进行视觉弱化处理（如文字颜色变灰、透明度降低），还是仅保留‘划除线’效果即可？"'
+  answer: 透明度降低
+  created_at: 2026-04-06 11:18:29.108207
+  answered_at: null
+- question_id: q66
+  question: '"关于分页器的视觉细节：在采用‘折叠策略’显示页码时，您希望省略的中间页码用什么样的符号连接？（例如：标准的省略号 ''...''，还是其他特定符号？）",'
+  answer: 标准的省略号 '...'
+  created_at: 2026-04-06 11:18:29.108208
+  answered_at: null
+- question_id: q67
+  question: '"关于分页器的每页条数固定性：您确认每页固定显示 20 条任务，是否需要提供用户切换每页显示数量（如 10/20/50 条）的下拉选项，还是严格锁定为
+    20 条以保持极简？",'
+  answer: 是严格锁定为 20 条以保持极简
+  created_at: 2026-04-06 11:18:29.108209
+  answered_at: null
+- question_id: q68
+  question: '"关于 LocalStorage 的 Key 命名：为了便于调试或避免与其他应用冲突，您是否有指定的 LocalStorage 键名（Key），还是由开发者自定义（如
+    ''my-todos-data''）？"'
+  answer: 由开发者自定义
+  created_at: 2026-04-06 11:18:29.108210
+  answered_at: null
+all_questions_answered: true
+remaining_questions: []
