@@ -63,6 +63,19 @@ class RequirementsAnalystAgent(BaseAgent):
         lines.append(state.original_user_requirement)
         lines.append("")
 
+        # 如果有预处理的项目背景资料，加入上下文
+        if state.project_background and state.documents_processed:
+            # project_background 存储的是文件名，从文件读取内容
+            from ..storage.project_store import ProjectStore
+            store = ProjectStore()
+            project_dir = store.get_project_dir(state.project_id)
+            bg_file = project_dir / state.project_background
+            if bg_file.exists():
+                with open(bg_file, "r", encoding="utf-8") as f:
+                    content = f.read()
+                lines.append(content)
+                lines.append("")
+
         # 如果有质量闸门回流反馈，先告诉分析师问题在哪里
         if state.backflow_feedback:
             lines.append("# 质量闸门评审反馈")

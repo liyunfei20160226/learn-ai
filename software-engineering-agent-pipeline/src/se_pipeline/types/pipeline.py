@@ -8,6 +8,22 @@ from datetime import datetime
 from .artifacts import RequirementsSpec
 
 
+class AttachedDocument(BaseModel):
+    """附加文档 - 用户导入的项目参考资料"""
+    filename: str = Field(description="原始文件名")
+    relative_path: str = Field(description="相对于资料根目录的路径")
+    absolute_path: str = Field(description="原始绝对路径")
+    original_ext: str = Field(description="原始文件扩展名")
+    processed_pdf_path: Optional[str] = Field(default=None, description="转换后的PDF文件路径")
+    page_image_paths: List[str] = Field(default_factory=list, description="PDF分页转换后的图片路径列表")
+    file_size: int = Field(description="原始文件大小（字节）")
+    summary_path: Optional[str] = Field(default=None, description="LLM总结后的summary.md文件相对路径（相对于项目processed_docs目录）")
+    processed_at: datetime = Field(default_factory=datetime.now, description="处理完成时间")
+    parse_success: bool = Field(default=False, description="是否解析成功")
+    error_message: Optional[str] = Field(default=None, description="解析失败原因")
+
+
+
 StageId = Literal[
     "requirements",
     "architecture",
@@ -40,6 +56,12 @@ class PipelineState(BaseModel):
     # 回流相关
     backflow_target_stage: Optional[StageId] = Field(default=None, description="回流目标阶段")
     backflow_feedback: Optional[str] = Field(default=None, description="回流反馈意见")
+
+    # 文档预处理
+    project_background: str = Field(default="", description="预处理后的项目背景资料（所有文档总结拼接）")
+    attached_documents: List[AttachedDocument] = Field(default_factory=list, description="导入的附加文档列表")
+    documents_processed: bool = Field(default=False, description="是否已完成文档预处理")
+    source_documents_dir: Optional[str] = Field(default=None, description="用户提供的原始资料目录路径")
 
     # 元数据
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")

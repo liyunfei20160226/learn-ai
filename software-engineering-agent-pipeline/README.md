@@ -135,4 +135,3 @@ MEMORY_MCP_BASE_URL=http://localhost:8000
 export MEMORY_FILE_PATH=/path/to/your/memory.jsonl
 ./start-http.sh
 ```
-

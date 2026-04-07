@@ -21,13 +21,16 @@ class ProjectStore:
         return self.base_dir / project_id
 
     def save_state(self, project_id: str, state: PipelineState) -> None:
-        """保存流水线状态"""
+        """保存流水线状态
+        project_background 只存文件名，所以直接保存即可，文件始终很小
+        """
         project_dir = self.get_project_dir(project_id)
         project_dir.mkdir(parents=True, exist_ok=True)
 
         state_file = project_dir / "pipeline_state.yaml"
+        data = state.model_dump()
         with open(state_file, "w", encoding="utf-8") as f:
-            yaml.dump(state.model_dump(), f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
     def load_state(self, project_id: str) -> Optional[PipelineState]:
         """加载流水线状态"""

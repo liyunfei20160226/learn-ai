@@ -27,6 +27,7 @@
 """
 import os
 import argparse
+from pathlib import Path
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from se_pipeline.types.pipeline import PipelineState
@@ -65,12 +66,23 @@ def run_interactive(
         original_requirement = input("> ").strip()
         print()
 
+        # 询问是否有参考资料目录
+        print("❓ 是否有项目参考资料目录需要导入？[y/N] ", end="")
+        has_docs = input().strip().lower()
+        source_documents_dir = None
+        if has_docs in ["y", "yes", "Y"]:
+            print()
+            print("请输入参考资料目录路径:")
+            source_documents_dir = input("> ").strip()
+            print()
+
         # 初始状态
         state = PipelineState(
             project_id=project_id,
             project_name=project_name,
             current_stage="requirements",
             original_user_requirement=original_requirement,
+            source_documents_dir=source_documents_dir,
         )
 
     # 初始化LLM和所有Agent（手动步进，不使用编译后的app）
@@ -111,6 +123,7 @@ def run_interactive(
         print("ℹ️  MEMORY_MCP_BASE_URL 未配置，跳过知识图谱集成\n")
 
     from se_pipeline.agents import (
+        DocumentPreprocessorAgent,
         RequirementsAnalystAgent,
         RequirementsVerifierAgent,
         RequirementsFinalAgent,
@@ -120,23 +133,67 @@ def run_interactive(
         analyst_node,
         verifier_node,
         final_node,
-        quality_gate_node,
         after_analyst,
         after_verifier,
         after_quality_gate,
         wait_user_node,
     )
 
+    # 初始化Agents
+    document_preprocessor = DocumentPreprocessorAgent(llm, vision_llm=llm)
     analyst = RequirementsAnalystAgent(llm)
     verifier = RequirementsVerifierAgent(llm)
     finalizer = RequirementsFinalAgent(llm)
     reviewer = AutoReviewer(llm)
+
+    # 如果有资料目录且未处理，先做文档预处理
+    if state.source_documents_dir and not state.documents_processed:
+        print("\n" + "="*70)
+        print("📚 开始文档预处理...")
+        print(f"📂 资料目录: {state.source_documents_dir}")
+        print("="*70 + "\n")
+
+        try:
+            state = document_preprocessor.run(state)
+            store.save_state(project_id, state)
+
+            # 打印统计信息
+            total, success = document_preprocessor.get_processing_stats(state.attached_documents)
+            print(f"📊 预处理完成: 共 {total} 个文件，成功解析 {success} 个，跳过 {total - success} 个")
+
+            if total == 0:
+                print("\n⚠️  未找到任何文件，请检查:")
+                print("   1. 目录路径是否正确")
+                print("   2. 目录中是否有文件（隐藏文件开头是 . 的会被跳过）")
+                print(f"   实际扫描目录: {Path(state.source_documents_dir).absolute()}")
+                print()
+
+            if total - success > 0:
+                print("\n⚠️  跳过的文件:")
+                for doc in state.attached_documents:
+                    if not doc.parse_success:
+                        print(f"  - {doc.relative_path}: {doc.error_message}")
+            print()
+
+            if success > 0:
+                print("💾 预处理结果已保存到项目目录")
+        except Exception as e:
+            print("\n❌ 文档预处理失败:")
+            print(f"   {type(e).__name__}: {e}")
+            print("\n⚠️  可能原因:")
+            print("   - API连接错误（检查网络、API Key、OPENAI_BASE_URL配置）")
+            print("   - API认证失败或配额用尽")
+            print("   - 解析图片需要支持多模态vision的模型（如 gpt-4o, claude-3 等）")
+            print("\n👋 程序退出，请修复问题后重新运行，已有进度已保存。")
+            exit(1)
 
     # 打印欢迎信息
     print("\n" + "="*70)
     print("🚀 开始需求分析流程")
     print(f"📋 项目: {state.project_name} ({project_id})")
     print(f"📝 原始需求: {state.original_user_requirement}")
+    if state.documents_processed and state.project_background:
+        print(f"📚 已导入项目参考资料: {len(state.attached_documents)} 个文件")
     print("="*70 + "\n")
 
     node = "analyst" if existing_state is None else after_analyst(state)
@@ -347,3 +404,13 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n👋 收到中断，优雅退出。状态已保存，可以下次继续。")
         exit(0)
+    except Exception as e:
+        print("\n\n❌ 程序运行出错:")
+        print(f"   {type(e).__name__}: {e}")
+        print("\n💡 常见原因:")
+        print("   - API连接错误：检查网络、API Key、OPENAI_BASE_URL配置")
+        print("   - API认证失败：检查API Key是否正确，是否过期")
+        print("   - API配额用尽：查看账户余额")
+        print("   - 解析图片：需要支持多模态vision的模型（如 gpt-4o, claude-3 等）")
+        print("\n📝 状态已保存，可以修复问题后重新运行")
+        exit(1)

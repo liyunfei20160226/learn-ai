@@ -1,1 +1,6 @@
 memory-mcp/node_modules/
+projects/
+*.pyc
+__pycache__/
+.venv/
+.env
