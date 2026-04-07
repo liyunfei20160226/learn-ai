@@ -14,8 +14,9 @@ from se_pipeline.web.models.requests import AnswerQuestionsRequest
 from se_pipeline.storage.project_store import ProjectStore
 from se_pipeline.agents.document_preprocessor import DocumentPreprocessorAgent
 
-current_dir = Path(__file__).parent.parent
-templates = Jinja2Templates(directory=str(current_dir / "templates"))
+current_file = Path(__file__)
+templates_dir = current_file.parent.parent / "templates"
+templates = Jinja2Templates(directory=str(templates_dir))
 
 import os
 from langchain_openai import ChatOpenAI

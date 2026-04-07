@@ -10,8 +10,9 @@ from pathlib import Path
 from se_pipeline.storage.project_store import ProjectStore
 from se_pipeline.types.pipeline import PipelineState
 
-current_dir = Path(__file__).parent.parent
-templates = Jinja2Templates(directory=str(current_dir / "templates"))
+current_file = Path(__file__)
+templates_dir = current_file.parent.parent / "templates"
+templates = Jinja2Templates(directory=str(templates_dir))
 
 router = APIRouter()
 store = ProjectStore()
