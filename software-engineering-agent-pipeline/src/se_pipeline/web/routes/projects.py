@@ -3,10 +3,14 @@ Project CRUD routes
 """
 from fastapi import Request, APIRouter
 from fastapi.responses import HTMLResponse
-from se_pipeline.web.templates import templates
+from fastapi.templating import Jinja2Templates
+from pathlib import Path
 from se_pipeline.web.models.requests import CreateProjectRequest
 from se_pipeline.storage.project_store import ProjectStore
 from se_pipeline.types.pipeline import PipelineState
+
+current_dir = Path(__file__).parent.parent
+templates = Jinja2Templates(directory=str(current_dir / "templates"))
 
 router = APIRouter()
 store = ProjectStore()

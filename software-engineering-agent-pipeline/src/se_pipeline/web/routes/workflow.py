@@ -6,12 +6,16 @@ import asyncio
 from typing import AsyncGenerator
 from fastapi import Request, APIRouter
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
-from se_pipeline.web.templates import templates
+from pathlib import Path
 from se_pipeline.web.workflow_manager import WorkflowManager
 from se_pipeline.web.models.requests import AnswerQuestionsRequest
 from se_pipeline.storage.project_store import ProjectStore
 from se_pipeline.agents.document_preprocessor import DocumentPreprocessorAgent
+
+current_dir = Path(__file__).parent.parent
+templates = Jinja2Templates(directory=str(current_dir / "templates"))
 
 router = APIRouter()
 from se_pipeline.web.app import workflow_manager
