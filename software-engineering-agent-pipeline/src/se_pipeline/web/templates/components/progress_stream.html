@@ -1,0 +1,17 @@
+{% if current_node and current_node != '__end__' %}
+<div class="bg-white rounded-2xl shadow-xl p-6 mb-8 animate-pulse">
+    <h2 class="text-xl font-semibold text-gray-900 mb-4">
+        <i class="fas fa-cog fa-spin text-blue-500 mr-2"></i>
+        正在处理
+    </h2>
+    <div class="text-gray-600 mb-4">
+        当前节点: <strong>{{ node_name_map[current_node] if current_node in node_name_map else current_node }}</strong>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+        <div class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full" style="width: 50%"></div>
+    </div>
+</div>
+{% else %}
+<div class="mb-8">
+</div>
+{% endif %}

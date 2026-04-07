@@ -1,0 +1,35 @@
+{% if spec %}
+<div class="bg-white rounded-2xl shadow-xl p-6 mb-8 border-l-4 border-green-500">
+    <h2 class="text-2xl font-semibold text-gray-900 mb-6">
+        <i class="fas fa-check-circle text-green-500 mr-2"></i>
+        需求分析完成
+    </h2>
+    <div class="mb-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-2xl font-bold text-blue-600">{{ spec.data.functional_requirements|length }}</div>
+                <div class="text-sm text-gray-500">功能需求</div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-2xl font-bold text-indigo-600">{{ spec.data.non_functional_requirements|length }}</div>
+                <div class="text-sm text-gray-500">非功能需求</div>
+            </div>
+            {% if spec.data.out_of_scope %}
+            <div class="bg-gray-50 rounded-lg p-4 text-center">
+                <div class="text-2xl font-bold text-gray-600">{{ spec.data.out_of_scope|length }}</div>
+                <div class="text-sm text-gray-500">超出范围</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="markdown-body text-gray-800">
+{{ markdown_content|safe }}
+    </div>
+    <div class="mt-6 pt-4 border-t border-gray-200">
+        <a href="/projects/{{ project_id }}" class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
+            <i class="fas fa-refresh mr-2"></i>
+            返回项目
+        </a>
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,40 @@
+{% if state.attached_documents %}
+<div class="divide-y divide-gray-100">
+    {% for doc in state.attached_documents %}
+    <div class="py-3 flex items-center justify-between">
+        <div class="flex items-center">
+            <i class="fas fa-file-alt text-gray-400 mr-3"></i>
+            <div>
+                <p class="text-sm font-medium text-gray-900">{{ doc.filename }}</p>
+                <p class="text-xs text-gray-500">
+                    {% if doc.parse_success %}
+                    <span class="text-green-600">
+                        <i class="fas fa-check-circle mr-1"></i>
+                        解析成功
+                    </span>
+                    {% else %}
+                    <span class="text-red-600">
+                        <i class="fas fa-times-circle mr-1"></i>
+                        {{ doc.error_message }}
+                    </span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <button
+            class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+            hx-delete="/projects/{{ state.project_id }}/documents/{{ doc.filename }}"
+            hx-target="#document-list"
+            hx-swap="innerHTML">
+            <i class="fas fa-trash"></i>
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-8 text-gray-500">
+    <i class="fas fa-cloud-upload-alt text-4xl mb-2 opacity-50"></i>
+    <p>暂无上传文档</p>
+    <p class="text-sm">上传参考文档帮助 AI 更好理解需求</p>
+</div>
+{% endif %}

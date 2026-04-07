@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}{{ state.project_name }} - SE Pipeline{% endblock %}
+
+{% block content %}
+<div class="min-h-screen">
+    <!-- Navigation -->
+    <nav class="backdrop-blur-md bg-white/80 sticky top-0 z-10 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/" class="text-gray-600 hover:text-gray-900 mr-4">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <i class="fas fa-robot text-blue-600 text-xl mr-3"></i>
+                    <span class="font-bold text-lg text-gray-900">{{ state.project_name }}</span>
+                </div>
+                <div class="text-sm text-gray-500">
+                    {{ state.project_id }}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Project Info -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                项目信息
+            </h2>
+            <div class="space-y-3">
+                <div>
+                    <span class="text-sm font-medium text-gray-500">原始需求:</span>
+                    <p class="mt-1 text-gray-800 whitespace-pre-wrap">{{ state.original_user_requirement }}</p>
+                </div>
+                <div>
+                    <span class="text-sm font-medium text-gray-500">当前阶段:</span>
+                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                        {{ node_name_map[state.current_stage] if state.current_stage in node_name_map else state.current_stage }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Document Upload -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                <i class="fas fa-file-upload text-green-500 mr-2"></i>
+                参考文档
+            </h2>
+            <form hx-post="/projects/{{ state.project_id }}/upload"
+                  hx-target="#document-list"
+                  hx-swap="innerHTML"
+                  enctype="multipart/form-data"
+                  class="mb-4">
+                <div class="flex items-center space-x-4">
+                    <input type="file" multiple
+                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                           name="files">
+                    <button type="submit"
+                            class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-all duration-200">
+                        <i class="fas fa-upload mr-2"></i>
+                        上传
+                    </button>
+                </div>
+            </form>
+            <div id="document-list">
+                {% include "components/document_list.html" %}
+            </div>
+            {% if state.attached_documents %}
+            <div class="mt-4 text-sm text-gray-500">
+                <i class="fas fa-info-circle mr-1"></i>
+                文档上传后，点击开始分析会自动预处理所有文档
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Progress / Current Questions -->
+        <div id="progress-container">
+            {% include "components/progress_stream.html" %}
+        </div>
+
+        <!-- Questions -->
+        <div id="questions-container">
+            {% if unanswered %}
+            {% include "components/question_form.html" %}
+            {% endif %}
+        </div>
+
+        <!-- Final Requirements -->
+        {% if state.requirements_spec %}
+        {% include "components/requirements_view.html" %}
+        {% endif %}
+
+        <!-- Start / Restart -->
+        <div class="bg-white rounded-2xl shadow-xl p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-900">
+                        <i class="fas fa-play text-purple-500 mr-2"></i>
+                        开始/继续分析
+                    </h2>
+                    <p class="text-sm text-gray-500 mt-1">
+                        {% if unanswered %}
+                        回答上面的问题后点击开始继续
+                        {% else %}
+                        点击开始启动需求分析流程
+                        {% endif %}
+                    </p>
+                </div>
+                <button id="start-btn"
+                        hx-post="/projects/{{ state.project_id }}/start"
+                        hx-swap="none"
+                        class="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-[1.02]">
+                    <i class="fas fa-play mr-2"></i>
+                    开始分析
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Start workflow with SSE streaming
+document.getElementById('start-btn')?.addEventListener('click', function() {
+    const progressContainer = document.getElementById('progress-container');
+    const questionsContainer = document.getElementById('questions-container');
+
+    // Show progress container
+    progressContainer.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-8 animate-pulse">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                <i class="fas fa-cog fa-spin text-blue-500 mr-2"></i>
+                正在处理...
+            </h2>
+            <div id="current-step" class="text-gray-600">
+                初始化...
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+                <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full" style="width: 10%"></div>
+            </div>
+        </div>
+    `;
+
+    // Open SSE connection
+    const eventSource = new EventSource('/projects/{{ state.project_id }}/stream?from_node=analyst');
+
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        const currentStep = document.getElementById('current-step');
+        const progressBar = document.getElementById('progress-bar');
+
+        if (data.event === 'node_start') {
+            if (currentStep) {
+                currentStep.innerHTML = `正在运行: <strong>${data.data.name}</strong>`;
+            }
+            if (progressBar) {
+                progressBar.style.width = '50%';
+            }
+        } else if (data.event === 'node_complete') {
+            if (progressBar) {
+                progressBar.style.width = '80%';
+            }
+        } else if (data.event === 'complete') {
+            if (progressBar) {
+                progressBar.style.width = '100%';
+            }
+            eventSource.close();
+            // Refresh page to show new state
+            window.location.reload();
+        }
+    };
+
+    eventSource.onerror = function(error) {
+        console.error('SSE error:', error);
+        eventSource.close();
+        document.getElementById('progress-container').innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8">
+                <h2 class="text-xl font-semibold text-red-800 mb-2">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    连接错误
+                </h2>
+                <p class="text-red-600">请检查 API 配置，刷新页面重试</p>
+            </div>
+        `;
+    };
+});
+</script>
+{% endblock %}
