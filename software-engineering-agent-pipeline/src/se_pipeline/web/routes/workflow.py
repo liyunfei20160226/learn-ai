@@ -17,8 +17,29 @@ from se_pipeline.agents.document_preprocessor import DocumentPreprocessorAgent
 current_dir = Path(__file__).parent.parent
 templates = Jinja2Templates(directory=str(current_dir / "templates"))
 
+import os
+from langchain_openai import ChatOpenAI
+from fastapi import Request, APIRouter
+from sse_starlette.sse import EventSourceResponse
+
+from se_pipeline.web.workflow_manager import WorkflowManager
+
+# workflow_manager is already initialized in app, but re-initializing here causes circular import
+# So we get it from app after import, but actually we need to initialize here OR get it properly
+# Actually easier: just initialize it again here (LLM is singleton-like anyway)
+llm = ChatOpenAI(
+    model=os.getenv("OPENAI_MODEL"),
+    temperature=0.0,
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL"),
+    extra_body={
+        "enable_thinking": False
+    }
+)
+vision_llm = llm
+workflow_manager = WorkflowManager(llm, vision_llm)
+
 router = APIRouter()
-from se_pipeline.web.app import workflow_manager
 
 
 @router.post("/projects/{project_id}/start")
