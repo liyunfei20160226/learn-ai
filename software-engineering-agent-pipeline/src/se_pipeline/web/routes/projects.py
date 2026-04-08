@@ -47,10 +47,10 @@ async def create_project(request: Request, form_data: CreateProjectRequest):
     # 检查是否已存在
     existing = store.load_state(form_data.project_id)
     if existing is not None:
-        print(f"[DEBUG] 创建失败: 项目已存在")
+        print("[DEBUG] 创建失败: 项目已存在")
         return HTMLResponse(
             f"""项目 ID {form_data.project_id} 已存在，请使用其他 ID""",
-            status_code=200
+            status_code=409
         )
 
     # 创建初始状态

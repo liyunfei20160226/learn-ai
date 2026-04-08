@@ -1,12 +1,10 @@
 """
 Document upload and delete routes
 """
-import os
 from pathlib import Path
 from fastapi import Request, APIRouter, UploadFile, File
 from fastapi.responses import HTMLResponse
 from se_pipeline.storage.project_store import ProjectStore
-from se_pipeline.types.pipeline import PipelineState
 from se_pipeline.web.templates import templates
 
 router = APIRouter()

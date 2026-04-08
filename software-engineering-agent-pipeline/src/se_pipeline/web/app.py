@@ -2,8 +2,9 @@
 FastAPI Application for SE Pipeline Web Interface
 """
 import os
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_openai import ChatOpenAI
 
@@ -11,17 +12,29 @@ from se_pipeline.web.routes import projects, documents, workflow
 from se_pipeline.web.workflow_manager import WorkflowManager
 from se_pipeline.web.templates import templates
 
-# 初始化 LLM
+# 初始化 LLM - 文本LLM用于文本总结和分析
 llm = ChatOpenAI(
     model=os.getenv("OPENAI_MODEL"),
     temperature=0.0,
     api_key=os.getenv("OPENAI_API_KEY"),
     base_url=os.getenv("OPENAI_BASE_URL"),
+    max_tokens=262144,
     extra_body={
         "enable_thinking": False
     }
 )
-vision_llm = llm
+
+# 初始化 Vision LLM - 多模态LLM用于图片文字提取，如果没配置单独的就用文本LLM
+if os.getenv("VISION_OPENAI_MODEL"):
+    vision_llm = ChatOpenAI(
+        model=os.getenv("VISION_OPENAI_MODEL"),
+        temperature=0.0,
+        api_key=os.getenv("VISION_OPENAI_API_KEY", os.getenv("OPENAI_API_KEY")),
+        base_url=os.getenv("VISION_OPENAI_BASE_URL", os.getenv("OPENAI_BASE_URL")),
+        max_tokens=262144,
+    )
+else:
+    vision_llm = llm
 
 # 初始化工作流管理器
 workflow_manager = WorkflowManager(llm, vision_llm)
@@ -55,6 +68,7 @@ app.post("/projects/{project_id}/start")(workflow.start_workflow)
 app.post("/projects/{project_id}/answer")(workflow.submit_answers)
 app.get("/projects/{project_id}/stream")(workflow.stream_workflow)
 app.get("/projects/{project_id}/requirements")(workflow.get_requirements)
+app.get("/projects/{project_id}/requirements/download")(workflow.download_requirements)
 app.get("/health")(lambda: {"status": "ok"})
 
 # 让模板能访问 node_name_map
@@ -80,10 +94,6 @@ templates.env.globals["node_name_map"] = {
 }
 
 # 处理请求验证错误，打印日志方便调试
-from fastapi import Request
-from fastapi.responses import HTMLResponse
-from fastapi.exceptions import RequestValidationError
-
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     print(f"\n[DEBUG] 请求验证失败: {exc}")

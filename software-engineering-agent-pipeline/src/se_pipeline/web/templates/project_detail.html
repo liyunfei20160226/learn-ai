@@ -122,6 +122,21 @@
         <!-- Final Requirements -->
         {% if state.requirements_spec %}
         {% include "components/requirements_view.html" %}
+        <!-- 需求分析完成卡片 - 提供下载链接 -->
+        <div class="bg-green-50 rounded-2xl shadow-xl p-6 mb-8 border-l-4 border-green-500">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                需求分析已完成
+            </h2>
+            <p class="text-gray-600 mb-4">
+                所有需求问题已澄清，需求规格文档已生成。你可以下载 Markdown 版本：
+            </p>
+            <a href="/projects/{{ state.project_id }}/requirements/download"
+               class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors">
+                <i class="fas fa-download mr-2"></i>
+                下载需求文档 (.md)
+            </a>
+        </div>
         {% endif %}
 
         <!-- Start / Restart -->
@@ -143,7 +158,8 @@
                 <button id="start-btn"
                         hx-post="/projects/{{ state.project_id }}/start"
                         hx-swap="none"
-                        class="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-[1.02]">
+                        class="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-[1.02]{% if unanswered %} opacity-50 cursor-not-allowed disabled{% endif %}"
+                        {% if unanswered %}disabled{% endif %}>
                     <i class="fas fa-play mr-2"></i>
                     开始分析
                 </button>
@@ -157,6 +173,12 @@
 document.getElementById('start-btn')?.addEventListener('click', function() {
     const progressContainer = document.getElementById('progress-container');
     const questionsContainer = document.getElementById('questions-container');
+    const startBtn = document.getElementById('start-btn');
+
+    // 禁用按钮，防止重复点击
+    startBtn.disabled = true;
+    startBtn.classList.add('opacity-50');
+    startBtn.classList.add('cursor-not-allowed');
 
     // Show progress container
     progressContainer.innerHTML = `
@@ -165,17 +187,23 @@ document.getElementById('start-btn')?.addEventListener('click', function() {
                 <i class="fas fa-cog fa-spin text-blue-500 mr-2"></i>
                 正在处理...
             </h2>
-            <div id="current-step" class="text-gray-600">
+            <div id="current-step" class="text-gray-600 mb-2">
+                {% if not state.documents_processed %}
+                文档预处理...
+                {% else %}
                 初始化...
+                {% endif %}
             </div>
+            <div id="current-document" class="text-sm text-gray-500 mb-4"></div>
             <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
                 <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full" style="width: 10%"></div>
             </div>
         </div>
     `;
 
-    // Open SSE connection
-    const eventSource = new EventSource('/projects/{{ state.project_id }}/stream?from_node=analyst');
+    // Open SSE connection - 如果文档未处理，从document_preprocessor开始
+    const fromNode = {% if not state.documents_processed %}'document_preprocessor'{% else %}'analyst'{% endif %};
+    const eventSource = new EventSource('/projects/{{ state.project_id }}/stream?from_node=' + fromNode);
 
     eventSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
@@ -189,6 +217,11 @@ document.getElementById('start-btn')?.addEventListener('click', function() {
             if (progressBar) {
                 progressBar.style.width = '50%';
             }
+        } else if (data.event === 'document_progress') {
+            const currentDoc = document.getElementById('current-document');
+            if (currentDoc) {
+                currentDoc.innerHTML = `<i class="fas fa-file-alt text-blue-400 mr-1"></i> 当前处理: ${data.data.current_file}`;
+            }
         } else if (data.event === 'node_complete') {
             if (progressBar) {
                 progressBar.style.width = '80%';
@@ -198,6 +231,7 @@ document.getElementById('start-btn')?.addEventListener('click', function() {
                 progressBar.style.width = '100%';
             }
             eventSource.close();
+            // 刷新页面后自然恢复按钮，不需要在这里恢复
             // Refresh page to show new state
             window.location.reload();
         }
@@ -206,6 +240,13 @@ document.getElementById('start-btn')?.addEventListener('click', function() {
     eventSource.onerror = function(error) {
         console.error('SSE error:', error);
         eventSource.close();
+        // 恢复按钮
+        const startBtn = document.getElementById('start-btn');
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50');
+            startBtn.classList.remove('cursor-not-allowed');
+        }
         document.getElementById('progress-container').innerHTML = `
             <div class="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8">
                 <h2 class="text-xl font-semibold text-red-800 mb-2">

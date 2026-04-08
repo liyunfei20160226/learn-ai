@@ -69,9 +69,11 @@ class DocumentPreprocessorAgent(BaseAgent):
         self,
         source_dir: Path,
         output_dir: Path,
-        project_id: str
+        project_id: str,
+        progress_callback: callable = None
     ) -> Tuple[List[AttachedDocument], str]:
         """递归处理目录下所有文件
+        :param progress_callback: 进度回调 callback(current_file: str) -> None
         :return: (文档列表，拼接后的项目背景总结)
         """
         documents: List[AttachedDocument] = []
@@ -94,6 +96,11 @@ class DocumentPreprocessorAgent(BaseAgent):
 
             file_count += 1
             rel_path = str(file_path.relative_to(source_dir))
+
+            # 通知进度
+            if progress_callback:
+                progress_callback(rel_path)
+
             print(f"  正在处理: {rel_path}... ", end="", flush=True)
 
             doc = self.process_single_file(file_path, source_dir, output_dir)
@@ -419,7 +426,7 @@ class DocumentPreprocessorAgent(BaseAgent):
             if embedded_images:
                 print(f"✓ 表格读取完成，{len(embedded_images)} 张嵌入式图片")
             else:
-                print(f"✓ 表格读取完成")
+                print("✓ 表格读取完成")
 
         # ========== 第三步：处理嵌入式图片，添加到对应sheet ==========
         from PIL import Image
@@ -495,8 +502,11 @@ class DocumentPreprocessorAgent(BaseAgent):
 请只回答你判断这个图片属于哪个sheet，直接返回 sheet 编号（如 "Sheet 2" 或 "2"）。
 如果无法判断归属，回答 "unknown"。
 """
+                import time
                 response = self.llm.invoke(prompt)
                 answer = response.content.strip().lower()
+                # 延迟避免触发频率限制 429
+                time.sleep(3)
 
                 matched_sheet = None
                 if "unknown" not in answer:
@@ -557,6 +567,9 @@ class DocumentPreprocessorAgent(BaseAgent):
                 print(f"    ✓ {sheet_name} 总结完成 ({len(sheet_summary):,d} 字符, 含 {image_count} 张图片)")
             else:
                 print(f"    ✓ {sheet_name} 总结完成 ({len(sheet_summary):,d} 字符)")
+            # sheet 之间加延迟，避免触发频率限制
+            import time
+            time.sleep(2)
 
         wb.close()
 
@@ -718,6 +731,7 @@ class DocumentPreprocessorAgent(BaseAgent):
 
     def _extract_text_from_image(self, image_path: str) -> str:
         """用视觉模型从图片提取文字"""
+        import time
         prompt_template = get_prompt("document_vision_parser")
 
         # 读取图片并编码
@@ -739,6 +753,8 @@ class DocumentPreprocessorAgent(BaseAgent):
         )
 
         response = self.vision_llm.invoke([message])
+        # 延迟避免触发频率限制 429
+        time.sleep(3)
         return response.content.strip()
 
     def _summarize_content(self, filename: str, file_type: str, content: str) -> str:
@@ -753,22 +769,30 @@ class DocumentPreprocessorAgent(BaseAgent):
             .replace("{{FILE_TYPE}}", file_type)\
             .replace("{{DOC_CONTENT}}", content)
 
+        import time
         response = self.llm.invoke(prompt)
+        # 延迟避免触发频率限制 429
+        time.sleep(3)
         return response.content.strip()
 
     def _final_summary(self, individual_summaries: str) -> str:
         """对所有文档的单独总结做最终整合汇总，消除重复"""
+        import time
         prompt_template = get_prompt("document_final_summary")
         prompt = prompt_template.replace("{{DOC_SUMMARIES}}", individual_summaries)
         response = self.llm.invoke(prompt)
         final_summary = response.content.strip()
+        # 延迟避免触发频率限制 429
+        time.sleep(4)
         # 添加标题
         if not final_summary.startswith("#"):
             final_summary = "# 项目参考资料汇总\n\n" + final_summary
         return final_summary
 
-    def run(self, state: PipelineState) -> PipelineState:
-        """执行文档预处理"""
+    def run(self, state: PipelineState, progress_callback: callable = None) -> PipelineState:
+        """执行文档预处理
+        :param progress_callback: 进度回调 callback(current_file: str) -> None
+        """
         if not state.source_documents_dir:
             # 没有资料目录，直接返回
             state.documents_processed = True
@@ -807,7 +831,8 @@ class DocumentPreprocessorAgent(BaseAgent):
         documents, project_background = self.process_directory(
             source_dir,
             output_dir,
-            state.project_id
+            state.project_id,
+            progress_callback
         )
 
         # 更新状态

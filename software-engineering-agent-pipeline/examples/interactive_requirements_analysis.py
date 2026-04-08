@@ -91,10 +91,23 @@ def run_interactive(
         temperature=0.0,
         api_key=os.getenv("OPENAI_API_KEY"),
         base_url=os.getenv("OPENAI_BASE_URL"),
+        max_tokens=262144,
         extra_body={
             "enable_thinking": False
         }
     )
+
+    # 初始化 Vision LLM - 如果配置了单独的多模态模型就用单独的，否则复用文本LLM
+    if os.getenv("VISION_OPENAI_MODEL"):
+        vision_llm = ChatOpenAI(
+            model=os.getenv("VISION_OPENAI_MODEL"),
+            temperature=0.0,
+            api_key=os.getenv("VISION_OPENAI_API_KEY", os.getenv("OPENAI_API_KEY")),
+            base_url=os.getenv("VISION_OPENAI_BASE_URL", os.getenv("OPENAI_BASE_URL")),
+            max_tokens=262144,
+        )
+    else:
+        vision_llm = llm
 
     # 检测知识图谱服务是否可用
     memory_client = None
@@ -140,7 +153,7 @@ def run_interactive(
     )
 
     # 初始化Agents
-    document_preprocessor = DocumentPreprocessorAgent(llm, vision_llm=llm)
+    document_preprocessor = DocumentPreprocessorAgent(llm, vision_llm=vision_llm)
     analyst = RequirementsAnalystAgent(llm)
     verifier = RequirementsVerifierAgent(llm)
     finalizer = RequirementsFinalAgent(llm)

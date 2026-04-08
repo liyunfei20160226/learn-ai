@@ -2,7 +2,6 @@
 Workflow Manager - 封装交互式流水线步进逻辑
 复用所有现有的 Agent 和路由逻辑，给 Web 接口使用
 """
-import os
 from typing import Tuple, List, Dict
 from langchain_openai import ChatOpenAI
 
@@ -26,6 +25,7 @@ from se_pipeline.graph.pipeline_graph import (
 
 
 node_name_map = {
+    "document_preprocessor": "文档预处理",
     "analyst": "需求分析师",
     "wait_user": "等待用户回答",
     "verifier": "需求验证官",
@@ -66,10 +66,22 @@ class WorkflowManager:
                 unanswered.append(item)
         return unanswered
 
-    def run_step(self, state: PipelineState, current_node: str) -> Tuple[PipelineState, str]:
-        """运行一个节点，返回(更新后的状态, 下一个节点)"""
+    def run_step_with_progress(
+        self,
+        state: PipelineState,
+        current_node: str,
+        progress_callback: callable = None
+    ) -> Tuple[PipelineState, str]:
+        """运行一个节点，支持进度回调，返回(更新后的状态, 下一个节点)"""
+        node_name = self.get_node_name(current_node)
+        print(f"\n🔄 开始运行节点: {node_name} ({current_node})")
+        print("   ↪️  请求 LLM 推理...", flush=True)
 
-        if current_node == "analyst":
+        if current_node == "document_preprocessor":
+            if not state.documents_processed and state.source_documents_dir:
+                state = self.document_preprocessor.run(state, progress_callback)
+            next_node = "analyst"
+        elif current_node == "analyst":
             state = analyst_node(state, self.analyst)
             next_node = after_analyst(state)
         elif current_node == "verifier":
@@ -93,9 +105,15 @@ class WorkflowManager:
             # unknown node, stay
             next_node = current_node
 
+        print(f"✅ 完成节点: {node_name}, 下一节点: {self.get_node_name(next_node)}", flush=True)
+
         # 保存状态
         self.save_state(state.project_id, state)
         return state, next_node
+
+    def run_step(self, state: PipelineState, current_node: str) -> Tuple[PipelineState, str]:
+        """运行一个节点，返回(更新后的状态, 下一个节点)"""
+        return self.run_step_with_progress(state, current_node, None)
 
     def get_node_name(self, node: str) -> str:
         """获取节点中文名称"""
