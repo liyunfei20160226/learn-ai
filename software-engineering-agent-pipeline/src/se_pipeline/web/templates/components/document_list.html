@@ -1,24 +1,29 @@
 {% if state.attached_documents %}
-<div class="divide-y divide-gray-100">
+<div class="divide-y divide-gray-100" id="document-list-inner">
     {% for doc in state.attached_documents %}
     <div class="py-3 flex items-center justify-between">
         <div class="flex items-center">
             <i class="fas fa-file-alt text-gray-400 mr-3"></i>
             <div>
-                <p class="text-sm font-medium text-gray-900">{{ doc.filename }}</p>
-                <p class="text-xs text-gray-500">
+                <p class="text-sm font-medium text-gray-900">
+                    {{ doc.filename }}
                     {% if doc.parse_success %}
-                    <span class="text-green-600">
+                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
                         <i class="fas fa-check-circle mr-1"></i>
-                        解析成功
+                        已上传
                     </span>
                     {% else %}
-                    <span class="text-red-600">
+                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
                         <i class="fas fa-times-circle mr-1"></i>
-                        {{ doc.error_message }}
+                        上传失败
                     </span>
                     {% endif %}
                 </p>
+                {% if not doc.parse_success %}
+                <p class="text-xs text-gray-500 mt-1">
+                    {{ doc.error_message }}
+                </p>
+                {% endif %}
             </div>
         </div>
         <button
@@ -32,9 +37,13 @@
     {% endfor %}
 </div>
 {% else %}
-<div class="text-center py-8 text-gray-500">
+<div class="text-center py-8 text-gray-500" id="document-list-inner">
     <i class="fas fa-cloud-upload-alt text-4xl mb-2 opacity-50"></i>
     <p>暂无上传文档</p>
     <p class="text-sm">上传参考文档帮助 AI 更好理解需求</p>
 </div>
 {% endif %}
+<script>
+// 上传成功后清空文件选择框
+document.querySelector('input[type="file"]').value = '';
+</script>

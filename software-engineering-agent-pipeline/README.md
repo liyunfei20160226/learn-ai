@@ -48,6 +48,17 @@
    uv run python examples/interactive_requirements_analysis.py --project-id "my-project"
    ```
 
+5. 启动Web界面
+   ```bash
+   # 启动Web服务器（默认端口 8000）
+   uv run python examples/web_server.py
+   
+   # 然后在浏览器打开 http://localhost:8000
+   
+   # 指定自定义端口
+   uv run python examples/web_server.py --port 8080
+   ```
+
 ## 常用测试命令
 
 ### 运行单元测试（不需要API，全部mock）

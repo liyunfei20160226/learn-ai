@@ -3,15 +3,10 @@ Project CRUD routes
 """
 from fastapi import Request, APIRouter
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from pathlib import Path
 from se_pipeline.web.models.requests import CreateProjectRequest
 from se_pipeline.storage.project_store import ProjectStore
 from se_pipeline.types.pipeline import PipelineState
-
-current_file = Path(__file__)
-templates_dir = current_file.parent.parent / "templates"
-templates = Jinja2Templates(directory=str(templates_dir))
+from se_pipeline.web.templates import templates
 
 router = APIRouter()
 store = ProjectStore()
@@ -20,9 +15,13 @@ store = ProjectStore()
 @router.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """首页 - 列出所有项目"""
-    projects = store.list_projects()
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    project_ids = store.list_projects()
+    projects = []
+    for project_id in project_ids:
+        state = store.load_state(project_id)
+        if state is not None:
+            projects.append(state)
+    return templates.TemplateResponse(request, "index.html", {
         "projects": projects
     })
 
@@ -30,9 +29,13 @@ async def root(request: Request):
 @router.get("/projects", response_class=HTMLResponse)
 async def list_projects(request: Request):
     """列出所有项目片段"""
-    projects = store.list_projects()
-    return templates.TemplateResponse("components/project_card.html", {
-        "request": request,
+    project_ids = store.list_projects()
+    projects = []
+    for project_id in project_ids:
+        state = store.load_state(project_id)
+        if state is not None:
+            projects.append(state)
+    return templates.TemplateResponse(request, "components/project_list.html", {
         "projects": projects
     }, headers={"HX-Trigger": "newProjectLoaded"})
 
@@ -40,13 +43,14 @@ async def list_projects(request: Request):
 @router.post("/projects")
 async def create_project(request: Request, form_data: CreateProjectRequest):
     """创建新项目"""
+    print(f"\n[DEBUG] 收到创建项目请求: project_id={form_data.project_id}, project_name={form_data.project_name}")
     # 检查是否已存在
     existing = store.load_state(form_data.project_id)
     if existing is not None:
+        print(f"[DEBUG] 创建失败: 项目已存在")
         return HTMLResponse(
-            f"""<div class="bg-red-50 border border-red-200 rounded-lg p-4 mt-4" hx-swap-oob="beforeend">#project-list">
-                    <p class="text-red-800">项目 ID {form_data.project_id} 已存在，请使用其他 ID</p>
-                </div>"""
+            f"""项目 ID {form_data.project_id} 已存在，请使用其他 ID""",
+            status_code=200
         )
 
     # 创建初始状态
@@ -57,11 +61,9 @@ async def create_project(request: Request, form_data: CreateProjectRequest):
         original_user_requirement=form_data.original_requirement,
     )
     store.save_state(form_data.project_id, state)
-
-    # 重定向到项目详情页
-    return HTMLResponse(
-        f"""<script>window.location.href = '/projects/{form_data.project_id}';</script>"""
-    )
+    print(f"[DEBUG] 创建成功: project_id={form_data.project_id}")
+    # 前端会处理跳转
+    return HTMLResponse("ok", status_code=200)
 
 
 @router.get("/projects/{project_id}", response_class=HTMLResponse)
@@ -84,8 +86,7 @@ async def get_project_detail(request: Request, project_id: str):
         if item["answer"] is None:
             unanswered.append(item)
 
-    return templates.TemplateResponse("project_detail.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "project_detail.html", {
         "state": state,
         "unanswered": unanswered,
         "node_name_map": node_name_map
@@ -96,8 +97,30 @@ async def get_project_detail(request: Request, project_id: str):
 async def delete_project(request: Request, project_id: str):
     """删除项目"""
     store.delete_project(project_id)
-    projects = store.list_projects()
-    return templates.TemplateResponse("components/project_card.html", {
-        "request": request,
+    project_ids = store.list_projects()
+    projects = []
+    for pid in project_ids:
+        state = store.load_state(pid)
+        if state is not None:
+            projects.append(state)
+    return templates.TemplateResponse(request, "components/project_list.html", {
+        "projects": projects
+    })
+
+
+@router.post("/projects/{project_id}/delete")
+async def delete_project_post(request: Request, project_id: str):
+    """删除项目 (POST 版本，兼容某些环境)"""
+    print(f"\n[DEBUG] 收到删除请求: project_id={project_id}")
+    print(f"[DEBUG] 请求方法={request.method}, 路径={request.url}")
+    store.delete_project(project_id)
+    project_ids = store.list_projects()
+    projects = []
+    for pid in project_ids:
+        state = store.load_state(pid)
+        if state is not None:
+            projects.append(state)
+    print(f"[DEBUG] 删除完成，剩余 {len(projects)} 个项目")
+    return templates.TemplateResponse(request, "components/project_list.html", {
         "projects": projects
     })

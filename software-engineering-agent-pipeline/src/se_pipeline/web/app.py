@@ -4,12 +4,12 @@ FastAPI Application for SE Pipeline Web Interface
 import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_openai import ChatOpenAI
 
 from se_pipeline.web.routes import projects, documents, workflow
 from se_pipeline.web.workflow_manager import WorkflowManager
+from se_pipeline.web.templates import templates
 
 # 初始化 LLM
 llm = ChatOpenAI(
@@ -42,20 +42,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 获取当前文件所在目录
-import sys
-from pathlib import Path
-current_dir = Path(__file__).parent
-
-# 模板和静态文件
-templates = Jinja2Templates(directory=str(current_dir / "templates"))
-
 # 注册路由
 app.get("/")(projects.root)
 app.get("/projects")(projects.list_projects)
 app.post("/projects")(projects.create_project)
 app.get("/projects/{project_id}")(projects.get_project_detail)
 app.delete("/projects/{project_id}")(projects.delete_project)
+app.post("/projects/{project_id}/delete")(projects.delete_project_post)
 app.post("/projects/{project_id}/upload")(documents.upload_file)
 app.delete("/projects/{project_id}/documents/{filename}")(documents.delete_document)
 app.post("/projects/{project_id}/start")(workflow.start_workflow)
@@ -66,6 +59,18 @@ app.get("/health")(lambda: {"status": "ok"})
 
 # 让模板能访问 node_name_map
 templates.env.globals["node_name_map"] = {
+    # 主阶段
+    "requirements": "需求分析",
+    "architecture": "架构设计",
+    "ui_prototype": "UI原型",
+    "database": "数据库设计",
+    "task_breakdown": "任务分解",
+    "codegen": "代码生成",
+    "codereview": "代码评审",
+    "testing": "测试验证",
+    "pre_release": "发布前检查",
+    "deployment": "部署上线",
+    # 需求分析内部节点
     "analyst": "需求分析师",
     "wait_user": "等待用户回答",
     "verifier": "需求验证官",
@@ -73,3 +78,20 @@ templates.env.globals["node_name_map"] = {
     "quality_gate": "质量闸门",
     "__end__": "结束",
 }
+
+# 处理请求验证错误，打印日志方便调试
+from fastapi import Request
+from fastapi.responses import HTMLResponse
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print(f"\n[DEBUG] 请求验证失败: {exc}")
+    print(f"[DEBUG] 请求URL: {request.url}")
+    print(f"[DEBUG] 请求方法: {request.method}")
+    body = await request.body()
+    print(f"[DEBUG] 请求体: {body.decode('utf-8')}")
+    return HTMLResponse(
+        "请求参数验证失败，请检查输入格式",
+        status_code=422
+    )

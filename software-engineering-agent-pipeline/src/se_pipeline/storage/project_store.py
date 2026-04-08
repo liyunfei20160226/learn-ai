@@ -13,7 +13,8 @@ class ProjectStore:
     """项目存储管理器"""
 
     def __init__(self, base_dir: str = "./projects"):
-        self.base_dir = Path(base_dir)
+        # 始终相对于当前工作目录（项目根目录）
+        self.base_dir = Path.cwd() / base_dir
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def get_project_dir(self, project_id: str) -> Path:
@@ -124,3 +125,10 @@ class ProjectStore:
         if not self.base_dir.exists():
             return []
         return [d.name for d in self.base_dir.iterdir() if d.is_dir()]
+
+    def delete_project(self, project_id: str) -> None:
+        """删除项目"""
+        import shutil
+        project_dir = self.get_project_dir(project_id)
+        if project_dir.exists():
+            shutil.rmtree(project_dir)

@@ -10,10 +10,8 @@
                 </p>
             </div>
             <button class="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
-                    hx-delete="/projects/{{ project.project_id }}"
-                    hx-confirm="确定要删除这个项目吗？"
-                    hx-target="#project-list"
-                    hx-swap="outerHTML swap:1s">
+                    onclick="console.log('删除按钮点击: {{ project.project_id }}'); openDeleteModal('{{ project.project_id }}', '{{ project.project_name }}')"
+            >
                 <i class="fas fa-trash"></i>
             </button>
         </div>
