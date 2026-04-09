@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔢 数独游戏</title>
+    <link rel="stylesheet" href="/static/sudoku.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <span class="title-emoji">🔢</span>
+                数独游戏
+                <span class="title-emoji">🔢</span>
+            </h1>
+            <p class="subtitle">填写数字，使得每行每列每个 3x3 宫都包含 1-9 不重复</p>
+        </header>
+
+        <main class="main">
+            <div class="game-card">
+                <div class="controls">
+                    <button id="newGameBtn" class="btn-new">新游戏</button>
+                    <button id="checkBtn" class="btn-check">检查</button>
+                    <button id="hintBtn" class="btn-hint">提示</button>
+                </div>
+                <div class="difficulty">
+                    <span>难度:</span>
+                    <button class="diff-btn active" data-diff="easy">简单</button>
+                    <button class="diff-btn" data-diff="medium">中等</button>
+                    <button class="diff-btn" data-diff="hard">困难</button>
+                </div>
+                <div class="board-container">
+                    <div id="sudokuBoard" class="sudoku-board"></div>
+                </div>
+                <div class="instructions">
+                    <p>点击格子选中，按数字键 1-9 填入，按 Delete 清除</p>
+                </div>
+            </div>
+
+            <div class="back-link">
+                <a href="/">← 返回项目主页</a>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>用 ❤️ 构建 with HTML + JavaScript</p>
+        </footer>
+    </div>
+
+    <div id="messageModal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="modalTitle">恭喜你 🎉</h2>
+            <p id="modalMessage">数独完成！</p>
+            <button id="modalOk" class="btn-ok">好的</button>
+        </div>
+    </div>
+
+    <script src="/static/sudoku.js"></script>
+</body>
+</html>

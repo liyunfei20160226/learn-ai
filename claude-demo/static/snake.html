@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐍 贪吃蛇游戏</title>
+    <link rel="stylesheet" href="/static/snake.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <span class="title-emoji">🐍</span>
+                贪吃蛇游戏
+                <span class="title-emoji">🐍</span>
+            </h1>
+            <p class="subtitle">使用方向键 ↑ ↓ ← → 控制</p>
+        </header>
+
+        <main class="main">
+            <div class="game-card">
+                <div class="score-board">
+                    <span class="score-label">分数:</span>
+                    <span id="score" class="score-value">0</span>
+                </div>
+                <div class="canvas-container">
+                    <canvas id="gameCanvas"></canvas>
+                    <div id="gameOverlay" class="game-overlay">
+                        <div class="overlay-content">
+                            <h2 id="overlayTitle">贪吃蛇</h2>
+                            <p id="overlayMessage">点击开始按钮开始游戏</p>
+                            <button id="startBtn" class="btn-start">开始游戏</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="controls-hint">
+                    <p>方向键 ↑ ↓ ← → 控制方向</p>
+                </div>
+            </div>
+
+            <div class="back-link">
+                <a href="/">← 返回项目主页</a>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>用 ❤️ 构建 with HTML5 Canvas + JavaScript</p>
+        </footer>
+    </div>
+
+    <script src="/static/snake.js"></script>
+</body>
+</html>

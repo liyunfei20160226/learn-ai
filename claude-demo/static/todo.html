@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ 酷炫 Todo List</title>
+    <link rel="stylesheet" href="/static/todo.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <span class="title-emoji">✨</span>
+                酷炫待办清单
+                <span class="title-emoji">✨</span>
+            </h1>
+            <p class="subtitle">优雅地管理你的每一天</p>
+        </header>
+
+        <main class="main">
+            <!-- Add Todo Form -->
+            <div class="add-todo-card">
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="todoTitle"
+                        placeholder="今天要做什么？"
+                        class="input-title"
+                    />
+                </div>
+                <div class="input-group">
+                    <textarea
+                        id="todoDescription"
+                        placeholder="添加一些描述（可选）"
+                        class="input-description"
+                    ></textarea>
+                </div>
+                <button id="addBtn" class="btn-add">
+                    <span class="btn-icon">➕</span>
+                    添加待办
+                </button>
+            </div>
+
+            <!-- Filters -->
+            <div class="filters">
+                <button class="filter-btn active" data-filter="all">全部</button>
+                <button class="filter-btn" data-filter="active">未完成</button>
+                <button class="filter-btn" data-filter="completed">已完成</button>
+            </div>
+
+            <!-- Todo List -->
+            <div id="todoList" class="todo-list"></div>
+
+            <!-- Stats -->
+            <div class="stats">
+                <span id="itemsLeft" class="items-left"></span>
+                <button id="clearCompleted" class="btn-clear">清空已完成</button>
+            </div>
+        </main>
+
+        <div class="back-link">
+            <a href="/">← 返回项目主页</a>
+        </div>
+
+        <footer class="footer">
+            <p>用 ❤️ 构建 with FastAPI + JavaScript</p>
+        </footer>
+    </div>
+
+    <script src="/static/todo.js"></script>
+</body>
+</html>
