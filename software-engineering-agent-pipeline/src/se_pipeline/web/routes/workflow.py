@@ -80,8 +80,11 @@ async def submit_answers(request: Request, project_id: str):
         else:
             # 已经进入验证阶段 → 在验证官循环 → 回验证官
             current_node = "verifier"
+    from se_pipeline.web.workflow_manager import node_name_map
     return templates.TemplateResponse(request, "components/progress_stream.html", {
-        "current_node": current_node
+        "project_id": project_id,
+        "current_node": current_node,
+        "node_name_map": node_name_map
     })
 
 

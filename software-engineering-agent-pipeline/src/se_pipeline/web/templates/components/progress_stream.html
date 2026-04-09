@@ -14,7 +14,7 @@
 </div>
 <script>
 // 启动 SSE 流式处理
-const projectId = "{{ request.path_params.project_id }}";
+const projectId = "{{ project_id }}";
 const fromNode = "{{ current_node }}";
 
 const eventSource = new EventSource('/projects/' + projectId + '/stream?from_node=' + fromNode);

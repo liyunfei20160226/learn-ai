@@ -43,7 +43,34 @@
     <p class="text-sm">上传参考文档帮助 AI 更好理解需求</p>
 </div>
 {% endif %}
+{% if requirements_already_completed %}
+<div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <div class="flex items-start">
+        <i class="fas fa-info-circle text-blue-600 mt-1 mr-3"></i>
+        <div>
+            <p class="text-sm text-blue-800 font-medium">文档已更新</p>
+            <p class="text-sm text-blue-700 mt-1">
+                需求分析已完成，点击下方的 <strong>开始分析</strong> 按钮重新运行分析以整合文档变更。
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
 <script>
 // 上传成功后清空文件选择框
 document.querySelector('input[type="file"]').value = '';
+// After document list updated, scroll to start button
+setTimeout(() => {
+    const startBtn = document.getElementById('start-btn');
+    if (startBtn) {
+        startBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Briefly highlight the button to draw attention
+        startBtn.classList.add('ring-4');
+        startBtn.classList.add('ring-blue-200');
+        setTimeout(() => {
+            startBtn.classList.remove('ring-4');
+            startBtn.classList.remove('ring-blue-200');
+        }, 2000);
+    }
+}, 100);
 </script>

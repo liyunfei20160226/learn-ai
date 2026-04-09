@@ -31,6 +31,14 @@
             </h2>
             <div class="space-y-3">
                 <div>
+                    <span class="text-sm font-medium text-gray-500">项目ID:</span>
+                    <span class="ml-2 text-gray-800 font-mono bg-gray-100 px-2 py-1 rounded">{{ state.project_id }}</span>
+                </div>
+                <div>
+                    <span class="text-sm font-medium text-gray-500">项目名称:</span>
+                    <span class="ml-2 text-gray-800">{{ state.project_name }}</span>
+                </div>
+                <div>
                     <span class="text-sm font-medium text-gray-500">原始需求:</span>
                     <p class="mt-1 text-gray-800 whitespace-pre-wrap">{{ state.original_user_requirement }}</p>
                 </div>
@@ -129,13 +137,47 @@
                 需求分析已完成
             </h2>
             <p class="text-gray-600 mb-4">
-                所有需求问题已澄清，需求规格文档已生成。你可以下载 Markdown 版本：
+                所有需求问题已澄清，需求规格文档已生成。你可以下载 Markdown 版本，或者添加文字需求变更：
             </p>
+            <div class="flex flex-wrap gap-3">
             <a href="/projects/{{ state.project_id }}/requirements/download"
                class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors">
                 <i class="fas fa-download mr-2"></i>
                 下载需求文档 (.md)
             </a>
+            <button id="change-request-btn"
+                    onclick="showChangeRequest()"
+                    class="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-colors">
+                <i class="fas fa-edit mr-2"></i>
+                需求变更
+            </button>
+            </div>
+            <div id="change-request-area" class="mt-6 hidden border-t pt-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">
+                    <i class="fas fa-plus-circle text-blue-500 mr-2"></i>
+                    添加需求变更
+                </h3>
+                <p class="text-sm text-gray-600 mb-4">
+                    在这里输入你想要变更或补充的需求信息，提交后会触发新一轮分析，分析师会结合历史问答和你的变更信息重新分析。
+                </p>
+                <textarea id="change-request-text"
+                          rows="4"
+                          class="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                          placeholder="请输入需求变更说明..."></textarea>
+                <div class="mt-4 flex space-x-3">
+                    <button id="submit-change-btn"
+                            onclick="submitChangeRequest('{{ state.project_id }}')"
+                            class="inline-flex items-center px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-colors">
+                        <i class="fas fa-paper-plane mr-2"></i>
+                        提交变更
+                    </button>
+                    <button id="cancel-change-btn"
+                            onclick="cancelChangeRequest()"
+                            class="inline-flex items-center px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors">
+                        取消
+                    </button>
+                </div>
+            </div>
         </div>
         {% elif state.requirements_spec %}
         {% include "components/requirements_view.html" %}
@@ -160,10 +202,13 @@
                 <button id="start-btn"
                         hx-post="/projects/{{ state.project_id }}/start"
                         hx-swap="none"
-                        class="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-[1.02]{% if unanswered %} opacity-50 cursor-not-allowed disabled{% endif %}"
+                        class="bg-gradient-to-r
+                        {% if state.requirements_spec and not state.documents_processed %}from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700
+                        {% else %}from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700{% endif %}
+                        text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-[1.02]{% if unanswered %} opacity-50 cursor-not-allowed disabled{% endif %}"
                         {% if unanswered %}disabled{% endif %}>
                     <i class="fas fa-play mr-2"></i>
-                    开始分析
+                    {% if state.requirements_spec and not state.documents_processed %}重新分析{% else %}开始分析{% endif %}
                 </button>
             </div>
         </div>
@@ -299,6 +344,143 @@ function showUploadError(message) {
             errorEl.innerHTML = '';
         }, 500);
     }, 3000);
+}
+
+function showChangeRequest() {
+    document.getElementById('change-request-area').classList.remove('hidden');
+    document.getElementById('change-request-text').focus();
+}
+
+function cancelChangeRequest() {
+    document.getElementById('change-request-area').classList.add('hidden');
+    document.getElementById('change-request-text').value = '';
+}
+
+function submitChangeRequest(projectId) {
+    const text = document.getElementById('change-request-text').value.trim();
+    if (!text) {
+        alert('请输入需求变更内容');
+        return;
+    }
+
+    // 禁用按钮防止重复提交，显示提示
+    const submitBtn = document.getElementById('submit-change-btn');
+    const cancelBtn = document.getElementById('cancel-change-btn');
+    submitBtn.disabled = true;
+    cancelBtn.disabled = true;
+    submitBtn.classList.add('opacity-50');
+    submitBtn.classList.add('cursor-not-allowed');
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>提交中...';
+
+    // 用fetch POST提交变更，后端直接返回进度流式页面
+    fetch('/projects/' + projectId + '/change-request', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'change_text=' + encodeURIComponent(text)
+    })
+    .then(response => response.text())
+    .then(html => {
+        // 提交成功，直接替换进度容器
+        const progressContainer = document.getElementById('progress-container');
+        progressContainer.innerHTML = html;
+        // 隐藏需求变更输入框
+        document.getElementById('change-request-area').classList.add('hidden');
+        // 隐藏需求分析完成卡片
+        const completedCard = document.querySelector('.bg-green-50.rounded-2xl.shadow-xl.p-6.mb-8.border-l-4.border-green-500');
+        if (completedCard) {
+            completedCard.style.display = 'none';
+        }
+        // 禁用底部的开始/重新分析按钮，防止重复点击
+        const startBtn = document.getElementById('start-btn');
+        if (startBtn) {
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50');
+            startBtn.classList.add('cursor-not-allowed');
+        }
+        // innerHTML不会自动执行script，需要我们手动启动SSE
+        const fromNode = 'analyst';
+        const eventSource = new EventSource('/projects/' + projectId + '/stream?from_node=' + fromNode);
+        const currentStep = document.getElementById('current-step');
+        const currentDoc = document.getElementById('current-document');
+        const progressBar = document.getElementById('progress-bar');
+
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.event === 'node_start') {
+                if (currentStep) {
+                    const nodeName = data.data.name;
+                    currentStep.innerHTML = '正在运行: <strong>' + nodeName + '</strong>';
+                }
+                if (progressBar) {
+                    progressBar.style.width = '50%';
+                }
+            } else if (data.event === 'document_progress') {
+                if (currentDoc) {
+                    currentDoc.innerHTML = '<i class=\"fas fa-file-alt text-blue-400 mr-1\"></i> 当前处理: ' + data.data.current_file;
+                }
+            } else if (data.event === 'node_complete') {
+                if (progressBar) {
+                    progressBar.style.width = '80%';
+                }
+            } else if (data.event === 'complete') {
+                if (progressBar) {
+                    progressBar.style.width = '100%';
+                }
+                eventSource.close();
+                // Refresh page to show new state
+                window.location.reload();
+            }
+        };
+
+        eventSource.onerror = function(error) {
+            console.error('SSE error:', error);
+            eventSource.close();
+            // 恢复开始按钮
+            const startBtn = document.getElementById('start-btn');
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.classList.remove('opacity-50');
+                startBtn.classList.remove('cursor-not-allowed');
+            }
+            // 恢复提交按钮
+            const submitBtn = document.getElementById('submit-change-btn');
+            const cancelBtn = document.getElementById('cancel-change-btn');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                cancelBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50');
+                submitBtn.classList.remove('cursor-not-allowed');
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>提交变更';
+            }
+            document.getElementById('progress-container-inner').innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-2xl p-6">
+                    <h2 class="text-xl font-semibold text-red-800 mb-2">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        连接错误
+                    </h2>
+                    <p class="text-red-600">请检查 API 配置，刷新页面重试</p>
+                </div>
+            `;
+        };
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('提交失败，请重试');
+        submitBtn.disabled = false;
+        cancelBtn.disabled = false;
+        submitBtn.classList.remove('opacity-50');
+        submitBtn.classList.remove('cursor-not-allowed');
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>提交变更';
+        // 恢复开始按钮
+        const startBtn = document.getElementById('start-btn');
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50');
+            startBtn.classList.remove('cursor-not-allowed');
+        }
+    });
 }
 </script>
 {% endblock %}

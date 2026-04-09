@@ -72,7 +72,8 @@ async def upload_file(request: Request, project_id: str, files: list[UploadFile]
     # 返回更新后的文档列表
     return templates.TemplateResponse(request, "components/document_list.html", {
         "state": state,
-        "project_id": project_id
+        "project_id": project_id,
+        "requirements_already_completed": state.requirements_spec is not None,
     })
 
 
@@ -102,5 +103,6 @@ async def delete_document(request: Request, project_id: str, filename: str):
     # 返回更新后的文档列表
     return templates.TemplateResponse(request, "components/document_list.html", {
         "state": state,
-        "project_id": project_id
+        "project_id": project_id,
+        "requirements_already_completed": state.requirements_spec is not None,
     })

@@ -69,6 +69,7 @@ app.post("/projects/{project_id}/answer")(workflow.submit_answers)
 app.get("/projects/{project_id}/stream")(workflow.stream_workflow)
 app.get("/projects/{project_id}/requirements")(workflow.get_requirements)
 app.get("/projects/{project_id}/requirements/download")(workflow.download_requirements)
+app.post("/projects/{project_id}/change-request")(projects.submit_change_request)
 app.get("/health")(lambda: {"status": "ok"})
 
 # 让模板能访问 node_name_map
