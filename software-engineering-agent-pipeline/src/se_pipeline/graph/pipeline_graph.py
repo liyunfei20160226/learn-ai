@@ -21,6 +21,9 @@ def analyst_node(state: PipelineState, analyst: RequirementsAnalystAgent) -> Pip
 
 
 def verifier_node(state: PipelineState, verifier: RequirementsVerifierAgent) -> PipelineState:
+    # 标记已经进入验证阶段
+    if not state.entered_verification:
+        state = state.model_copy(update={"entered_verification": True})
     return verifier.run(state)
 
 

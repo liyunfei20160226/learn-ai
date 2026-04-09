@@ -51,7 +51,8 @@ class PipelineState(BaseModel):
     # 需求分析阶段内部状态（双Agent协作）
     requirements_qa_history: List[Dict[str, Optional[str]]] = Field(default_factory=list, description="问答历史")
     requirements_verification_passed: bool = Field(default=False, description="需求验证是否通过")
-    needs_more_questions: bool = Field(default=False, description="是否需要继续提问")
+    needs_more_questions: bool = Field(default=False, description="是否需要继续提问（分析师或验证官需要继续）")
+    entered_verification: bool = Field(default=False, description="是否已经进入验证阶段")
 
     # 回流相关
     backflow_target_stage: Optional[StageId] = Field(default=None, description="回流目标阶段")

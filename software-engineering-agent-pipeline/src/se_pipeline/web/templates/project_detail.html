@@ -67,13 +67,13 @@
                   enctype="multipart/form-data"
                   class="mb-4"
                   onsubmit="return checkFileSelect(this);">
-                <div class="flex items-center space-x-4">
+                <div class="flex flex-wrap items-center gap-4">
                     <input type="file" multiple
-                           class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                           class="block flex-1 min-w-[200px] text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                            name="files">
                     <button type="button"
                             onclick="return checkUpload()"
-                            class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-all duration-200">
+                            class="flex-shrink-0 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-all duration-200 whitespace-nowrap">
                         <i class="fas fa-upload mr-2"></i>
                         上传
                     </button>
@@ -120,7 +120,7 @@
         </div>
 
         <!-- Final Requirements -->
-        {% if state.requirements_spec %}
+        {% if state.requirements_spec and not unanswered %}
         {% include "components/requirements_view.html" %}
         <!-- 需求分析完成卡片 - 提供下载链接 -->
         <div class="bg-green-50 rounded-2xl shadow-xl p-6 mb-8 border-l-4 border-green-500">
@@ -137,6 +137,8 @@
                 下载需求文档 (.md)
             </a>
         </div>
+        {% elif state.requirements_spec %}
+        {% include "components/requirements_view.html" %}
         {% endif %}
 
         <!-- Start / Restart -->
@@ -174,6 +176,11 @@ document.getElementById('start-btn')?.addEventListener('click', function() {
     const progressContainer = document.getElementById('progress-container');
     const questionsContainer = document.getElementById('questions-container');
     const startBtn = document.getElementById('start-btn');
+    // 找到需求分析完成卡片并隐藏
+    const requirementsCompletedCard = document.querySelector('.bg-green-50.rounded-2xl.shadow-xl.p-6.mb-8.border-l-4.border-green-500');
+    if (requirementsCompletedCard) {
+        requirementsCompletedCard.style.display = 'none';
+    }
 
     // 禁用按钮，防止重复点击
     startBtn.disabled = true;

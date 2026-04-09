@@ -62,6 +62,11 @@ async def upload_file(request: Request, project_id: str, files: list[UploadFile]
         state = state.model_copy(update={"source_documents_dir": str(uploads_dir)})
 
     if updated:
+        # 上传新文档后，重置文档处理标记，需要重新预处理
+        # 这样新上传的文档会被整合到项目背景中
+        state = state.model_copy(update={
+            "documents_processed": False,
+        })
         store.save_state(project_id, state)
 
     # 返回更新后的文档列表
@@ -81,6 +86,10 @@ async def delete_document(request: Request, project_id: str, filename: str):
     # 从 attached_documents 中移除
     new_docs = [doc for doc in state.attached_documents if doc.filename != filename]
     state = state.model_copy(update={"attached_documents": new_docs})
+    # 删除文档后，重置文档处理标记，需要重新预处理
+    state = state.model_copy(update={
+        "documents_processed": False,
+    })
     store.save_state(project_id, state)
 
     # 删除物理文件

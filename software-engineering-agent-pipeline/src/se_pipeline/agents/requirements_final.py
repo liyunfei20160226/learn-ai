@@ -54,6 +54,11 @@ class RequirementsFinalAgent(BaseAgent):
         state.requirements_spec = spec
         state.update_timestamp()
 
+        # 保存markdown文件到磁盘
+        from ..storage.project_store import ProjectStore
+        store = ProjectStore()
+        store.save_requirements(state.project_id, spec)
+
         return state
 
     def _build_context(self, state: PipelineState) -> str:

@@ -66,8 +66,22 @@ async def submit_answers(request: Request, project_id: str):
     workflow_manager.save_state(project_id, state)
 
     # 下一步由 SSE 流式处理
+    # 正确逻辑：根据是否已经进入验证阶段来判断
+    # - 如果还没进入验证阶段 → 用户回答的是分析师的问题 → 回分析师
+    # - 如果已经进入验证阶段 → 用户回答的是验证官的问题 → 回验证官
+    # - 如果验证通过后质量闸门回流 → 回到分析师
+    if state.requirements_verification_passed:
+        # 验证已经通过 → 质量闸门回流，回分析师
+        current_node = "analyst"
+    else:
+        if not state.entered_verification:
+            # 还没进入验证阶段 → 还在分析师循环 → 回分析师
+            current_node = "analyst"
+        else:
+            # 已经进入验证阶段 → 在验证官循环 → 回验证官
+            current_node = "verifier"
     return templates.TemplateResponse(request, "components/progress_stream.html", {
-        "current_node": "analyst" if not state.requirements_verification_passed else "verifier"
+        "current_node": current_node
     })
 
 

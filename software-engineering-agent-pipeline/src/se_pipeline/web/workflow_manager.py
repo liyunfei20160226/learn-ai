@@ -98,6 +98,7 @@ class WorkflowManager:
                     state = state.model_copy(update={
                         "requirements_verification_passed": False,
                         "needs_more_questions": True,
+                        "entered_verification": False,
                         "backflow_feedback": result.feedback
                     })
             next_node = after_quality_gate(state)
