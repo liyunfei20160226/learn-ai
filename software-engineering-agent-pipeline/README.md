@@ -146,3 +146,24 @@ MEMORY_MCP_BASE_URL=http://localhost:8000
 export MEMORY_FILE_PATH=/path/to/your/memory.jsonl
 ./start-http.sh
 ```
+
+## TODO / 待改进
+
+### Excel 文档处理改进
+
+当前问题：Excel 中提取出来的图片，如果不属于某个 sheet，则无法判断其在哪个具体 sheet 中。目前的做法是直接给多模态 LLM，让模型分析应该属于哪个 sheet。
+
+改进方案：
+
+1. **第一步**：将 Excel 的每个 sheet，通过 pandas 转成 dataframe，再转成 markdown 文档  
+   ✅ 这一步已经实现  
+   ✅ 表格数据转换准确，不会丢单元格数据
+
+2. **第二步**：将 Excel 整体转成 PDF，再将 PDF 的每一页转换成图片，分别给多模态 LLM 进行 OCR，分析转换成临时的 markdown 文件  
+   - PDF分页自然分片，即使大sheet也能正确处理，不会因为太大丢信息
+   - 每页OCR能提取出该页上的所有图片，并保留图片在页面中的位置信息
+
+3. **第三步**：将第一步（表格结构化转换）和第二步（PDF图片OCR）得到的所有内容再次交给 LLM 分析，合并生成正式的完整 Excel 文档 markdown 资料
+   - LLM 同时拿到：**结构化表格数据** + **分页OCR结果（含图片位置）**
+   - LLM 的任务：基于结构化表格，把OCR出来的图片按位置插入正确位置，合并成完整文档
+   - 这样既保证了表格数据的准确性，又能完整提取图片，解决图片归属问题
