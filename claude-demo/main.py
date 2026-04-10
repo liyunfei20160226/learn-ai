@@ -60,6 +60,15 @@ def update_todo(todo_id: str, todo_update: TodoUpdate):
                 todo.completed = todo_update.completed
             return todo
     raise HTTPException(status_code=404, detail="Todo not found")
+
+@app.delete("/api/todos/completed")
+def clear_completed():
+    """Clear all completed todos"""
+    global todos
+    completed_count = sum(1 for t in todos if t.completed)
+    todos = [t for t in todos if not t.completed]
+    return {"message": f"Cleared {completed_count} completed todos"}
+
 @app.delete("/api/todos/{todo_id}")
 def delete_todo(todo_id: str):
     """Delete a todo"""
@@ -69,14 +78,6 @@ def delete_todo(todo_id: str):
     if len(todos) == initial_length:
         raise HTTPException(status_code=404, detail="Todo not found")
     return {"message": "Deleted successfully"}
-
-@app.delete("/api/todos/completed")
-def clear_completed():
-    """Clear all completed todos"""
-    global todos
-    completed_count = sum(1 for t in todos if t.completed)
-    todos = [t for t in todos if not t.completed]
-    return {"message": f"Cleared {completed_count} completed todos"}
 
 # Mount static files and serve frontend
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -100,6 +101,16 @@ def snake_game():
 def sudoku_game():
     """Sudoku puzzle game"""
     return FileResponse("static/sudoku.html")
+
+@app.get("/minesweeper")
+def minesweeper_game():
+    """Minesweeper game"""
+    return FileResponse("static/minesweeper.html")
+
+@app.get("/category")
+def category_page():
+    """Category page showing apps by category"""
+    return FileResponse("static/category.html")
 
 if __name__ == "__main__":
     import uvicorn

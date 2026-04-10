@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💣 扫雷</title>
+    <link rel="stylesheet" href="/static/minesweeper.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <span class="title-emoji">💣</span>
+                扫雷
+                <span class="title-emoji">💣</span>
+            </h1>
+            <p class="subtitle">左键点开格子，右键插旗子标记地雷</p>
+        </header>
+
+        <main class="main">
+            <div class="game-card">
+                <div class="difficulty">
+                    <span>难度:</span>
+                    <button class="diff-btn active" data-diff="easy">初级</button>
+                    <button class="diff-btn" data-diff="medium">中级</button>
+                    <button class="diff-btn" data-diff="hard">高级</button>
+                </div>
+
+                <div class="status-bar">
+                    <div class="counter">
+                        <span class="counter-label">🚩</span>
+                        <span id="minesLeft" class="counter-value">10</span>
+                    </div>
+                    <button id="resetBtn" class="reset-btn">
+                        <span id="face">😐</span>
+                    </button>
+                    <div class="counter">
+                        <span class="counter-label">⏱️</span>
+                        <span id="timer" class="counter-value">0</span>
+                    </div>
+                </div>
+
+                <div class="board-container">
+                    <div id="gameBoard" class="minesweeper-board"></div>
+                </div>
+
+                <div class="instructions">
+                    <div class="rules-title">🎮 游戏规则</div>
+                    <ul class="rules-list">
+                        <li>左键点击点开一个格子</li>
+                        <li>右键点击插旗子标记地雷</li>
+                        <li>数字表示周围 8 格共有多少颗地雷</li>
+                        <li>第一次点击一定安全，点击后才会布雷</li>
+                        <li>点开所有非地雷格子获得胜利</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="back-link">
+                <a href="/">← 返回项目主页</a>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>用 ❤️ 构建 with HTML + JavaScript</p>
+        </footer>
+    </div>
+
+    <div id="messageModal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="modalTitle"></h2>
+            <p id="modalMessage"></p>
+            <button id="modalOk" class="btn-ok">好的</button>
+        </div>
+    </div>
+
+    <script src="/static/minesweeper.js"></script>
+</body>
+</html>
