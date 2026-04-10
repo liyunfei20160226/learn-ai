@@ -7,7 +7,11 @@
     <div id="current-step" class="text-gray-600 mb-2">
         当前节点: <strong>{{ node_name_map[current_node] if current_node in node_name_map else current_node }}</strong>
     </div>
-    <div id="current-document" class="text-sm text-gray-500 mb-4"></div>
+    <div id="current-document" class="text-sm text-gray-500 mb-2"></div>
+    <div class="mt-4">
+        <div class="text-xs text-gray-400 mb-1">详细进度日志:</div>
+        <div id="progress-log" class="bg-gray-50 rounded-lg p-3 max-h-48 overflow-y-auto font-mono text-xs text-gray-600 leading-relaxed"></div>
+    </div>
     <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
         <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full" style="width: 10%"></div>
     </div>
@@ -23,6 +27,7 @@ eventSource.onmessage = function(event) {
     const data = JSON.parse(event.data);
     const currentStep = document.getElementById('current-step');
     const currentDoc = document.getElementById('current-document');
+    const progressLog = document.getElementById('progress-log');
     const progressBar = document.getElementById('progress-bar');
 
     if (data.event === 'node_start') {
@@ -31,15 +36,28 @@ eventSource.onmessage = function(event) {
             currentStep.innerHTML = `正在运行: <strong>${nodeName}</strong>`;
         }
         if (progressBar) {
-            progressBar.style.width = '50%';
+            progressBar.style.width = '30%';
         }
     } else if (data.event === 'document_progress') {
+        const message = data.data.current_file;
         if (currentDoc) {
-            currentDoc.innerHTML = `<i class="fas fa-file-alt text-blue-400 mr-1"></i> 当前处理: ${data.data.current_file}`;
+            currentDoc.innerHTML = `<i class="fas fa-file-alt text-blue-400 mr-1"></i> 当前处理: ${message}`;
+        }
+        if (progressLog) {
+            const line = document.createElement('div');
+            line.textContent = '• ' + message;
+            progressLog.appendChild(line);
+            // 自动滚动到底部
+            progressLog.scrollTop = progressLog.scrollHeight;
+        }
+        if (progressBar) {
+            // 每收到一个进度更新，进度条前进一点
+            const currentWidth = parseInt(progressBar.style.width || '30%');
+            progressBar.style.width = Math.min(currentWidth + 5, 80) + '%';
         }
     } else if (data.event === 'node_complete') {
         if (progressBar) {
-            progressBar.style.width = '80%';
+            progressBar.style.width = '85%';
         }
     } else if (data.event === 'complete') {
         if (progressBar) {

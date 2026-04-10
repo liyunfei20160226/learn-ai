@@ -102,8 +102,10 @@ class DocumentPreprocessorAgent(BaseAgent):
                 progress_callback(rel_path)
 
             print(f"  正在处理: {rel_path}... ", end="", flush=True)
+            if progress_callback:
+                progress_callback(f"正在处理: {rel_path}")
 
-            doc = self.process_single_file(file_path, source_dir, output_dir)
+            doc = self.process_single_file(file_path, source_dir, output_dir, progress_callback)
             documents.append(doc)
 
             if doc.parse_success:
@@ -135,7 +137,8 @@ class DocumentPreprocessorAgent(BaseAgent):
         self,
         file_path: Path,
         source_dir: Path,
-        output_dir: Path
+        output_dir: Path,
+        progress_callback: callable = None
     ) -> AttachedDocument:
         """处理单个文件"""
         relative_path = str(file_path.relative_to(source_dir))
@@ -155,13 +158,13 @@ class DocumentPreprocessorAgent(BaseAgent):
                 self._process_text_file(doc, file_path, output_dir)
             elif ext in ['.xlsx', '.xls', '.xlsm']:
                 # Excel原生解析 - pandas读表格转markdown，比PDF转图片更准确
-                self._process_excel(doc, file_path, output_dir)
+                self._process_excel(doc, file_path, output_dir, progress_callback)
             elif ext == '.pdf':
                 # 原生PDF，不需要转换，直接处理
-                self._process_pdf(doc, file_path, output_dir)
+                self._process_pdf(doc, file_path, output_dir, progress_callback)
             elif ext in NEED_CONVERSION_EXTENSIONS and self.libreoffice.can_convert(file_path):
                 # 需要用LibreOffice转换为PDF
-                self._process_with_conversion(doc, file_path, output_dir)
+                self._process_with_conversion(doc, file_path, output_dir, progress_callback)
             elif ext in {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.tif'}:
                 # 图片，直接用视觉模型解析
                 self._process_image(doc, file_path, output_dir)
@@ -199,7 +202,8 @@ class DocumentPreprocessorAgent(BaseAgent):
         self,
         doc: AttachedDocument,
         input_path: Path,
-        output_dir: Path
+        output_dir: Path,
+        progress_callback: callable = None
     ) -> None:
         """先用LibreOffice转换为PDF，再处理PDF"""
         # 为当前文件创建单独子目录
@@ -213,39 +217,36 @@ class DocumentPreprocessorAgent(BaseAgent):
             return
 
         doc.processed_pdf_path = str(result.output_path.relative_to(output_dir))
-        self._process_pdf(doc, result.output_path, output_dir)
+        self._process_pdf(doc, result.output_path, output_dir, progress_callback)
+
 
     def _process_excel(
         self,
         doc: AttachedDocument,
         excel_path: Path,
-        output_dir: Path
+        output_dir: Path,
+        progress_callback: callable = None
     ) -> None:
         """处理Excel文件原生解析 - 每个sheet单独处理
-        - 表格用pandas转markdown
-        - 提取sheet中的图片
-        - 每个sheet单独总结，单独保存文件
-
-        图片处理逻辑：
-        1. 先从zip media一次性提取所有图片（整个Excel一次）
-        2. 遍历每个sheet，读取表格，提取嵌入式图片
-        3. 所有图片提取完后，LLM逐个判断图片属于哪个sheet
-        4. 判断不了的放到最终汇总
-        5. 每个sheet单独总结，单独保存文件
+        改进方案（双路径提取 + LLM合并）：
+        1. 第一步：pandas读取每个sheet，转dataframe → 转markdown表格
+           → 保证表格数据准确，但浮动图片可能抓不到
+        2. 第二步：整个Excel转PDF → 逐页转图片 → 多模态逐页OCR提取文字
+           → 能抓到页面上所有内容，包括浮动图片/图表，但表格格式可能不准
+        3. 第三步：LLM合并两份结果 → 保留准确表格，插入PDF提取的图片内容
+           → 解决图片无法归属的问题
 
         目录结构：
         processed_docs/
-          ├─ {original_filename}/     <- 每个文件单独子目录
-          │   ├─ images/              <- 所有图片放这里
-          │   ├─ {excel}_sheet_01_name.summary.md
-          │   ├─ {excel}_sheet_02_name.summary.md
-          │   ...
+          ├─ {original_filename}/             <- 每个文件单独子目录
+          │   ├─ pdf_pages/                  <- PDF转图片存放这里
+          │   ├─ sheet_xx_name.summary.md    <- 每个sheet单独总结
+          │   └─ full_merged_content.md      <- LLM合并后的完整内容
           └─ {original_filename}.summary.md  <- 文件总summary在根目录
         """
         try:
             import openpyxl
             import pandas as pd
-            from openpyxl.drawing.image import Image
         except ImportError:
             doc.parse_success = False
             doc.error_message = "Missing dependencies: need openpyxl and pandas. Install with: pip install openpyxl pandas"
@@ -256,36 +257,16 @@ class DocumentPreprocessorAgent(BaseAgent):
         # ========== 为当前Excel创建单独子目录 ==========
         file_subdir = output_dir / excel_path.stem
         file_subdir.mkdir(parents=True, exist_ok=True)
-        images_dir = file_subdir / "images"
-        images_dir.mkdir(exist_ok=True)
 
-        # ========== 第一步：从zip media一次性提取所有图片（整个Excel一次） ==========
-        extracted_all_images: List[Path] = []
-        if excel_path.suffix.lower() in ['.xlsx', '.xlsm']:
-            try:
-                from zipfile import ZipFile
-                with ZipFile(excel_path, 'r') as zf:
-                    media_files = [name for name in zf.namelist() if name.startswith('xl/media/')]
-                    for media_name in media_files:
-                        img_filename = f"media_{len(extracted_all_images)+1:02d}{Path(media_name).suffix}"
-                        img_path = images_dir / img_filename
-                        with zf.open(media_name) as src:
-                            image_data = src.read()
-                        with open(img_path, 'wb') as dst:
-                            dst.write(image_data)
-                        extracted_all_images.append(img_path)
-                        print(f"    ✓ 从media提取图片: {excel_path.stem}/images/{img_filename}")
-            except Exception as e:
-                print(f"    ✗ 从zip提取图片失败: {e}")
-                pass
-
-        # ========== 第二步：遍历每个sheet，处理表格，提取嵌入式图片 ==========
-        # 存储每个sheet的信息：(sheet_idx, sheet_name, content_parts, extracted_text, embedded_images)
-        sheets_info: List[Tuple[int, str, List[str], str, List[Path]]] = []
+        # ========== 第一步：遍历每个sheet，读取表格数据转markdown ==========
+        # 存储每个sheet的信息：(sheet_idx, sheet_name, content_parts, extracted_text)
+        sheets_info: list[tuple[int, str, list[str], str]] = []
 
         for sheet_idx, sheet_name in enumerate(wb.sheetnames, 1):
             ws = wb[sheet_name]
             print(f"    Processing sheet: {sheet_name}... ", end="", flush=True)
+            if progress_callback:
+                progress_callback(f"{doc.filename} → 读取 sheet {sheet_idx}/{len(wb.sheetnames)}: {sheet_name}")
 
             # 读取表格数据转markdown
             data = []
@@ -300,120 +281,8 @@ class DocumentPreprocessorAgent(BaseAgent):
                 if not df.empty:
                     sheet_markdown = df.to_markdown(index=False, tablefmt="github")
 
-            # 提取sheet中的嵌入式图片 - 搜索所有可能位置
-            embedded_images: List[Path] = []
-
-            # 方法1: ws._images (大多数情况)
-            if hasattr(ws, '_images'):
-                for img in ws._images:
-                    try:
-                        img_filename = f"sheet_{sheet_idx:02d}_image_{len(embedded_images)+1:02d}.png"
-                        img_path = images_dir / img_filename
-                        # 不同 openpyxl 版本图片数据位置不同
-                        image_data = None
-                        if hasattr(img, 'ref') and hasattr(img.ref, 'blob'):
-                            image_data = img.ref.blob
-                        elif hasattr(img, 'blob'):
-                            image_data = img.blob
-                        elif hasattr(img, 'ref') and hasattr(img.ref, 'image'):
-                            if hasattr(img.ref.image, 'getvalue'):
-                                image_data = img.ref.image.getvalue()
-                            elif hasattr(img.ref.image, 'read'):
-                                image_data = img.ref.image.read()
-
-                        if image_data is None:
-                            continue
-
-                        with open(img_path, 'wb') as f:
-                            f.write(image_data)
-                        embedded_images.append(img_path)
-                        print(f"      ✓ 提取嵌入式图片: {excel_path.stem}/images/{img_filename}")
-                    except Exception as e:
-                        # 提取图片失败跳过，不影响表格文字处理
-                        print(f"      ✗ 嵌入式图片提取失败: {e}")
-                        continue
-
-            # 方法2: ws.drawings (有些版本存在这里)
-            if hasattr(ws, 'drawings'):
-                for drawing in ws.drawings:
-                    try:
-                        if hasattr(drawing, 'image'):
-                            img = drawing.image
-                            image_data = None
-                            if isinstance(img, Image):
-                                img_filename = f"sheet_{sheet_idx:02d}_image_{len(embedded_images)+1:02d}.png"
-                                img_path = images_dir / img_filename
-                                if hasattr(img, 'ref') and hasattr(img.ref, 'blob'):
-                                    image_data = img.ref.blob
-                                elif hasattr(img, 'blob'):
-                                    image_data = img.blob
-                                elif hasattr(img, 'ref') and hasattr(img.ref, 'image'):
-                                    if hasattr(img.ref.image, 'getvalue'):
-                                        image_data = img.ref.image.getvalue()
-                                    elif hasattr(img.ref.image, 'read'):
-                                        image_data = img.ref.image.read()
-
-                                if image_data is None:
-                                    continue
-
-                                with open(img_path, 'wb') as f:
-                                    f.write(image_data)
-                                embedded_images.append(img_path)
-                                print(f"      ✓ 提取嵌入式图片: {excel_path.stem}/images/{img_filename}")
-                    except Exception as e:
-                        print(f"      ✗ 嵌入式图片提取失败: {e}")
-                        continue
-
-            # 方法3: 检查 _pictures
-            if hasattr(ws, '_pictures'):
-                for pic in ws._pictures:
-                    try:
-                        img_filename = f"sheet_{sheet_idx:02d}_image_{len(embedded_images)+1:02d}.png"
-                        img_path = images_dir / img_filename
-                        image_data = None
-                        if hasattr(pic, '_img') and hasattr(pic._img, 'ref') and hasattr(pic._img.ref, 'blob'):
-                            image_data = pic._img.ref.blob
-                        elif hasattr(pic, '_img') and hasattr(pic._img, 'blob'):
-                            image_data = pic._img.blob
-
-                        if image_data is None:
-                            continue
-
-                        with open(img_path, 'wb') as f:
-                            f.write(image_data)
-                        embedded_images.append(img_path)
-                        print(f"      ✓ 提取嵌入式图片: {excel_path.stem}/images/{img_filename}")
-                    except Exception as e:
-                        print(f"      ✗ 嵌入式图片提取失败: {e}")
-                        continue
-
-            # 方法4: 检查 embedded_objects
-            if hasattr(ws, 'embedded_objects'):
-                for obj in ws.embedded_objects:
-                    try:
-                        if hasattr(obj, 'object') and hasattr(obj.object, 'picture'):
-                            pic = obj.object.picture
-                            img_filename = f"sheet_{sheet_idx:02d}_image_{len(embedded_images)+1:02d}.png"
-                            img_path = images_dir / img_filename
-                            image_data = None
-                            if hasattr(pic, 'ref') and hasattr(pic.ref, 'blob'):
-                                image_data = pic.ref.blob
-                            elif hasattr(pic, 'blob'):
-                                image_data = pic.blob
-
-                            if image_data is None:
-                                continue
-
-                            with open(img_path, 'wb') as f:
-                                f.write(image_data)
-                            embedded_images.append(img_path)
-                            print(f"      ✓ 提取嵌入式图片: {excel_path.stem}/images/{img_filename}")
-                    except Exception as e:
-                        print(f"      ✗ 嵌入式图片提取失败: {e}")
-                        continue
-
-            # 构建初始内容（只有表格文字，图片还没添加）
-            content_parts: List[str] = []
+            # 构建内容（只有表格文字，图片由PDF OCR提取，后续LLM合并）
+            content_parts: list[str] = []
             content_parts.append(f"# Sheet: {sheet_name}\n")
             if sheet_markdown:
                 content_parts.append(sheet_markdown)
@@ -421,126 +290,18 @@ class DocumentPreprocessorAgent(BaseAgent):
 
             extracted_text = "\n".join(content_parts)
 
-            # 保存sheet信息，后续处理图片
-            sheets_info.append((sheet_idx, sheet_name, content_parts, extracted_text, embedded_images))
-            if embedded_images:
-                print(f"✓ 表格读取完成，{len(embedded_images)} 张嵌入式图片")
-            else:
-                print("✓ 表格读取完成")
+            # 保存sheet信息
+            sheets_info.append((sheet_idx, sheet_name, content_parts, extracted_text))
+            print("✓ 表格读取完成")
 
-        # ========== 第三步：处理嵌入式图片，添加到对应sheet ==========
-        from PIL import Image
-        for sheet_idx, sheet_name, content_parts, extracted_text, embedded_images in sheets_info:
-            if embedded_images:
-                print(f"    处理 {sheet_name} 嵌入式图片 ({len(embedded_images)} 张)...")
-                for img_path in embedded_images:
-                    img_path = Path(img_path)
-                    # 如果是emf/wmf矢量图，转换为png给LLM
-                    ext = img_path.suffix.lower()
-                    if ext in ['.emf', '.wmf', '.eps']:
-                        try:
-                            with Image.open(img_path) as img:
-                                png_path = img_path.with_suffix('.png')
-                                img.convert('RGBA').save(png_path, 'PNG')
-                                img_path = png_path
-                        except Exception as e:
-                            print(f"      ⚠️  转换矢量图 {img_path.name} 到png失败: {e}")
-                            continue
+        # ========== 逐个sheet总结，保存单独文件 ==========
+        all_sheet_summaries: list[str] = []
+        structured_text_parts: list[str] = []
 
-                    img_text = self._extract_text_from_image(str(img_path))
-                    if img_text.strip():
-                        content_parts.append(f"## 图片内容\n{img_text}")
-                        extracted_text = "\n".join(content_parts)
-
-            # 更新提取后的文本
-            # 直接修改sheets_info中的内容（因为是列表可变对象）
-            sheets_info[sheets_info.index((sheet_idx, sheet_name, content_parts, extracted_text, embedded_images))] = \
-                (sheet_idx, sheet_name, content_parts, extracted_text, embedded_images)
-
-        # ========== 第四步：处理从zip提取的所有图片，LLM判断归属 ==========
-        if extracted_all_images:
-            print(f"\n    判断 {len(extracted_all_images)} 张media图片归属...")
-            # 构建所有sheet信息供LLM判断归属
-            sheets_overview = []
-            for sheet_idx, sheet_name, content_parts, _, _ in sheets_info:
-                # 只取前1000字符，足够判断归属
-                preview = "\n".join(content_parts)[:1000]
-                sheets_overview.append(f"Sheet {sheet_idx}: {sheet_name}\n{preview}\n")
-
-            sheets_overview_text = "\n---\n".join(sheets_overview)
-
-            for img_path in extracted_all_images:
-                img_path = Path(img_path)
-                # 如果是emf/wmf矢量图，转换为png给LLM
-                ext = img_path.suffix.lower()
-                if ext in ['.emf', '.wmf', '.eps']:
-                    try:
-                        with Image.open(img_path) as img:
-                            png_path = img_path.with_suffix('.png')
-                            img.convert('RGBA').save(png_path, 'PNG')
-                            img_path = png_path
-                    except Exception as e:
-                        print(f"      ⚠️  转换矢量图 {img_path.name} 到png失败: {e}")
-                        continue
-
-                # 提取图片文字内容
-                img_text = self._extract_text_from_image(str(img_path))
-                if not img_text.strip():
-                    print(f"      ✗ 图片 {img_path.name} 未提取到内容，跳过")
-                    continue
-
-                # LLM判断图片属于哪个sheet
-                prompt = f"""请根据图片内容和所有sheet的概览，判断这张图片最可能属于哪个sheet。
-
-# 所有Sheet概览
-{sheets_overview_text}
-
-# 当前图片内容
-{img_text}
-
-# 任务
-请只回答你判断这个图片属于哪个sheet，直接返回 sheet 编号（如 "Sheet 2" 或 "2"）。
-如果无法判断归属，回答 "unknown"。
-"""
-                import time
-                response = self.llm.invoke(prompt)
-                answer = response.content.strip().lower()
-                # 延迟避免触发频率限制 429
-                time.sleep(3)
-
-                matched_sheet = None
-                if "unknown" not in answer:
-                    # 尝试提取sheet编号
-                    import re
-                    numbers = re.findall(r'\d+', answer)
-                    if numbers:
-                        sheet_num = int(numbers[0])
-                        # 找到对应sheet
-                        for idx, (sheet_idx, sheet_name, content_parts, extracted_text, embedded_images) in enumerate(sheets_info):
-                            if sheet_idx == sheet_num:
-                                matched_sheet = idx
-                                break
-
-                if matched_sheet is not None:
-                    # 添加到对应sheet
-                    sheet_idx, sheet_name, content_parts, extracted_text, embedded_images = sheets_info[matched_sheet]
-                    content_parts.append(f"## 图片内容\n{img_text}")
-                    extracted_text = "\n".join(content_parts)
-                    sheets_info[matched_sheet] = (sheet_idx, sheet_name, content_parts, extracted_text, embedded_images)
-                    print(f"      ✓ 图片 {img_path.name} → 归属 Sheet {sheet_idx}: {sheet_name}")
-                else:
-                    # 无法判断，添加到最后汇总
-                    print(f"      ⚠ 图片 {img_path.name} → 无法判断归属，放到汇总")
-                    # 最后汇总会处理，这里先保存到unassigned_images
-                    if 'unassigned_images' not in locals():
-                        unassigned_images: List[str] = []
-                    unassigned_images.append(f"--- 未归属图片 ---\n{img_text}")
-
-        # ========== 第五步：逐个sheet总结，保存单独文件 ==========
-        all_sheet_summaries: List[str] = []
-        full_text_parts: List[str] = []
-
-        for (sheet_idx, sheet_name, content_parts, extracted_text, embedded_images) in sheets_info:
+        for (sheet_idx, sheet_name, content_parts, extracted_text) in sheets_info:
+            print(f"    正在总结: Sheet {sheet_idx}: {sheet_name}... ", end="", flush=True)
+            if progress_callback:
+                progress_callback(f"{doc.filename} → 总结 sheet {sheet_idx}/{len(sheets_info)}: {sheet_name}")
             # 总结这个sheet
             sheet_summary = self._summarize_content(
                 f"{doc.filename} - Sheet {sheet_idx}: {sheet_name}",
@@ -554,32 +315,38 @@ class DocumentPreprocessorAgent(BaseAgent):
             with open(sheet_summary_path, "w", encoding="utf-8") as f:
                 f.write(f"# {doc.filename} - Sheet {sheet_idx}: {sheet_name}\n\n{sheet_summary}\n")
 
-            # 收集
+            # 收集结构化文本（每个sheet原始提取结果）
             all_sheet_summaries.append(f"## Sheet {sheet_idx}: {sheet_name}\n\n{sheet_summary}\n")
-            full_text_parts.append(f"--- Sheet {sheet_idx}: {sheet_name} ---\n{extracted_text}\n")
-            # 统计这张sheet有多少图片
-            image_count = len(embedded_images)
-            # 检查是否有media图片添加到这个sheet
-            if extracted_text and "## 图片内容" in extracted_text:
-                # 计算图片内容块数量（嵌入式已经算过了，这里只加media的）
-                image_count += extracted_text.count("## 图片内容") - len(embedded_images)
-            if image_count > 0:
-                print(f"    ✓ {sheet_name} 总结完成 ({len(sheet_summary):,d} 字符, 含 {image_count} 张图片)")
-            else:
-                print(f"    ✓ {sheet_name} 总结完成 ({len(sheet_summary):,d} 字符)")
+            structured_text_parts.append(f"--- Sheet {sheet_idx}: {sheet_name} ---\n{extracted_text}\n")
             # sheet 之间加延迟，避免触发频率限制
             import time
-            time.sleep(2)
+            time.sleep(0.1)
+            print(f"✓ 完成 ({len(sheet_summary)} 字符)")
 
         wb.close()
 
-        # 汇总所有内容，保存到总summary文件
+        # ========== 第二步：将整个Excel转PDF，逐页OCR提取文字 ==========
+        pdf_pages_text = self._convert_excel_to_pdf_and_ocr(doc, excel_path, file_subdir, progress_callback)
+
+        # ========== 第三步：合并结构化表格结果 + PDF OCR结果，LLM生成完整文本 ==========
+        # 合并结果写入单独文件，供后续读取
+        if pdf_pages_text:
+            # 构建完整文本送给LLM合并
+            structured_text = "\n\n".join(structured_text_parts)
+            if progress_callback:
+                progress_callback(f"{doc.filename} → LLM合并结果中...")
+            merged_text = self._merge_excel_results(structured_text, pdf_pages_text)
+            # 保存完整合并结果到单独文件
+            full_merged_path = file_subdir / "full_merged_content.md"
+            with open(full_merged_path, "w", encoding="utf-8") as f:
+                f.write(merged_text)
+            print(f"    ✓ 完整合并结果保存完成: {len(merged_text)} 字符")
+            if progress_callback:
+                progress_callback(f"{doc.filename} → ✓ 完整合并结果保存完成")
+
+        # ========== 汇总保存 ==========
         if all_sheet_summaries:
             full_summary = f"# {doc.filename}\n\n" + "\n".join(all_sheet_summaries)
-            # 处理无法归属的图片
-            if 'unassigned_images' in locals() and unassigned_images:
-                # 添加未归属图片
-                full_summary += "\n\n---\n\n## 未归属图片\n\n" + "\n\n".join(unassigned_images)
             # 保存summary到单独文件，只存路径
             summary_filename = f"{excel_path.stem}.summary.md"
             summary_path = output_dir / summary_filename
@@ -595,7 +362,8 @@ class DocumentPreprocessorAgent(BaseAgent):
         self,
         doc: AttachedDocument,
         pdf_path: Path,
-        output_dir: Path
+        output_dir: Path,
+        progress_callback: callable = None
     ) -> None:
         """处理PDF：转图片，视觉提取，总结
 
@@ -644,9 +412,13 @@ class DocumentPreprocessorAgent(BaseAgent):
             # 逐页视觉提取 + 逐页保存summary
 
             for page_num, img_path in enumerate(image_result.image_paths, 1):
+                if progress_callback:
+                    progress_callback(f"{doc.filename} → 提取第{page_num}页")
                 page_text = self._extract_text_from_image(img_path)
                 full_text_parts.append(f"--- 第{page_num}页 ---\n{page_text}")
 
+                if progress_callback:
+                    progress_callback(f"{doc.filename} → 总结第{page_num}页")
                 # 每页都保存单独summary文件，方便人工review
                 page_summary = self._summarize_content(
                     f"{doc.filename} - 第{page_num}页",
@@ -753,8 +525,8 @@ class DocumentPreprocessorAgent(BaseAgent):
         )
 
         response = self.vision_llm.invoke([message])
-        # 延迟避免触发频率限制 429
-        time.sleep(3)
+        # 小延迟避免触发频率限制 429
+        time.sleep(0.2)
         return response.content.strip()
 
     def _summarize_content(self, filename: str, file_type: str, content: str) -> str:
@@ -771,8 +543,8 @@ class DocumentPreprocessorAgent(BaseAgent):
 
         import time
         response = self.llm.invoke(prompt)
-        # 延迟避免触发频率限制 429
-        time.sleep(3)
+        # 小延迟避免触发频率限制 429
+        time.sleep(0.2)
         return response.content.strip()
 
     def _final_summary(self, individual_summaries: str) -> str:
@@ -782,8 +554,8 @@ class DocumentPreprocessorAgent(BaseAgent):
         prompt = prompt_template.replace("{{DOC_SUMMARIES}}", individual_summaries)
         response = self.llm.invoke(prompt)
         final_summary = response.content.strip()
-        # 延迟避免触发频率限制 429
-        time.sleep(4)
+        # 小延迟避免触发频率限制 429
+        time.sleep(0.2)
         # 添加标题
         if not final_summary.startswith("#"):
             final_summary = "# 项目参考资料汇总\n\n" + final_summary
@@ -851,6 +623,100 @@ class DocumentPreprocessorAgent(BaseAgent):
         state.update_timestamp()
 
         return state
+
+    def _convert_excel_to_pdf_and_ocr(
+        self,
+        doc: AttachedDocument,
+        excel_path: Path,
+        file_subdir: Path,
+        progress_callback: callable = None
+    ) -> list[str]:
+        """第二步：将整个Excel转PDF，然后PDF逐页转图片，多模态逐页OCR提取文字
+
+        Returns:
+            list[str]: 每页提取的文字列表
+        """
+        # 第一步：用LibreOffice将Excel转PDF
+        # LibreOffice.convert 需要传入 output_dir，它自动生成 input.stem.pdf
+        if progress_callback:
+            progress_callback(f"{doc.filename} → Excel转PDF")
+        result = self.libreoffice.convert(excel_path, file_subdir)
+        if not result.success:
+            print(f"    ✗ Excel转PDF失败: {result.error_message}")
+            print("    回退到只使用结构化结果")
+            doc.error_message = "Excel to PDF conversion failed"
+            return []
+
+        # 获取输出的PDF路径
+        pdf_path = file_subdir / f"{excel_path.stem}.pdf"
+        if not pdf_path.exists() and result.output_path:
+            pdf_path = result.output_path
+        print(f"    ✓ Excel转PDF完成: {pdf_path.name}")
+
+        # 第二步：PDF逐页转图片
+        if progress_callback:
+            progress_callback(f"{doc.filename} → PDF逐页转图片")
+        image_result = self.pdf_to_images.convert(pdf_path, file_subdir / "pdf_pages")
+        if not image_result.success:
+            print(f"    ✗ PDF转图片失败: {image_result.error_message}")
+            return []
+
+        print(f"    ✓ PDF转图片完成: {len(image_result.image_paths)} 页")
+
+        # 第三步：逐页OCR提取文字
+        pages_text: list[str] = []
+        for page_num, img_path in enumerate(image_result.image_paths, 1):
+            if progress_callback:
+                progress_callback(f"{doc.filename} → 第{page_num}页 OCR提取")
+            page_text = self._extract_text_from_image(img_path)
+            if page_text.strip():
+                pages_text.append(f"--- PDF第{page_num}页 ---\n{page_text}")
+            print(f"    ✓ 第{page_num}页OCR完成: {len(page_text)} 字符")
+            # 小延迟避免触发频率限制
+            import time
+            time.sleep(0.1)
+
+        return pages_text
+
+    def _merge_excel_results(self, structured_text: str, pdf_pages_text: list[str]) -> str:
+        """第三步：LLM合并结构化表格结果和PDF OCR结果，生成最终完整文本
+
+        Args:
+            structured_text: pandas提取的每个sheet结构化表格文字
+            pdf_pages_text: PDF转图片OCR提取的每页文字
+
+        Returns:
+            str: 合并后的完整文本
+        """
+        if not pdf_pages_text:
+            return structured_text
+
+        pdf_combined = "\n\n".join(pdf_pages_text)
+
+        prompt = f"""请帮我合并两份来自同一个Excel文件的提取结果，生成一份完整、准确、不重复的Excel文档内容：
+
+# 第一份：pandas直接提取的结构化表格数据（准确，但不包含浮动图片/图表）
+{structured_text[:8000]}
+
+# 第二份：Excel转PDF后逐页OCR提取的内容（包含所有图片/图表文字，但表格可能格式不对）
+{pdf_combined[:8000]}
+
+# 任务：
+请将两份结果合并，生成一份完整、不重复的最终文档：
+1. 保留pandas提取的结构化表格，因为它准确
+2. 将PDF OCR提取到的浮动图片、图表、文本框等内容插入到正确位置
+3. 去重：相同内容只保留一份
+4. 保持文档结构清晰，按sheet分页
+
+# 输出：
+请直接输出合并后的完整文档，不要额外解释。
+"""
+        import time
+        time.sleep(0.2)
+        response = self.llm.invoke(prompt)
+        merged = response.content.strip()
+        print(f"    ✓ LLM合并完成: {len(merged)} 字符")
+        return merged
 
     def get_processing_stats(self, documents: List[AttachedDocument]) -> Tuple[int, int]:
         """获取处理统计"""
