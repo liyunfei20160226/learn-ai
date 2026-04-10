@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📓 笔记应用 - 项目集合</title>
+    <link rel="stylesheet" href="/static/notes.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <span class="title-emoji">📓</span>
+                笔记
+                <span class="title-emoji">📓</span>
+            </h1>
+            <p class="subtitle">大分类 → 中分类 → 小分类，支持关键字搜索，CSV 文件存储</p>
+        </header>
+
+        <main class="main">
+            <div class="app-container">
+                <!-- 左侧分类树 -->
+                <div class="sidebar">
+                    <div class="sidebar-header">
+                        <h3>分类目录</h3>
+                        <button id="addCategoryBtn" class="btn-add">+ 添加分类</button>
+                    </div>
+                    <div id="categoryTree" class="category-tree">
+                        <!-- 动态渲染 -->
+                        <div class="empty-state">加载中...</div>
+                    </div>
+                </div>
+
+                <!-- 右侧内容区 -->
+                <div class="content">
+                    <div class="content-header">
+                        <div class="search-box">
+                            <input type="text" id="searchInput" placeholder="🔍 搜索关键字...">
+                            <button id="searchBtn" class="btn-search">搜索</button>
+                        </div>
+                        <button id="addNoteBtn" class="btn-add-note" disabled>+ 新建笔记</button>
+                    </div>
+
+                    <div id="notesList" class="notes-list">
+                        <div class="empty-state">请在左侧选择一个分类</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="back-link">
+                <a href="/">← 返回项目主页</a>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>用 ❤️ 构建 with FastAPI + Pandas + 原生 JavaScript</p>
+        </footer>
+    </div>
+
+    <!-- 添加分类弹窗 -->
+    <div id="categoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="categoryModalTitle">添加分类</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="categoryError" class="error-message" style="display: none;"></div>
+                <div class="form-group" id="level1Group">
+                    <label for="level1">大分类</label>
+                    <input type="text" id="level1" placeholder="例如：学习笔记">
+                </div>
+                <div class="form-group" id="level2Group">
+                    <label for="level2">中分类</label>
+                    <input type="text" id="level2" placeholder="例如：Claude 学习">
+                </div>
+                <div class="form-group" id="level3Group">
+                    <label for="level3">小分类</label>
+                    <input type="text" id="level3" placeholder="例如：日常操作">
+                </div>
+                <div class="parent-path" id="parentPath"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelCategoryBtn" class="btn-cancel">取消</button>
+                <button id="confirmCategoryBtn" class="btn-confirm">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加/编辑笔记弹窗 -->
+    <div id="noteModal" class="modal">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2 id="noteModalTitle">新建笔记</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="noteTitle">笔记标题</label>
+                    <input type="text" id="noteTitle" placeholder="输入笔记标题">
+                </div>
+                <div class="form-group">
+                    <label for="noteContent">笔记内容</label>
+                    <textarea id="noteContent" placeholder="输入笔记内容"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelNoteBtn" class="btn-cancel">取消</button>
+                <button id="confirmNoteBtn" class="btn-confirm">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 笔记详情弹窗 -->
+    <div id="noteDetailModal" class="modal">
+        <div class="modal-content modal-detail">
+            <div class="modal-header">
+                <h2 id="detailTitle">笔记详情</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="note-path" id="detailPath"></div>
+                <div class="note-detail-content" id="detailContent"></div>
+                <div class="note-meta">
+                    <span id="detailCreated"></span>
+                    <span id="detailUpdated"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="deleteNoteBtn" class="btn-delete">删除</button>
+                <button id="editNoteBtn" class="btn-edit">编辑</button>
+                <button id="closeDetailBtn" class="btn-cancel">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>确认删除</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage"></p>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelConfirmBtn" class="btn-cancel">取消</button>
+                <button id="confirmDeleteBtn" class="btn-delete">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/notes.js"></script>
+</body>
+</html>
