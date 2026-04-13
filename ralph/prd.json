@@ -1,0 +1,245 @@
+{
+  "project": "在线协作白板",
+  "branchName": "ralph/online-collaboration-whiteboard",
+  "description": "在线协作白板 MVP 版本 - 类似 Excalidraw 的在线协作白板，支持团队多人实时协作绘图，数据存储在浏览器本地",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "创建白板画布容器",
+      "description": "作为用户，我希望看到一个无限大的白板画布，以便自由绘图。",
+      "acceptanceCriteria": [
+        "画布占据整个视口，背景带网格图案",
+        "支持画布平移（拖拽空白区域）",
+        "支持滚轮缩放画布",
+        "最小/最大缩放范围限制",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "实现工具栏和工具选择",
+      "description": "作为用户，我希望通过左侧工具栏选择不同的绘图工具，以便切换绘图模式。",
+      "acceptanceCriteria": [
+        "左侧固定工具栏，包含所有基础工具按钮",
+        "当前选中工具高亮显示",
+        "包含工具：选择、矩形、圆形、菱形、直线、箭头、自由铅笔、文本、橡皮",
+        "点击工具按钮切换当前工具",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "实现矩形绘图工具",
+      "description": "作为用户，我希望能够在画布上绘制矩形，以便框出内容区域。",
+      "acceptanceCriteria": [
+        "拖拽创建矩形，起点到终点动态预览",
+        "松开鼠标完成绘制",
+        "支持自定义填充色和边框色",
+        "绘制后自动切换回选择工具",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "实现圆形和椭圆绘图工具",
+      "description": "作为用户，我希望能够在画布上绘制圆形/椭圆。",
+      "acceptanceCriteria": [
+        "拖拽创建椭圆，从中心到边角或对角（支持两种模式）",
+        "支持自定义填充色和边框色",
+        "按住 Shift 绘制正圆形",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "实现直线和箭头工具",
+      "description": "作为用户，我希望能够绘制直线和箭头，以便连接图形。",
+      "acceptanceCriteria": [
+        "拖拽起点到终点绘制直线/箭头",
+        "箭头工具在终点显示箭头头部",
+        "支持自定义线条颜色和粗细",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "实现自由铅笔工具",
+      "description": "作为用户，我希望能够自由手绘，以便快速记录想法。",
+      "acceptanceCriteria": [
+        "鼠标拖拽连续绘制线条",
+        "线条平滑化处理",
+        "支持自定义颜色和粗细",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "实现文本工具",
+      "description": "作为用户，我希望能够在画布上添加文本注释，以便说明内容。",
+      "acceptanceCriteria": [
+        "点击画布创建文本框",
+        "进入编辑模式，支持输入文字",
+        "支持修改文本字体大小和颜色",
+        "点击空白处完成编辑",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "实现橡皮擦工具",
+      "description": "作为用户，我希望能够擦除不需要的元素，以便修正绘图。",
+      "acceptanceCriteria": [
+        "点击已有元素即可删除",
+        "支持拖拽擦除（经过的元素删除）",
+        "擦除时有视觉反馈",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "实现选择工具和元素变换",
+      "description": "作为用户，我希望能够选择、移动和修改已绘制的元素，以便调整构图。",
+      "acceptanceCriteria": [
+        "点击选择元素，选中显示边框控制点",
+        "拖拽移动选中元素",
+        "拖拽控制点调整元素大小",
+        "支持框选（拖拽选择多个元素）",
+        "支持删除选中元素（Delete/Backspace 键）",
+        "支持复制/粘贴选中元素",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "实现图层操作（撤销/重做）",
+      "description": "作为用户，我希望能够撤销和重做操作，以便更正错误。",
+      "acceptanceCriteria": [
+        "Ctrl+Z 撤销上一步操作",
+        "Ctrl+Shift+Z 或 Ctrl+Y 重做",
+        "撤销栈保存所有修改操作",
+        "工具栏显示撤销/重做按钮",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "实现颜色和样式控制面板",
+      "description": "作为用户，我希望能够调整绘图颜色和线条粗细，以便自定义样式。",
+      "acceptanceCriteria": [
+        "右侧或顶部显示样式控制面板",
+        "支持选择笔触颜色",
+        "支持选择填充颜色（可透明）",
+        "支持选择线条粗细",
+        "选择器实时更新当前样式",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "数据持久化到 localStorage",
+      "description": "作为用户，我希望刷新页面后绘图内容不丢失，以便下次继续编辑。",
+      "acceptanceCriteria": [
+        "每次修改后自动保存画布数据到 localStorage",
+        "页面加载时从 localStorage 恢复画布",
+        "支持清空画布功能",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "支持导出为图片",
+      "description": "作为用户，我希望能够导出绘图为 PNG 图片，以便分享给他人。",
+      "acceptanceCriteria": [
+        "提供导出按钮",
+        "导出整个画布为 PNG 文件下载",
+        "导出保留透明度和背景网格（可选）",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "实现基于 WebRTC 的实时协作连接",
+      "description": "作为协作者，我希望能够和其他人同时编辑同一个白板，以便协同脑暴。",
+      "acceptanceCriteria": [
+        "使用 WebRTC P2P 连接对等客户端",
+        "生成房间链接/房间码，用户可以加入",
+        "操作广播给所有连接的客户端",
+        "接收其他客户端的操作并应用到本地画布",
+        "显示连接状态指示器",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "显示其他协作者光标",
+      "description": "作为协作者，我希望看到其他人的光标位置和用户名，以便知道谁在编辑哪里。",
+      "acceptanceCriteria": [
+        "每个协作者显示不同颜色的光标",
+        "光标旁边显示用户名",
+        "鼠标移动时广播位置给其他人",
+        "不影响本地绘图操作",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "Implemented together with US-014"
+    }
+  ]
+}

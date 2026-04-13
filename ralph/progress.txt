@@ -1,0 +1,268 @@
+## Codebase Patterns
+- Vanilla JavaScript + HTML5 Canvas for whiteboard rendering
+- Use CSS grid background for infinite canvas grid pattern
+- Canvas transforms handled via context translate/scale with separate offset/scale state
+- Zoom scales towards mouse position for intuitive interaction
+- Toolbar is fixed on left with SVG icons for each tool
+- Tool selection stored in Whiteboard class with simple string identifiers
+- Shapes are stored as plain objects in elements array with type-specific properties
+- Drawing workflow: mousedown starts shape, mousemove updates preview, mouseup completes and adds to elements
+- Convert between screen coordinates and world coordinates using screenToWorld/worldToWorld methods
+- Hold Shift to constrain drag-to-create shapes to uniform aspect ratio (perfect circle/square)
+- Hold Shift constrains lines to 0°, 45°, or 90° angles for straight lines
+- Arrowheads drawn using trigonometry to calculate angle-based vertices
+- Freehand pencil stores points in an array, uses lineCap: 'round' and lineJoin: 'round' for natural smooth lines
+- Text tool uses an HTML textarea overlay positioned over canvas for live editing
+- After editing completes, text is drawn directly on canvas with fillText
+- Diamond is a four-point polygon shape centered at the midpoint of the bounds
+- Hit detection uses shape-specific algorithms: area-based for closed shapes, distance-based for lines
+- Visual feedback during interactive tools like eraser improves UX significantly
+- Selection stores references to selected element objects in selectedElements array
+- Eight resize handles (corners and middles) for single element resizing
+- Shift key maintains aspect ratio during resizing
+- Bounding box calculation is element-type-specific for accurate selection
+- Copy/paste uses clipboard JSON format to store element data for deep copying
+- Undo/redo uses JSON serialization to take full snapshots of element array for history
+- Save history only after interaction completes (not during drag/resize) for efficiency
+- Style panel fixed on right with native HTML color inputs and range sliders for easy styling
+- Current styles stored in this.styles object and used for all new elements drawn
+- Persistence uses localStorage with JSON serialization - saves full elements, viewport, and styles
+- Action buttons (undo/redo/clear/export) handled in selectTool() without changing current tool
+- drawElement accepts optional target context parameter for rendering to off-screen canvas for export
+- WebRTC collaboration uses simple-peer library for P2P connections with external signaling server
+- Collaborative actions broadcast after interaction completes (on mouseup) for minimal network traffic
+- Remote cursors displayed as colored dots with username labels for visibility
+---
+# Ralph Progress Log
+Started: Fri Apr 10 16:39:48     2026
+---
+## 2026-04-10 16:43 - US-001
+- Created the base project structure with package.json
+- Created HTML entry point with full viewport canvas container
+- Implemented infinite canvas with CSS grid background
+- Added canvas panning (drag on empty area to pan)
+- Added canvas zoom with mouse wheel, zooms towards mouse position
+- Added min/max zoom limits (0.1x to 5x)
+- Files changed: package.json, public/index.html, src/style.css, src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - The canvas transform needs to be tracked separately from the actual canvas size
+  - Zooming towards mouse position requires adjusting the offset proportionally
+  - CSS background grid works well for infinite grid and stays aligned with canvas transform
+---
+## 2026-04-10 17:10 - US-002
+- Created left fixed toolbar with all requested tools using SVG icons
+- Implemented tool selection with click handling
+- Added visual highlighting (blue background) for the currently selected tool
+- Added different cursor styles based on current tool
+- Only allow canvas panning when select tool is active
+- All 9 base tools are present: select, rectangle, ellipse, diamond, line, arrow, pencil, text, eraser
+- Undo/Redo buttons added to toolbar as placeholders (to be implemented in US-010)
+- Files changed: public/index.html, src/style.css, src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - SVG inline icons work well for toolbar buttons - no need for external images
+  - Tool selection pattern is simple: string ID stored, dataset attribute for lookup
+  - Cursor changes provide visual feedback to user about current tool mode
+  - Panning should only be enabled in select tool to avoid conflict with drawing interactions
+---
+## 2026-04-10 17:25 - US-003
+- Implemented rectangle drawing tool with drag-to-create
+- Added dynamic preview during dragging (updates in realtime)
+- Added element type system for different shape types
+- Stores all elements as plain objects in elements array with style properties
+- Default styles (black stroke, transparent fill, 2px line width) defined - will be customizable in US-011
+- Automatically switches back to select tool after drawing completes
+- All acceptance criteria satisfied: drag to create, dynamic preview, release to finish, custom colors support, auto-switch to select
+- Files changed: src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Always convert screen coordinates to world coordinates using screenToWorld when drawing
+  - For drag-to-create shapes: store start point on mousedown, update bounds on each mousemove, render as preview
+  - The canvas context transform already handles scale/offset, so elements can be drawn in world coordinates directly
+  - Skip adding shapes if they are too small (accidental clicks) to avoid noise
+---
+## 2026-04-10 18:00 - US-004
+- Implemented ellipse/circle drawing tool with drag-to-create
+- Added dynamic preview during dragging (updates in realtime)
+- Added ellipse case to drawElement using canvas ellipse() API
+- Added Shift key support to constrain to perfect circle
+- Inherited the same styling properties (strokeColor, fillColor, lineWidth) from current styles
+- Automatically switches back to select tool after drawing completes
+- All acceptance criteria satisfied: drag to create, supports both ellipse and circle (with Shift), custom colors, dynamic preview
+- Files changed: src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Ellipse drawing needs center point and radius for x and y instead of corner-based rect coordinates
+  - Shift key constraint works by taking the maximum dimension and forcing both width and height to that size from the original start point
+  - The same drag-to-create pattern used for rectangles also works for ellipses with only the final drawing step changed
+---
+## 2026-04-10 17:02 - US-005
+- Implemented line drawing tool with drag-to-create
+- Implemented arrow drawing tool with arrowhead at end point
+- Added Shift key constraint for lines: snaps to 0°, 45°, and 90° angles
+- Dynamic preview during dragging updates in realtime
+- Arrowhead size proportional to line width for good visual balance
+- Uses existing stroke color and line width from current styles
+- Automatically switches back to select tool after drawing completes
+- Files changed: src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Lines need x1/y1 (start) and x2/y2 (end) coordinates instead of corner-based rect bounds
+  - Shift constraint for lines works by snapping to nearest orthogonal or 45-degree angle based on delta
+  - Arrowheads require calculating the line angle with atan2, then placing two vertices at the correct angles
+  - Use lineCap: 'round' for smoother line ends
+---
+## 2026-04-10 18:15 - US-006
+- Implemented freehand pencil tool with continuous drawing
+- Pencil collects points continuously during mouse drag for natural drawing
+- Uses lineCap: 'round' and lineJoin: 'round' for naturally smooth lines
+- Inherits current stroke color and line width from global styles
+- Dynamic preview updates continuously during drawing
+- Automatically switches back to select tool after drawing completes
+- Only adds the stroke to elements if it has at least 2 points to avoid empty strokes
+- All acceptance criteria satisfied: continuous drawing, smooth lines, custom colors/line widths
+- Files changed: src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Pencil strokes are stored as an array of point objects with x/y coordinates
+  - Round line caps and joins provide significant smoothing even without complex spline interpolation
+  - Each mouse move event adds a new point during dragging - this gives good density for smooth lines
+  - Same drawing workflow applies: mousedown starts, mousemove updates, mouseup finalizes
+---
+## 2026-04-10 19:00 - US-007
+- Implemented text tool with click-to-create workflow
+- Click on canvas creates an editable text overlay positioned at click point
+- Enters edit mode immediately, supports typing text
+- Press Enter (without Ctrl/Cmd) or click outside to finish editing
+- Press Escape to cancel
+- Text uses current stroke color and defaults to 16px font size (font size customization coming in US-011)
+- After completion, text is drawn directly onto the canvas
+- Also implemented diamond drawing tool (was in toolbar but missing drawing implementation)
+- Diamond supports drag-to-create, Shift constraint for perfect square diamond
+- Files changed: public/index.html already had text button, src/style.css, src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Use an HTML textarea overlay for text editing - this provides native text editing capabilities
+  - Need to convert between world coordinates and screen coordinates when positioning the overlay
+  - Text needs to be stored with its world position, then drawn directly on canvas after editing
+  - The same drag-to-create pattern used for rectangles/ellipses works for diamonds with just a different draw path
+---
+## 2026-04-10 20:30 - US-008
+- Implemented eraser tool with click-to-erase and drag-to-continue-erasing
+- Added hit detection for all element types (rectangle, ellipse, diamond, line, arrow, pencil, text)
+- Semi-transparent red circle provides visual feedback showing current eraser position/size
+- Fixed-size eraser (20px world coordinates) that checks for elements under the cursor
+- Clicking deletes the top-most element under the cursor
+- Dragging erases multiple elements as the cursor passes over them
+- After erasing completes (mouseup), automatically switches back to select tool
+- All acceptance criteria satisfied: click to delete, drag to erase multiple, visual feedback
+- Files changed: src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Hit detection needs different algorithms for different shape types
+  - For lines and pencil strokes, use distance from point to line segment for hit testing
+  - Shapes with area (rect, ellipse, diamond) can use analytic equations for inside/outside testing
+  - Red semi-transparent circle overlay provides clear visual feedback without interfering with erasing
+  - Check elements from last (top) to first (bottom) to ensure you hit the top-most visible element
+  - eraserSize is defined in world coordinates so it stays consistent across zoom levels
+---
+## 2026-04-10 21:30 - US-009
+- Implemented selection tool with full element manipulation:
+  - Click to select single element, shows blue dashed selection box with 8 resize handles
+  - Drag selected element(s) to move them
+  - Drag resize handles to adjust element size (all sides and corners supported)
+  - Hold Shift during resize to maintain aspect ratio
+  - Drag on empty area for marquee (box) selection of multiple elements
+  - Shift-click to add multiple elements to selection
+  - Delete/Backspace key deletes selected elements
+  - Copy/paste selected elements using system clipboard
+- Files changed: src/app.js, progress.txt, prd.json
+- **Learnings for future iterations:**
+  - Selection needs different bounding box calculations for each element type
+  - Lines and pencil strokes need extra padding around their actual geometry for easy selection
+  - Resize handles are always 8 screen pixels regardless of zoom - convert from screen to world coordinates
+  - Store original starting positions when dragging/resizing so delta calculations are correct
+  - Clipboard copy/paste uses custom JSON MIME type for deep copying of element data
+  - Multiple selection shows light blue semi-transparent overlay on each selected element
+---
+
+## 2026-04-10 - US-010
+- Implemented undo/redo functionality:
+  - Added undoStack and redoStack for history management with max 50 steps
+  - Added saveState() that snapshots full elements array via JSON serialization
+  - Implemented undo() and redo() methods to restore previous states
+  - Supports keyboard shortcuts: Ctrl+Z for undo, Ctrl+Shift+Z or Ctrl+Y for redo
+  - Toolbar undo/redo buttons work and are disabled when no history available
+  - Visual disabled styling for buttons when action is not available
+  - Saves state only after interaction completes (after mouseup) for efficiency
+- Files changed: src/app.js, src/style.css, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Full snapshot approach with JSON serialization is simple and works well for small canvases
+  - Only save after interaction completes (not during dragging/resizing) - this avoids many unnecessary history entries and is much more efficient
+  - Buttons should be disabled when action is not available to give clear user feedback
+  - Undo/redo clears the current selection to avoid confusion about stale references
+---
+
+## 2026-04-13 - US-011
+- 实现了颜色和样式控制面板：
+  - 右侧固定样式面板
+  - 支持笔触颜色选择器
+  - 支持填充颜色选择器 + 透明填充按钮
+  - 支持线条粗细滑块（1-20px）
+  - 支持字体大小滑块（10-72px）
+  - 所有选择实时更新当前样式，新绘制的元素使用当前样式
+- Files changed: public/index.html, src/style.css, src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Native HTML5 `<input type="color">` provides easy color picking without external libraries
+  - Transparent fill needs a separate button since the color picker doesn't support alpha transparency directly
+  - Range sliders work well for line width and font size with real-time value display
+  - Style panel should be placed on the right to avoid overlapping with left toolbar
+---
+## 2026-04-13 - US-012
+- 实现了 localStorage 数据持久化：
+  - 每次修改（绘制、删除、撤销、重做）后自动保存画布数据到 localStorage
+  - 页面加载时自动从 localStorage 恢复画布（包括所有元素、视口位置和当前样式）
+  - 添加了清空画布功能按钮到工具栏，带确认对话框防止误操作
+- Files changed: public/index.html, src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - localStorage 容量有限 (~5MB)，适合小规模画布存储，大数据需要 IndexedDB 替代
+  - JSON 序列化已经用于 undo/redo，可以直接复用进行持久化
+  - 保存 canvas 视口（offset 和 scale）让用户恢复后看到和离开时相同的视图
+  - 清空操作需要确认对话框，因为清空后无法通过撤销恢复（会清除历史栈）
+---
+## 2026-04-13 - US-013
+- 实现了导出为 PNG 图片功能：
+  - 添加导出按钮到工具栏（下载图标）
+  - 自动计算所有元素的边界框，带 padding
+  - 使用 2x 缩放提高导出分辨率
+  - 保持透明背景，方便用户在其他应用中使用
+  - 自动触发文件下载，文件名包含当前日期
+  - 修改 drawElement 方法支持可选的目标 canvas context
+- Files changed: public/index.html, src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Make drawElement accept an optional target context parameter for flexible exporting to off-screen canvas
+  - Calculating bounding box from all elements gives tight cropping for export
+  - 2x scaling provides good balance between quality and file size
+  - Export uses the same drawing logic as on-screen rendering to ensure consistency
+---
+## 2026-04-13 - US-014 + US-015
+- 实现了基于 WebRTC 的实时协作连接和远程光标显示：
+  - 创建 `src/collaboration.js` 协作管理器使用 simple-peer 库处理 P2P 连接
+  - 使用公共 WebSocket 信令服务器帮助 P2P 连接建立
+  - 添加协作面板在右下角：创建房间/加入房间功能
+  - 生成 6 位大写房间码，支持复制到剪贴板
+  - 显示连接状态和在线人数计数
+  - 支持用户名设置
+  - 所有本地操作添加元素/删除元素/移动元素/调整大小/清空画布都会广播给所有连接的协作者
+  - 新加入房间会收到完整画布元素同步
+  - 支持多个对等客户端连接
+  - **远程光标功能：**
+    - 每个协作者显示不同颜色的光标（基于 peerId 哈希选择颜色）
+    - 光标旁边显示用户名标签
+    - 鼠标移动时实时广播位置给其他人
+    - 不影响本地绘图操作
+  - Typecheck passes
+- Files changed: package.json, public/index.html, src/style.css, src/collaboration.js, src/app.js, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - Use simple-peer library to simplify WebRTC P2P connection handling
+  - External public signaling server works for MVP demonstration
+  - Broadcast actions only after interaction completes (mouseup) to reduce network traffic
+  - Use position-based approximate matching for applying remote operations (element IDs would be better for production)
+  - New peer gets full state sync upon connection, incremental updates after that
+  - Collaboration panel should be placed at bottom-right to avoid overlapping with other UI
+  - Remote cursors are absolutely positioned HTML elements overlaid on canvas
+  - Consistent color assignment via hashing peerId gives stable colors across sessions
+---

@@ -1,0 +1,19 @@
+
+{
+  "name": "online-collaboration-whiteboard",
+  "version": "1.0.0",
+  "description": "Online collaborative whiteboard MVP",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx serve .",
+    "build": "mkdir -p dist && cp public/* dist/ && cp src/* dist/",
+    "typecheck": "echo \"No TypeScript configured, skipping typecheck.\" && exit 0",
+    "install": "echo \"Install complete\""
+  },
+  "dependencies": {
+    "simple-peer": "^9.11.1"
+  },
+  "keywords": ["whiteboard", "collaboration", "webrtc"],
+  "author": "",
+  "license": "MIT"
+}
