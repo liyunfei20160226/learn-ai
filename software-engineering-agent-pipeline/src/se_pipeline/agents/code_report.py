@@ -76,34 +76,38 @@ class CodeReportAgent(BaseAgent):
         # 前端问题
         if state.frontend_review and state.frontend_review.data.issues:
             for issue in state.frontend_review.data.issues:
-                issue["issue_id"] = f"fr-{issue_id_counter:02d}"
-                issue["category"] = "frontend"
-                all_issues.append(issue)
+                issue_dict = issue.model_dump()
+                issue_dict["issue_id"] = f"fr-{issue_id_counter:02d}"
+                issue_dict["category"] = "frontend"
+                all_issues.append(issue_dict)
                 issue_id_counter += 1
 
         # 后端问题
         if state.backend_review and state.backend_review.data.issues:
             for issue in state.backend_review.data.issues:
-                issue["issue_id"] = f"br-{issue_id_counter:02d}"
-                issue["category"] = "backend"
-                all_issues.append(issue)
+                issue_dict = issue.model_dump()
+                issue_dict["issue_id"] = f"br-{issue_id_counter:02d}"
+                issue_dict["category"] = "backend"
+                all_issues.append(issue_dict)
                 issue_id_counter += 1
 
         # 数据库问题
         if state.database_analysis and state.database_analysis.data.issues:
             for issue in state.database_analysis.data.issues:
-                issue["issue_id"] = f"db-{issue_id_counter:02d}"
-                issue["category"] = "database"
-                all_issues.append(issue)
+                issue_dict = issue.model_dump()
+                issue_dict["issue_id"] = f"db-{issue_id_counter:02d}"
+                issue_dict["category"] = "database"
+                all_issues.append(issue_dict)
                 issue_id_counter += 1
 
         # 一致性问题
         if state.consistency_check and state.consistency_check.data.inconsistencies:
             for issue in state.consistency_check.data.inconsistencies:
-                issue["issue_id"] = f"cc-{issue_id_counter:02d}"
-                issue["category"] = "consistency"
-                issue["issue_type"] = "consistency"
-                all_issues.append(issue)
+                issue_dict = issue.model_dump()
+                issue_dict["issue_id"] = f"cc-{issue_id_counter:02d}"
+                issue_dict["category"] = "consistency"
+                issue_dict["issue_type"] = "consistency"
+                all_issues.append(issue_dict)
                 issue_id_counter += 1
 
         # 结构问题（如果架构分析发现问题，可以在这里加）

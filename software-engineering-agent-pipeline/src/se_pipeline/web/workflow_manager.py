@@ -12,6 +12,12 @@ from se_pipeline.agents import (
     RequirementsAnalystAgent,
     RequirementsVerifierAgent,
     RequirementsFinalAgent,
+    CodeStructureAgent,
+    FrontendReviewAgent,
+    BackendReviewAgent,
+    DatabaseAnalyzeAgent,
+    ConsistencyCheckAgent,
+    CodeReportAgent,
 )
 from se_pipeline.quality_gate import AutoReviewer
 from se_pipeline.graph.pipeline_graph import (
@@ -21,6 +27,7 @@ from se_pipeline.graph.pipeline_graph import (
     after_analyst,
     after_verifier,
     after_quality_gate,
+    after_codereview_quality_gate,
 )
 
 
@@ -31,6 +38,13 @@ node_name_map = {
     "verifier": "需求验证官",
     "final": "需求生成",
     "quality_gate": "质量闸门",
+    "codereview_quality_gate": "质量闸门",
+    "code_structure": "代码结构分析",
+    "frontend_review": "前端代码评审",
+    "backend_review": "后端代码评审",
+    "database_analyze": "数据库分析",
+    "consistency_check": "一致性检查",
+    "code_report": "评审报告生成",
     "__end__": "结束",
 }
 
@@ -49,6 +63,13 @@ class WorkflowManager:
         self.verifier = RequirementsVerifierAgent(llm)
         self.finalizer = RequirementsFinalAgent(llm)
         self.reviewer = AutoReviewer(llm)
+        # 代码评审 Agents
+        self.code_structure = CodeStructureAgent(llm)
+        self.frontend_review = FrontendReviewAgent(llm)
+        self.backend_review = BackendReviewAgent(llm)
+        self.database_analyze = DatabaseAnalyzeAgent(llm)
+        self.consistency_check = ConsistencyCheckAgent(llm)
+        self.code_report = CodeReportAgent(llm)
 
     def load_state(self, project_id: str) -> PipelineState:
         """加载项目状态"""
@@ -80,7 +101,11 @@ class WorkflowManager:
         if current_node == "document_preprocessor":
             if not state.documents_processed and state.source_documents_dir:
                 state = self.document_preprocessor.run(state, progress_callback)
-            next_node = "analyst"
+            # 根据项目类型决定下一步
+            if state.project_type == "code_review":
+                next_node = "code_structure"
+            else:
+                next_node = "analyst"
         elif current_node == "analyst":
             state = analyst_node(state, self.analyst)
             next_node = after_analyst(state)
@@ -102,6 +127,38 @@ class WorkflowManager:
                         "backflow_feedback": result.feedback
                     })
             next_node = after_quality_gate(state)
+        elif current_node == "code_structure":
+            import asyncio
+            state = asyncio.run(self.code_structure.run(state))
+            self.project_store.save_code_structure(state.project_id, state.code_structure)
+            next_node = "codereview_quality_gate"
+        elif current_node == "codereview_quality_gate":
+            next_node = after_codereview_quality_gate(state)
+        elif current_node == "frontend_review":
+            import asyncio
+            state = asyncio.run(self.frontend_review.run(state))
+            self.project_store.save_frontend_review(state.project_id, state.frontend_review)
+            next_node = "codereview_quality_gate"
+        elif current_node == "backend_review":
+            import asyncio
+            state = asyncio.run(self.backend_review.run(state))
+            self.project_store.save_backend_review(state.project_id, state.backend_review)
+            next_node = "codereview_quality_gate"
+        elif current_node == "database_analyze":
+            import asyncio
+            state = asyncio.run(self.database_analyze.run(state))
+            self.project_store.save_database_analysis(state.project_id, state.database_analysis)
+            next_node = "codereview_quality_gate"
+        elif current_node == "consistency_check":
+            import asyncio
+            state = asyncio.run(self.consistency_check.run(state))
+            self.project_store.save_consistency_check(state.project_id, state.consistency_check)
+            next_node = "codereview_quality_gate"
+        elif current_node == "code_report":
+            import asyncio
+            state = asyncio.run(self.code_report.run(state))
+            self.project_store.save_codereview_report(state.project_id, state.codereview_report)
+            next_node = "codereview_quality_gate"
         else:
             # unknown node, stay
             next_node = current_node

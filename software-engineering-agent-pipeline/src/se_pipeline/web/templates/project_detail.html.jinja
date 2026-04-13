@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html.jinja" %}
 
 {% block title %}{{ state.project_name }} - SE Pipeline{% endblock %}
 
@@ -9,8 +9,8 @@
         <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center">
-                    <a href="/" class="text-gray-600 hover:text-gray-900 mr-4">
-                        <i class="fas fa-arrow-left"></i>
+                    <a href="/" aria-label="返回首页" class="text-gray-600 hover:text-gray-900 mr-4">
+                        <i class="fas fa-arrow-left" aria-hidden="true"></i>
                     </a>
                     <i class="fas fa-robot text-blue-600 text-xl mr-3"></i>
                     <span class="font-bold text-lg text-gray-900">{{ state.project_name }}</span>
@@ -162,7 +162,7 @@
             }
             </script>
             <div id="document-list">
-                {% include "components/document_list.html" %}
+                {% include "components/document_list.html.jinja" %}
             </div>
             {% if state.attached_documents %}
             <div class="mt-4 text-sm text-gray-500">
@@ -174,19 +174,19 @@
 
         <!-- Progress / Current Questions -->
         <div id="progress-container">
-            {% include "components/progress_stream.html" %}
+            {% include "components/progress_stream.html.jinja" %}
         </div>
 
         <!-- Questions -->
         <div id="questions-container">
             {% if unanswered %}
-            {% include "components/question_form.html" %}
+            {% include "components/question_form.html.jinja" %}
             {% endif %}
         </div>
 
         <!-- Final Requirements -->
         {% if state.requirements_spec and not unanswered %}
-        {% include "components/requirements_view.html" %}
+        {% include "components/requirements_view.html.jinja" %}
         <!-- 需求分析完成卡片 - 提供下载链接 -->
         <div class="bg-green-50 rounded-2xl shadow-xl p-6 mb-8 border-l-4 border-green-500">
             <h2 class="text-xl font-semibold text-gray-900 mb-4">
@@ -218,6 +218,7 @@
                     在这里输入你想要变更或补充的需求信息，提交后会触发新一轮分析，分析师会结合历史问答和你的变更信息重新分析。
                 </p>
                 <textarea id="change-request-text"
+                          name="change-request-text"
                           rows="4"
                           class="w-full px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                           placeholder="请输入需求变更说明..."></textarea>
@@ -237,7 +238,27 @@
             </div>
         </div>
         {% elif state.requirements_spec %}
-        {% include "components/requirements_view.html" %}
+        {% include "components/requirements_view.html.jinja" %}
+        {% endif %}
+
+        <!-- 代码评审完成卡片 - 提供下载链接 -->
+        {% if state.codereview_report and not unanswered %}
+        <div class="bg-green-50 rounded-2xl shadow-xl p-6 mb-8 border-l-4 border-green-500">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                代码评审已完成
+            </h2>
+            <p class="text-gray-600 mb-4">
+                所有分析阶段已完成，最终评审报告已生成。你可以下载 Markdown 版本：
+            </p>
+            <div class="flex flex-wrap gap-3">
+            <a href="/projects/{{ state.project_id }}/codereview/download"
+               class="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors">
+                <i class="fas fa-download mr-2"></i>
+                下载评审报告 (.md)
+            </a>
+            </div>
+        </div>
         {% endif %}
 
         <!-- Start / Restart -->
@@ -252,7 +273,12 @@
                         {% if unanswered %}
                         回答上面的问题后点击开始继续
                         {% else %}
-                        点击开始启动需求分析流程
+                            {% set process_name = {
+                                'full_development': '需求分析',
+                                'independent_requirements': '需求分析',
+                                'code_review': '代码评审',
+                            }.get(state.project_type, '分析') %}
+                            点击开始启动{{ process_name }}流程
                         {% endif %}
                     </p>
                 </div>
@@ -270,9 +296,29 @@
             </div>
         </div>
     </div>
-</div>
 
 <script>
+// Show error message in progress container
+function showErrorMessage(message) {
+    const progressContainer = document.getElementById('progress-container');
+    progressContainer.innerHTML = `
+        <div class="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8">
+            <h2 class="text-xl font-semibold text-red-800 mb-2">
+                <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+                错误
+            </h2>
+            <p class="text-red-600">${message}</p>
+        </div>
+    `;
+    // Restore start button
+    const startBtn = document.getElementById('start-btn');
+    if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.classList.remove('opacity-50');
+        startBtn.classList.remove('cursor-not-allowed');
+    }
+}
+
 // Start workflow with SSE streaming
 document.getElementById('start-btn')?.addEventListener('click', function() {
     const progressContainer = document.getElementById('progress-container');
@@ -284,35 +330,91 @@ document.getElementById('start-btn')?.addEventListener('click', function() {
         requirementsCompletedCard.style.display = 'none';
     }
 
-    // 禁用按钮，防止重复点击
+    // 检查：独立代码评审必须填写目标代码目录
+    {% if state.project_type == 'code_review' %}
+    const targetInput = document.getElementById('target_code_dir');
+    const targetCodeDir = targetInput ? targetInput.value.trim() : '';
+    if (!targetCodeDir) {
+        showErrorMessage('请先在上方"目标代码目录"输入框填写待评审代码目录的绝对路径，再开始分析');
+        return;
+    }
+
+    // 先保存目标代码目录到后端
     startBtn.disabled = true;
     startBtn.classList.add('opacity-50');
     startBtn.classList.add('cursor-not-allowed');
 
-    // Show progress container
-    progressContainer.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-xl p-6 mb-8 animate-pulse">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">
-                <i class="fas fa-cog fa-spin text-blue-500 mr-2"></i>
-                正在处理...
-            </h2>
-            <div id="current-step" class="text-gray-600 mb-2">
-                {% if not state.documents_processed %}
-                文档预处理...
-                {% else %}
-                初始化...
-                {% endif %}
-            </div>
-            <div id="current-document" class="text-sm text-gray-500 mb-4"></div>
-            <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
-                <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full" style="width: 10%"></div>
-            </div>
-        </div>
-    `;
+    fetch('/projects/{{ state.project_id }}/update-target-dir', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'target_code_dir=' + encodeURIComponent(targetCodeDir)
+    })
+    .then(response => {
+        if (!response.ok) {
+            showErrorMessage('保存目标目录失败，请重试');
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50');
+            startBtn.classList.remove('cursor-not-allowed');
+            return;
+        }
 
-    // Open SSE connection - 如果文档未处理，从document_preprocessor开始
-    const fromNode = {% if not state.documents_processed %}'document_preprocessor'{% else %}'analyst'{% endif %};
-    const eventSource = new EventSource('/projects/{{ state.project_id }}/stream?from_node=' + fromNode);
+        // 保存成功，继续启动分析
+        startStreaming();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showErrorMessage('保存目标目录失败，请重试');
+        startBtn.disabled = false;
+        startBtn.classList.remove('opacity-50');
+        startBtn.classList.remove('cursor-not-allowed');
+    });
+
+    {% else %}
+    // 非独立代码评审，直接启动
+    startBtn.disabled = true;
+    startBtn.classList.add('opacity-50');
+    startBtn.classList.add('cursor-not-allowed');
+    startStreaming();
+    {% endif %}
+
+    function startStreaming() {
+        // 找到需求分析完成卡片并隐藏
+        if (requirementsCompletedCard) {
+            requirementsCompletedCard.style.display = 'none';
+        }
+
+        // Show progress container
+        progressContainer.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-xl p-6 mb-8 animate-pulse">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-cog fa-spin text-blue-500 mr-2"></i>
+                    正在处理...
+                </h2>
+                <div id="current-step" class="text-gray-600 mb-2">
+                    {% if not state.documents_processed %}
+                    文档预处理...
+                    {% else %}
+                    初始化...
+                    {% endif %}
+                </div>
+                <div id="current-document" class="text-sm text-gray-500 mb-4"></div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+                    <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full" style="width: 10%"></div>
+                </div>
+            </div>
+        `;
+
+        // Open SSE connection - 根据项目类型选择正确起点
+        {% if state.project_type == 'code_review' %}
+        // 独立代码评审：如果文档未处理，先预处理文档，否则从第一步code_structure开始
+        const fromNode = {% if not state.documents_processed %}'document_preprocessor'{% else %}'code_structure'{% endif %};
+        {% else %}
+        // 完整流程/独立需求分析：如果文档未处理，从document_preprocessor开始，否则从analyst开始
+        const fromNode = {% if not state.documents_processed %}'document_preprocessor'{% else %}'analyst'{% endif %};
+        {% endif %}
+        const eventSource = new EventSource('/projects/{{ state.project_id }}/stream?from_node=' + fromNode);
 
     eventSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
@@ -366,7 +468,7 @@ document.getElementById('start-btn')?.addEventListener('click', function() {
             </div>
         `;
     };
-});
+}
 
 function checkUpload() {
     const form = document.querySelector('form[hx-post="/projects/{{ state.project_id }}/upload"]');
@@ -539,5 +641,6 @@ function submitChangeRequest(projectId) {
         }
     });
 }
+});
 </script>
 {% endblock %}

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html.jinja" %}
 
 {% block title %}首页 - SE Pipeline{% endblock %}
 
@@ -54,8 +54,8 @@
                     >
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">项目类型</label>
-                    <div class="space-y-2">
+                    <label for="project_type" class="block text-sm font-medium text-gray-700 mb-2">项目类型</label>
+                    <div id="project_type" class="space-y-2">
                         <label class="flex items-center">
                             <input type="radio" name="project_type" value="full_development" checked
                                    class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500">
@@ -104,7 +104,7 @@
         </h2>
         <div id="project-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for project in projects %}
-            {% include "components/project_card.html" %}
+            {% include "components/project_card.html.jinja" %}
             {% endfor %}
         </div>
     </div>

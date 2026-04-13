@@ -105,6 +105,31 @@ def after_quality_gate(state: PipelineState) -> Literal["__end__", "analyst"]:
         return "analyst"
 
 
+def after_codereview_quality_gate(state: PipelineState) -> str:
+    """代码评审质量闸门后，按固定顺序进入下一步"""
+    if state.code_structure is None:
+        # code_structure 还没做，下一步 code_structure
+        return "code_structure"
+    elif state.frontend_review is None:
+        # code_structure 已完成，frontend_review 还没做 → 下一步 frontend_review
+        return "frontend_review"
+    elif state.backend_review is None:
+        # frontend_review 已完成，backend_review 还没做 → 下一步 backend_review
+        return "backend_review"
+    elif state.database_analysis is None:
+        # backend_review 已完成，database_analyze 还没做 → 下一步 database_analyze
+        return "database_analyze"
+    elif state.consistency_check is None:
+        # database_analyze 已完成，consistency_check 还没做 → 下一步 consistency_check
+        return "consistency_check"
+    elif state.codereview_report is None:
+        # consistency_check 已完成，code_report 还没做 → 下一步 code_report
+        return "code_report"
+    else:
+        # 全部完成
+        return "__end__"
+
+
 def build_requirements_internal_graph(
     llm: ChatOpenAI
 ) -> StateGraph:

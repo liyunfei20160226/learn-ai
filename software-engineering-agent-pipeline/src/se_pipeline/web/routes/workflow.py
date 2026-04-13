@@ -81,7 +81,7 @@ async def submit_answers(request: Request, project_id: str):
             # 已经进入验证阶段 → 在验证官循环 → 回验证官
             current_node = "verifier"
     from se_pipeline.web.workflow_manager import node_name_map
-    return templates.TemplateResponse(request, "components/progress_stream.html", {
+    return templates.TemplateResponse(request, "components/progress_stream.html.jinja", {
         "project_id": project_id,
         "current_node": current_node,
         "node_name_map": node_name_map
@@ -259,7 +259,7 @@ async def get_requirements(request: Request, project_id: str):
     markdown_text = spec.to_markdown()
     html_content = markdown.markdown(markdown_text, extensions=['tables', 'fenced_code'])
 
-    return templates.TemplateResponse(request, "components/requirements_view.html", {
+    return templates.TemplateResponse(request, "components/requirements_view.html.jinja", {
         "spec": spec,
         "markdown_content": html_content,
         "project_id": project_id
@@ -284,6 +284,33 @@ async def download_requirements(request: Request, project_id: str):
         )
 
     filename = f"{project_id}-requirements.md"
+    return FileResponse(
+        str(md_path),
+        media_type='text/markdown',
+        filename=filename,
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
+
+
+@router.get("/projects/{project_id}/codereview/download")
+async def download_codereview(request: Request, project_id: str):
+    """下载代码评审报告 Markdown 文件"""
+    from fastapi.responses import FileResponse
+    from fastapi import responses
+    from se_pipeline.storage.project_store import ProjectStore
+    store = ProjectStore()
+    project_dir = store.get_project_dir(project_id)
+    md_path = project_dir / "07-code-review-report.md"
+
+    if not md_path.exists():
+        return responses.HTMLResponse(
+            """<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                    <p class="text-yellow-800">代码评审报告尚未生成，请完成完整分析流程</p>
+                  </div>""",
+            status_code=404
+        )
+
+    filename = f"{project_id}-code-review-report.md"
     return FileResponse(
         str(md_path),
         media_type='text/markdown',
