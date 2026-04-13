@@ -10,6 +10,7 @@ class CreateProjectRequest(BaseModel):
     project_id: str
     project_name: str
     original_requirement: str
+    project_type: str = "full_development"
 
     @field_validator('project_id')
     def validate_project_id(cls, v):

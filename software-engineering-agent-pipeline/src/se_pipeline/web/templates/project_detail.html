@@ -61,7 +61,58 @@
                     </span>
                 </div>
             </div>
+                <div>
+                    <span class="text-sm font-medium text-gray-500">项目类型:</span>
+                    <span class="ml-2 text-gray-800">
+                        {% if state.project_type == 'code_review' %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                            独立代码评审
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+                            全新开发项目
+                        </span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
         </div>
+
+        <!-- 目标代码目录 - 只在独立代码评审模式显示 -->
+        {% if state.project_type == 'code_review' %}
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                <i class="fas fa-folder-open text-purple-500 mr-2"></i>
+                目标代码目录
+            </h2>
+            <p class="text-sm text-gray-500 mb-4">
+                请输入要评审的本地代码目录的<strong>绝对路径</strong>，例如 <code class="bg-gray-100 px-1 rounded">/home/user/my-project</code> 或者 <code class="bg-gray-100 px-1 rounded">C:\code\my-project</code>
+            </p>
+            <form hx-post="/projects/{{ state.project_id }}/update-target-dir"
+                  hx-swap="none"
+                  class="space-y-4">
+                <div class="flex items-center gap-4">
+                    <input type="text" id="target_code_dir" name="target_code_dir"
+                           value="{{ state.target_code_dir or '' }}"
+                           placeholder="请输入待评审代码目录的绝对路径..."
+                           class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                    <button type="submit"
+                            class="flex-shrink-0 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-all duration-200">
+                        <i class="fas fa-save mr-2"></i>
+                        保存
+                    </button>
+                </div>
+            </form>
+            {% if state.target_code_dir %}
+            <div class="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                <p class="text-sm text-green-800">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    当前目录: <code class="bg-green-100 px-1 rounded">{{ state.target_code_dir }}</code>
+                </p>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
 
         <!-- Document Upload -->
         <div class="bg-white rounded-2xl shadow-xl p-6 mb-8">

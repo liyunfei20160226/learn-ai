@@ -40,3 +40,10 @@ def get_requirements_checklist() -> list[CheckItem]:
     from ..prompts import get_quality_checklist
     text = get_quality_checklist("requirements")
     return load_checklist_from_text(text)
+
+
+def get_codereview_checklist() -> list[CheckItem]:
+    """代码评审阶段检查清单"""
+    from ..prompts import get_quality_checklist
+    text = get_quality_checklist("codereview")
+    return load_checklist_from_text(text)

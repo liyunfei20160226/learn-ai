@@ -175,3 +175,92 @@ def create_requirements_internal_app(llm: ChatOpenAI):
     """创建需求分析阶段内部子图应用"""
     graph = build_requirements_internal_graph(llm)
     return graph.compile()
+
+
+def build_codereview_subgraph(
+    llm: ChatOpenAI
+) -> StateGraph:
+    """构建代码评审阶段内部子图
+    分步流程：
+    code_structure → quality_gate → frontend_review → quality_gate → backend_review → quality_gate → database_analyze → quality_gate → consistency_check → quality_gate → code_report → quality_gate → end
+    """
+    from ..agents import (
+        CodeStructureAgent,
+        FrontendReviewAgent,
+        BackendReviewAgent,
+        DatabaseAnalyzeAgent,
+        ConsistencyCheckAgent,
+        CodeReportAgent,
+    )
+    from ..quality_gate import AutoReviewer
+
+    graph = StateGraph(PipelineState)
+
+    # 初始化各个Agent
+    code_structure_agent = CodeStructureAgent(llm)
+    frontend_agent = FrontendReviewAgent(llm)
+    backend_agent = BackendReviewAgent(llm)
+    database_agent = DatabaseAnalyzeAgent(llm)
+    consistency_agent = ConsistencyCheckAgent(llm)
+    report_agent = CodeReportAgent(llm)
+    reviewer = AutoReviewer(llm)
+
+    # 定义节点包装
+    async def code_structure_node(state: PipelineState) -> PipelineState:
+        return await code_structure_agent.run(state)
+
+    async def frontend_review_node(state: PipelineState) -> PipelineState:
+        return await frontend_agent.run(state)
+
+    async def backend_review_node(state: PipelineState) -> PipelineState:
+        return await backend_agent.run(state)
+
+    async def database_analyze_node(state: PipelineState) -> PipelineState:
+        return await database_agent.run(state)
+
+    async def consistency_check_node(state: PipelineState) -> PipelineState:
+        return await consistency_agent.run(state)
+
+    async def code_report_node(state: PipelineState) -> PipelineState:
+        return await report_agent.run(state)
+
+    def codereview_quality_gate_node(state: PipelineState) -> PipelineState:
+        """质量闸门"""
+        if state.codereview_report is not None:
+            reviewer.review_codereview(state.codereview_report)
+            # TODO: 如果不通过，设置回流
+        return state
+
+    # 添加节点
+    graph.add_node("code_structure", code_structure_node)
+    graph.add_node("frontend_review", frontend_review_node)
+    graph.add_node("backend_review", backend_review_node)
+    graph.add_node("database_analyze", database_analyze_node)
+    graph.add_node("consistency_check", consistency_check_node)
+    graph.add_node("code_report", code_report_node)
+    graph.add_node("codereview_quality_gate", codereview_quality_gate_node)
+
+    # 连接流程 - 每个步骤后过质量闸门
+    graph.set_entry_point("code_structure")
+    graph.add_edge("code_structure", "codereview_quality_gate")
+    graph.add_edge("codereview_quality_gate", "frontend_review")
+    graph.add_edge("frontend_review", "codereview_quality_gate")
+    graph.add_edge("codereview_quality_gate", "backend_review")
+    graph.add_edge("backend_review", "codereview_quality_gate")
+    graph.add_edge("codereview_quality_gate", "database_analyze")
+    graph.add_edge("database_analyze", "codereview_quality_gate")
+    graph.add_edge("codereview_quality_gate", "consistency_check")
+    graph.add_edge("consistency_check", "codereview_quality_gate")
+    graph.add_edge("codereview_quality_gate", "code_report")
+    graph.add_edge("code_report", "codereview_quality_gate")
+
+    # 完成后结束
+    graph.set_finish_point("codereview_quality_gate")
+
+    return graph
+
+
+def create_codereview_subgraph_app(llm: ChatOpenAI):
+    """创建代码评审子图应用"""
+    graph = build_codereview_subgraph(llm)
+    return graph.compile()

@@ -1,0 +1,8 @@
+# 代码评审阶段质量检查清单
+# format: id question severity
+
+complete 代码结构分析是否完成且有效 error
+summary 架构摘要是否清晰准确 error
+tech_detection 技术栈识别是否完整 error
+issues_all 所有发现的问题都有明确的位置和原因 error
+no_missing 没有遗漏明显的架构问题 error

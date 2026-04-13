@@ -6,8 +6,8 @@ from typing import List
 from langchain_openai import ChatOpenAI
 
 from ..types.quality_gate import QualityGateResult, CheckResult, CheckItem, Severity
-from ..types.artifacts import RequirementsSpec
-from .checklists import get_requirements_checklist
+from ..types.artifacts import RequirementsSpec, CodeReviewReport
+from .checklists import get_requirements_checklist, get_codereview_checklist
 
 
 class AutoReviewer:
@@ -137,3 +137,16 @@ class AutoReviewer:
             feedback="\n".join(all_feedback) if all_feedback else "所有检查通过",
             target_stage_for_backflow="requirements" if not passed else None
         )
+
+    def review_codereview(self, report: CodeReviewReport) -> QualityGateResult:
+        """评审代码评审报告"""
+        checklist = get_codereview_checklist()
+
+        # 构建prompt
+        prompt = self._build_review_prompt("代码评审", report, checklist)
+
+        response = self.llm.invoke(prompt)
+        response_text = response.content.strip()
+
+        # 解析结果
+        return self._parse_result(response_text, checklist, "codereview")

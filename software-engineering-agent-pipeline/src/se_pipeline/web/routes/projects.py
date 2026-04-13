@@ -54,14 +54,27 @@ async def create_project(request: Request, form_data: CreateProjectRequest):
         )
 
     # 创建初始状态
-    state = PipelineState(
-        project_id=form_data.project_id,
-        project_name=form_data.project_name,
-        current_stage="requirements",
-        original_user_requirement=form_data.original_requirement,
-    )
+    if form_data.project_type == "code_review":
+        # 独立代码评审模式，直接从代码结构分析开始
+        state = PipelineState(
+            project_id=form_data.project_id,
+            project_name=form_data.project_name,
+            project_type="code_review",
+            current_stage="codereview",
+            current_codereview_stage="code_structure",
+            original_user_requirement=form_data.original_requirement,
+        )
+    else:
+        # 全新开发模式，从需求分析开始
+        state = PipelineState(
+            project_id=form_data.project_id,
+            project_name=form_data.project_name,
+            project_type="full_development",
+            current_stage="requirements",
+            original_user_requirement=form_data.original_requirement,
+        )
     store.save_state(form_data.project_id, state)
-    print(f"[DEBUG] 创建成功: project_id={form_data.project_id}")
+    print(f"[DEBUG] 创建成功: project_id={form_data.project_id}, type={form_data.project_type}")
     # 前端会处理跳转
     return HTMLResponse("ok", status_code=200)
 
@@ -182,3 +195,26 @@ async def submit_change_request(request: Request, project_id: str):
         "current_node": "analyst",
         "node_name_map": node_name_map
     })
+
+
+@router.post("/projects/{project_id}/update-target-dir")
+async def update_target_dir(request: Request, project_id: str):
+    """更新目标代码目录（独立代码评审模式）"""
+    form_data = await request.form()
+    target_dir = form_data.get("target_code_dir", "").strip()
+
+    from se_pipeline.storage.project_store import ProjectStore
+    store = ProjectStore()
+    state = store.load_state(project_id)
+    if state is None:
+        return HTMLResponse("项目不存在", status_code=404)
+
+    # 更新目标目录
+    state = state.model_copy(update={
+        "target_code_dir": target_dir if target_dir else None
+    })
+    state.update_timestamp()
+    store.save_state(project_id, state)
+
+    # 刷新页面，htmx 不替换就是成功
+    return HTMLResponse("")

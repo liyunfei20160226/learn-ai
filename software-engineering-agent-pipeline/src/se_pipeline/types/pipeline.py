@@ -5,7 +5,23 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, List, Literal
 from datetime import datetime
 
-from .artifacts import RequirementsSpec
+from .artifacts import (
+    RequirementsSpec,
+    ArchitectureDesign,
+    UIPrototype,
+    DatabaseSchema,
+    TaskBacklog,
+    CodegenImplementation,
+    CodeStructure,
+    FrontendReviewResult,
+    BackendReviewResult,
+    DatabaseAnalysisResult,
+    ConsistencyCheckResult,
+    CodeReviewReport,
+    TestReport,
+    PreReleaseCheck,
+    DeploymentConfig,
+)
 
 
 class AttachedDocument(BaseModel):
@@ -23,7 +39,6 @@ class AttachedDocument(BaseModel):
     error_message: Optional[str] = Field(default=None, description="解析失败原因")
 
 
-
 StageId = Literal[
     "requirements",
     "architecture",
@@ -37,16 +52,47 @@ StageId = Literal[
     "deployment",
 ]
 
+# 代码评审内部阶段（分步处理）
+CodeReviewStageId = Literal[
+    "code_structure",
+    "frontend_review",
+    "backend_review",
+    "database_analyze",
+    "consistency_check",
+    "code_report",
+]
+
 
 class PipelineState(BaseModel):
     """流水线整体状态"""
     project_id: str = Field(description="项目ID")
     project_name: str = Field(description="项目名称")
+    project_type: str = Field(default="full_development", description="项目类型: full_development (全新开发) / code_review (独立代码评审)")
     current_stage: StageId = Field(description="当前阶段")
+    current_codereview_stage: Optional[CodeReviewStageId] = Field(default=None, description="代码评审当前内部阶段")
     original_user_requirement: str = Field(description="用户原始需求")
 
     # 各阶段制品
     requirements_spec: Optional[RequirementsSpec] = Field(default=None, description="需求规格制品")
+    architecture_design: Optional[ArchitectureDesign] = Field(default=None, description="架构设计制品")
+    ui_prototype: Optional[UIPrototype] = Field(default=None, description="UI原型制品")
+    database_schema: Optional[DatabaseSchema] = Field(default=None, description="数据库设计制品")
+    task_backlog: Optional[TaskBacklog] = Field(default=None, description="任务拆分制品")
+    codegen_implementation: Optional[CodegenImplementation] = Field(default=None, description="代码生成制品")
+
+    # 代码评审相关（独立代码评审模式或流水线阶段）
+    target_code_dir: Optional[str] = Field(default=None, description="待评审的目标代码目录（绝对路径）")
+    code_structure: Optional[CodeStructure] = Field(default=None, description="代码结构分析结果")
+    frontend_review: Optional[FrontendReviewResult] = Field(default=None, description="前端评审结果")
+    backend_review: Optional[BackendReviewResult] = Field(default=None, description="后端评审结果")
+    database_analysis: Optional[DatabaseAnalysisResult] = Field(default=None, description="数据库分析结果")
+    consistency_check: Optional[ConsistencyCheckResult] = Field(default=None, description="一致性检查结果")
+    codereview_report: Optional[CodeReviewReport] = Field(default=None, description="最终代码评审报告")
+
+    # 后续阶段制品
+    test_report: Optional[TestReport] = Field(default=None, description="测试报告制品")
+    pre_release_check: Optional[PreReleaseCheck] = Field(default=None, description="预发布检查制品")
+    deployment_config: Optional[DeploymentConfig] = Field(default=None, description="部署配置制品")
 
     # 需求分析阶段内部状态（双Agent协作）
     requirements_qa_history: List[Dict[str, Optional[str]]] = Field(default_factory=list, description="问答历史")
