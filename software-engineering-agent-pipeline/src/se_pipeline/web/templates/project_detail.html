@@ -94,21 +94,10 @@
             <p class="text-sm text-gray-500 mb-4">
                 请输入要评审的本地代码目录的<strong>绝对路径</strong>，例如 <code class="bg-gray-100 px-1 rounded">/home/user/my-project</code> 或者 <code class="bg-gray-100 px-1 rounded">C:\code\my-project</code>
             </p>
-            <form hx-post="/projects/{{ state.project_id }}/update-target-dir"
-                  hx-swap="none"
-                  class="space-y-4">
-                <div class="flex items-center gap-4">
-                    <input type="text" id="target_code_dir" name="target_code_dir"
-                           value="{{ state.target_code_dir or '' }}"
-                           placeholder="请输入待评审代码目录的绝对路径..."
-                           class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                    <button type="submit"
-                            class="flex-shrink-0 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition-all duration-200">
-                        <i class="fas fa-save mr-2"></i>
-                        保存
-                    </button>
-                </div>
-            </form>
+            <input type="text" id="target_code_dir"
+                   value="{{ state.target_code_dir or '' }}"
+                   placeholder="请输入待评审代码目录的绝对路径..."
+                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
             {% if state.target_code_dir %}
             <div class="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
                 <p class="text-sm text-green-800">
@@ -240,6 +229,13 @@
         {% include "components/requirements_view.html" %}
         {% endif %}
 
+        <!-- 错误提示区域 -->
+        <div id="error-message-box" class="hidden mb-6">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p id="error-message-text" class="text-red-800 text-sm"></p>
+            </div>
+        </div>
+
         <!-- Start / Restart -->
         <div class="bg-white rounded-2xl shadow-xl p-6">
             <div class="flex items-center justify-between">
@@ -278,41 +274,87 @@ document.getElementById('start-btn')?.addEventListener('click', function() {
     const progressContainer = document.getElementById('progress-container');
     const questionsContainer = document.getElementById('questions-container');
     const startBtn = document.getElementById('start-btn');
-    // 找到需求分析完成卡片并隐藏
-    const requirementsCompletedCard = document.querySelector('.bg-green-50.rounded-2xl.shadow-xl.p-6.mb-8.border-l-4.border-green-500');
-    if (requirementsCompletedCard) {
-        requirementsCompletedCard.style.display = 'none';
+
+    // 检查：独立代码评审必须填写目标代码目录
+    {% if state.project_type == 'code_review' %}
+    const targetInput = document.getElementById('target_code_dir');
+    const targetCodeDir = targetInput ? targetInput.value.trim() : '';
+    if (!targetCodeDir) {
+        showErrorMessage('请先在上方"目标代码目录"输入框填写待评审代码目录的绝对路径，再开始分析');
+        return;
     }
 
-    // 禁用按钮，防止重复点击
+    // 先保存目标代码目录到后端
     startBtn.disabled = true;
     startBtn.classList.add('opacity-50');
     startBtn.classList.add('cursor-not-allowed');
 
-    // Show progress container
-    progressContainer.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-xl p-6 mb-8 animate-pulse">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">
-                <i class="fas fa-cog fa-spin text-blue-500 mr-2"></i>
-                正在处理...
-            </h2>
-            <div id="current-step" class="text-gray-600 mb-2">
-                {% if not state.documents_processed %}
-                文档预处理...
-                {% else %}
-                初始化...
-                {% endif %}
-            </div>
-            <div id="current-document" class="text-sm text-gray-500 mb-4"></div>
-            <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
-                <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full" style="width: 10%"></div>
-            </div>
-        </div>
-    `;
+    fetch('/projects/{{ state.project_id }}/update-target-dir', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'target_code_dir=' + encodeURIComponent(targetCodeDir)
+    })
+    .then(response => {
+        if (!response.ok) {
+            showErrorMessage('保存目标目录失败，请重试');
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50');
+            startBtn.classList.remove('cursor-not-allowed');
+            return;
+        }
 
-    // Open SSE connection - 如果文档未处理，从document_preprocessor开始
-    const fromNode = {% if not state.documents_processed %}'document_preprocessor'{% else %}'analyst'{% endif %};
-    const eventSource = new EventSource('/projects/{{ state.project_id }}/stream?from_node=' + fromNode);
+        // 保存成功，继续启动分析
+        startAnalysis();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showErrorMessage('保存目标目录失败，请重试');
+        startBtn.disabled = false;
+        startBtn.classList.remove('opacity-50');
+        startBtn.classList.remove('cursor-not-allowed');
+    });
+
+    {% else %}
+    // 非独立代码评审，直接启动
+    startBtn.disabled = true;
+    startBtn.classList.add('opacity-50');
+    startBtn.classList.add('cursor-not-allowed');
+    startAnalysis();
+    {% endif %}
+
+    function startAnalysis() {
+        // 找到需求分析完成卡片并隐藏
+        const requirementsCompletedCard = document.querySelector('.bg-green-50.rounded-2xl.shadow-xl.p-6.mb-8.border-l-4.border-green-500');
+        if (requirementsCompletedCard) {
+            requirementsCompletedCard.style.display = 'none';
+        }
+
+        // Show progress container
+        progressContainer.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-xl p-6 mb-8 animate-pulse">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-cog fa-spin text-blue-500 mr-2"></i>
+                    正在处理...
+                </h2>
+                <div id="current-step" class="text-gray-600 mb-2">
+                    {% if not state.documents_processed %}
+                    文档预处理...
+                    {% else %}
+                    初始化...
+                    {% endif %}
+                </div>
+                <div id="current-document" class="text-sm text-gray-500 mb-4"></div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+                    <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full" style="width: 10%"></div>
+                </div>
+            </div>
+        `;
+
+        // Open SSE connection - 如果文档未处理，从document_preprocessor开始
+        const fromNode = {% if not state.documents_processed %}'document_preprocessor'{% else %}'analyst'{% endif %};
+        const eventSource = new EventSource('/projects/{{ state.project_id }}/stream?from_node=' + fromNode);
 
     eventSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
@@ -403,6 +445,17 @@ function showUploadError(message) {
     }, 3000);
 }
 
+function showErrorMessage(message) {
+    const errorBox = document.getElementById('error-message-box');
+    const errorText = document.getElementById('error-message-text');
+    errorText.textContent = message;
+    errorBox.classList.remove('hidden');
+    // 3秒后自动消失
+    setTimeout(() => {
+        errorBox.classList.add('hidden');
+    }, 4000);
+}
+
 function showChangeRequest() {
     document.getElementById('change-request-area').classList.remove('hidden');
     document.getElementById('change-request-text').focus();
@@ -416,7 +469,7 @@ function cancelChangeRequest() {
 function submitChangeRequest(projectId) {
     const text = document.getElementById('change-request-text').value.trim();
     if (!text) {
-        alert('请输入需求变更内容');
+        showErrorMessage('请输入需求变更内容');
         return;
     }
 
@@ -524,7 +577,7 @@ function submitChangeRequest(projectId) {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('提交失败，请重试');
+        showErrorMessage('提交失败，请重试');
         submitBtn.disabled = false;
         cancelBtn.disabled = false;
         submitBtn.classList.remove('opacity-50');

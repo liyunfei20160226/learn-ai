@@ -164,7 +164,17 @@ function confirmDelete() {
     })
     .catch(error => {
         console.error('删除失败:', error);
-        alert('删除失败，请刷新重试');
+        // 在创建表单错误位置显示错误
+        const errorEl = document.getElementById('create-error');
+        if (errorEl) {
+            errorEl.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-lg p-4"><p class="text-red-800">删除失败，请刷新重试</p></div>';
+            // 3秒后自动清除
+            setTimeout(() => {
+                errorEl.innerHTML = '';
+            }, 3000);
+        } else {
+            alert('删除失败，请刷新重试');
+        }
         closeDeleteModal();
     });
 }
