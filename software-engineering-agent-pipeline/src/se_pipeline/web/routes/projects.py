@@ -64,8 +64,17 @@ async def create_project(request: Request, form_data: CreateProjectRequest):
             current_codereview_stage="code_structure",
             original_user_requirement=form_data.original_requirement,
         )
+    elif form_data.project_type == "independent_requirements":
+        # 独立需求分析模式，从需求分析开始，完成后结束
+        state = PipelineState(
+            project_id=form_data.project_id,
+            project_name=form_data.project_name,
+            project_type="independent_requirements",
+            current_stage="requirements",
+            original_user_requirement=form_data.original_requirement,
+        )
     else:
-        # 全新开发模式，从需求分析开始
+        # 全新开发模式，从需求分析开始，完成后进入下一阶段
         state = PipelineState(
             project_id=form_data.project_id,
             project_name=form_data.project_name,
