@@ -15,13 +15,6 @@ logs
 # environments
 .env
 
-# Claude Code configuration
-.claude/
-my-claude-skill/code-analyzer-workspace/ 
-
-# Skills CLI tool directory
-skills/claude-skill-test/code-analyzer-workspace/
-
 # node
 node_modules
 

@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__filesystem__create_directory",
+      "mcp__filesystem__write_file",
+      "Bash(uv run:*)",
+      "Bash(uv add:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python:*)",
+      "Bash(uv pip:*)",
+      "Bash(C:\\\\Users\\\\liyun\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\Scripts\\\\pytest.exe:*)",
+      "Bash(C:\\\\Users\\\\liyun\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe:*)",
+      "Bash(C:/Users/liyun/AppData/Local/Python/pythoncore-3.14-64/python.exe:*)",
+      "Bash(C:/Users/liyun/AppData/Local/Python/pythoncore-3.14-64/Scripts/pytest.exe:*)",
+      "Bash(mkdir -p ./memory-mcp)",
+      "Bash(cp -r ../memory-mcp/* ./memory-mcp/)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(node http-server.js 8000)",
+      "WebSearch",
+      "Bash(git checkout:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git rm:*)",
+      "mcp__filesystem__directory_tree",
+      "Bash(git reset:*)",
+      "Bash(npx markuplint:*)",
+      "Bash(npx htmlhint:*)",
+      "Bash(npx prettier:*)",
+      "Bash(git pull:*)"
+    ]
+  }
+}

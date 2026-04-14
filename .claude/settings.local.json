@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m json.tool)",
+      "Bash(npm install:*)",
+      "Bash(rm -rf /c/work/learn-ai/memory-mcp/dist)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git clone:*)",
+      "Bash(npm root:*)",
+      "Bash(npm list:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m 'Update MCP configs and test files:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python examples/visualize_graph.py)",
+      "Bash(uv venv:*)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m pip install -e .)",
+      "Bash(.venv/Scripts/python.exe -m pip install -e .)",
+      "Bash(uv pip:*)",
+      "Bash(python:*)",
+      "Bash(ruff check:*)",
+      "Bash(pip install:*)",
+      "Bash(git status:*)",
+      "Bash(git rm:*)"
+    ]
+  }
+}
