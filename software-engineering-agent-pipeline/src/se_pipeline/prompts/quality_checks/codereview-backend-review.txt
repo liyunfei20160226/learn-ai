@@ -1,0 +1,8 @@
+# 后端代码评审阶段质量检查清单
+# format: id question severity
+
+complete 是否完成了完整的后端代码评审 error
+dir_review 是否完成了目录结构/模块划分合理性评审 error
+issues 所有发现的问题都有明确的位置、类型和描述 error
+no_empty 是否至少发现了一些问题或者明确说明没有问题 error
+summary 是否有清晰的评审总结 error

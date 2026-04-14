@@ -2,7 +2,7 @@
 流水线状态类型定义 - LangGraph 状态
 """
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, List, Literal
+from typing import Optional, Dict, List, Literal, Union
 from datetime import datetime
 
 from .artifacts import (
@@ -101,7 +101,7 @@ class PipelineState(BaseModel):
     entered_verification: bool = Field(default=False, description="是否已经进入验证阶段")
 
     # 回流相关
-    backflow_target_stage: Optional[StageId] = Field(default=None, description="回流目标阶段")
+    backflow_target_stage: Optional[Union[StageId, CodeReviewStageId]] = Field(default=None, description="回流目标阶段（可以是顶级阶段或代码评审内部阶段）")
     backflow_feedback: Optional[str] = Field(default=None, description="回流反馈意见")
 
     # 文档预处理

@@ -1,0 +1,8 @@
+# 数据库分析阶段质量检查清单
+# format: id question severity
+
+complete 是否完成了完整的数据库分析 error
+tables 是否从代码推导出了表结构 error
+issues 所有发现的问题都有明确的位置、类型和描述 error
+no_empty 是否至少发现了一些问题或者明确说明没有问题 error
+summary 是否有清晰的分析总结 error

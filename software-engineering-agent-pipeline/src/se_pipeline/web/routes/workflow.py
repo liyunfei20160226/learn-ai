@@ -170,8 +170,14 @@ async def stream_workflow(request: Request, project_id: str, from_node: str):
 
                 # 处理 worker 中抛出的异常
                 if error is not None:
-                    # 抛出异常让上层处理
-                    raise error
+                    # 发送错误事件给前端，优雅断开连接而不是强制中断
+                    yield {
+                        "data": json.dumps({
+                            "event": "error",
+                            "data": {"message": str(error)}
+                        })
+                    }
+                    break
 
                 local_state = result
                 current_node = next_node
@@ -208,7 +214,14 @@ async def stream_workflow(request: Request, project_id: str, from_node: str):
 
                 # 处理异常
                 if error is not None:
-                    raise error
+                    # 发送错误事件给前端，优雅断开连接而不是强制中断
+                    yield {
+                        "data": json.dumps({
+                            "event": "error",
+                            "data": {"message": str(error)}
+                        })
+                    }
+                    break
 
                 local_state = result
                 current_node = next_node

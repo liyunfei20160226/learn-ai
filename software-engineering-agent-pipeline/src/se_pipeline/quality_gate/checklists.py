@@ -42,8 +42,13 @@ def get_requirements_checklist() -> list[CheckItem]:
     return load_checklist_from_text(text)
 
 
-def get_codereview_checklist() -> list[CheckItem]:
-    """代码评审阶段检查清单"""
+def get_codereview_checklist(stage: str = None) -> list[CheckItem]:
+    """代码评审阶段检查清单
+    Args:
+        stage: 阶段名称，可选值: code-structure, frontend-review, backend-review, database-analysis, consistency-check, codereview
+              如果为None，返回最终报告检查清单
+    """
     from ..prompts import get_quality_checklist
-    text = get_quality_checklist("codereview")
+    filename = f"codereview-{stage}" if stage else "codereview"
+    text = get_quality_checklist(filename)
     return load_checklist_from_text(text)

@@ -60,6 +60,12 @@ class DatabaseAnalyzeAgent(BaseAgent):
 
         # 构建上下文
         context = self._build_context(code_struct, db_files)
+        # 如果有回流反馈（上次质量闸门不通过），添加到上下文
+        if state.backflow_feedback:
+            context += "\n\n# 上次质量检查反馈\n"
+            context += "上次分析未通过质量检查，反馈意见如下，请根据反馈改进你的分析:\n"
+            context += state.backflow_feedback
+            context += "\n"
         prompt_template = get_prompt("database_analyze")
         full_prompt = prompt_template.replace("{{CONTEXT}}", context)
 
@@ -185,16 +191,24 @@ class DatabaseAnalyzeAgent(BaseAgent):
         return "\n".join(lines)
 
     def _parse_response(self, response_text: str) -> dict:
-        """解析LLM响应，提取YAML结果"""
+        """解析LLM响应，提取YAML结果
+        如果解析失败，尝试从部分输出恢复尽可能多的数据
+        """
         try:
             if "```yaml" in response_text:
                 start = response_text.find("```yaml") + 7
                 end = response_text.find("```", start)
-                yaml_text = response_text[start:end].strip()
+                if end == -1:  # YAML被截断，没有结束标记
+                    yaml_text = response_text[start:].strip()
+                else:
+                    yaml_text = response_text[start:end].strip()
             elif "```" in response_text:
                 start = response_text.find("```") + 3
                 end = response_text.find("```", start)
-                yaml_text = response_text[start:end].strip()
+                if end == -1:
+                    yaml_text = response_text[start:].strip()
+                else:
+                    yaml_text = response_text[start:end].strip()
             else:
                 yaml_text = response_text.strip()
 
@@ -204,13 +218,59 @@ class DatabaseAnalyzeAgent(BaseAgent):
                 for field in required:
                     if field not in data:
                         data[field] = [] if field in ["derived_tables", "issues"] else "No summary provided."
+                if "database_type" not in data:
+                    data["database_type"] = None
                 return data
         except Exception:
+            # YAML解析失败，尝试提取尽可能多的issues
             pass
+
+        # 解析失败，但尝试提取尽可能多的信息
+        issues = []
+        derived_tables = []
+        issue_id_counter = 1
+        lines = response_text.splitlines()
+        capture_summary = []
+        in_issues = False
+        in_tables = False
+
+        for line in lines:
+            if "derived_tables:" in line:
+                in_tables = True
+                continue
+            if "issues:" in line:
+                in_issues = True
+                in_tables = False
+                continue
+            if "summary:" in line:
+                in_issues = False
+                in_tables = False
+                continue
+            if in_tables and line.strip().startswith("-"):
+                # table entry
+                derived_tables.append({
+                    "table_name": "unknown",
+                    "detected_from": "unknown",
+                    "columns": [],
+                })
+            elif in_issues and line.strip().startswith("-") or line.strip().startswith("  -"):
+                # 新issue开始
+                issues.append({
+                    "issue_id": f"db-{issue_id_counter:02d}",
+                    "location": "unknown",
+                    "issue_type": "design",
+                    "severity": "warning",
+                    "description": line.strip().lstrip("- "),
+                })
+                issue_id_counter += 1
+            elif in_issues and issues and line.strip():
+                issues[-1]["description"] += " " + line.strip()
+            else:
+                capture_summary.append(line)
 
         return {
             "database_type": None,
-            "derived_tables": [],
-            "issues": [],
-            "summary": response_text[:1000]
+            "derived_tables": derived_tables,
+            "issues": issues,
+            "summary": "\n".join(capture_summary)[:1000]
         }

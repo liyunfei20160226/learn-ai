@@ -42,6 +42,14 @@ class AutoReviewer:
             lines.append(f"功能需求数量: {len(artifact.data.functional_requirements)}")
             lines.append(f"用户角色数量: {len(artifact.data.user_roles)}")
             lines.append("")
+        elif hasattr(artifact, 'data'):
+            # 大多数代码评审制品都有 summary 包含完整分析内容
+            if hasattr(artifact.data, 'overall_summary'):
+                lines.append(artifact.data.overall_summary)
+                lines.append("")
+            elif hasattr(artifact.data, 'summary'):
+                lines.append(artifact.data.summary)
+                lines.append("")
 
         lines.append("## 检查清单")
         lines.append("")
@@ -150,3 +158,29 @@ class AutoReviewer:
 
         # 解析结果
         return self._parse_result(response_text, checklist, "codereview")
+
+    def review_artifact(self, artifact: any, stage_id: str, checklist: list[CheckItem]) -> QualityGateResult:
+        """泛化方法：评审任意类型的制品"""
+        stage_name_map = {
+            "code_structure": "代码结构分析",
+            "frontend_review": "前端代码评审",
+            "backend_review": "后端代码评审",
+            "database_analyze": "数据库分析",
+            "consistency_check": "一致性检查",
+            "codereview": "最终代码评审报告",
+        }
+        stage_name = stage_name_map.get(stage_id, stage_id)
+
+        # 构建prompt
+        prompt = self._build_review_prompt(stage_name, artifact, checklist)
+
+        response = self.llm.invoke(prompt)
+        response_text = response.content.strip()
+
+        # 解析结果，回流目标就是当前阶段
+        result = self._parse_result(response_text, checklist, stage_id)
+        # 修改回流目标为当前阶段（哪里来哪里去）
+        return result.__class__(**{
+            **result.model_dump(),
+            "target_stage_for_backflow": stage_id,
+        })

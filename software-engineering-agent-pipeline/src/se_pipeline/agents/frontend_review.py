@@ -61,6 +61,12 @@ class FrontendReviewAgent(BaseAgent):
 
         # 构建上下文
         context = self._build_context(code_struct, key_files)
+        # 如果有回流反馈（上次质量闸门不通过），添加到上下文
+        if state.backflow_feedback:
+            context += "\n\n# 上次质量检查反馈\n"
+            context += "上次评审未通过质量检查，反馈意见如下，请根据反馈改进你的评审:\n"
+            context += state.backflow_feedback
+            context += "\n"
         prompt_template = get_prompt("frontend_review")
         full_prompt = prompt_template.replace("{{CONTEXT}}", context)
 
@@ -192,17 +198,25 @@ class FrontendReviewAgent(BaseAgent):
         return "\n".join(lines)
 
     def _parse_response(self, response_text: str) -> dict:
-        """解析LLM响应，提取YAML结果"""
+        """解析LLM响应，提取YAML结果
+        如果解析失败，尝试从部分输出恢复尽可能多的数据
+        """
         # 提取YAML块
         try:
             if "```yaml" in response_text:
                 start = response_text.find("```yaml") + 7
                 end = response_text.find("```", start)
-                yaml_text = response_text[start:end].strip()
+                if end == -1:  # YAML被截断，没有结束标记
+                    yaml_text = response_text[start:].strip()
+                else:
+                    yaml_text = response_text[start:end].strip()
             elif "```" in response_text:
                 start = response_text.find("```") + 3
                 end = response_text.find("```", start)
-                yaml_text = response_text[start:end].strip()
+                if end == -1:
+                    yaml_text = response_text[start:].strip()
+                else:
+                    yaml_text = response_text[start:end].strip()
             else:
                 yaml_text = response_text.strip()
 
@@ -213,15 +227,50 @@ class FrontendReviewAgent(BaseAgent):
                 for field in required:
                     if field not in data:
                         data[field] = [] if field == "issues" else "No analysis provided."
+                # 如果没有summary，添加一个空的
+                if "summary" not in data:
+                    data["summary"] = "No summary provided."
+                # 如果没有frontend_type，添加None
+                if "frontend_type" not in data:
+                    data["frontend_type"] = None
                 return data
         except Exception:
-            # YAML解析失败，返回默认结构
+            # YAML解析失败，尝试逐行解析，提取尽可能多的issues
             pass
 
-        # 解析失败，返回原始文本作为摘要
+        # 解析失败，但尝试提取尽可能多的信息
+        # 把整个响应放在directory_structure_review，尝试手动提取issues
+        issues = []
+        issue_id_counter = 1
+        lines = response_text.splitlines()
+        capture_review = True
+        directory_structure_text = []
+        in_issues = False
+
+        for line in lines:
+            if "issues:" in line:
+                in_issues = True
+                capture_review = False
+                continue
+            if capture_review:
+                directory_structure_text.append(line)
+            elif in_issues and line.strip().startswith("-") or line.strip().startswith("  -"):
+                # 新issue开始
+                issues.append({
+                    "issue_id": f"issue-{issue_id_counter:02d}",
+                    "location": "unknown",
+                    "issue_type": "general",
+                    "severity": "warning",
+                    "description": line.strip().lstrip("- "),
+                })
+                issue_id_counter += 1
+            elif in_issues and issues and line.strip():
+                # 追加到最后一个issue描述
+                issues[-1]["description"] += " " + line.strip()
+
         return {
             "frontend_type": None,
-            "directory_structure_review": response_text[:1000],
-            "issues": [],
-            "summary": "Failed to parse structured output. See directory structure review above."
+            "directory_structure_review": "\n".join(directory_structure_text)[:1000],
+            "issues": issues,
+            "summary": "Partially parsed output due to YAML formatting issues. Extracted as much as possible."
         }

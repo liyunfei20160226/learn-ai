@@ -24,6 +24,7 @@ from se_pipeline.graph.pipeline_graph import (
     analyst_node,
     verifier_node,
     final_node,
+    codereview_quality_gate_node,
     after_analyst,
     after_verifier,
     after_quality_gate,
@@ -133,6 +134,8 @@ class WorkflowManager:
             self.project_store.save_code_structure(state.project_id, state.code_structure)
             next_node = "codereview_quality_gate"
         elif current_node == "codereview_quality_gate":
+            # 执行质量闸门评审
+            state = codereview_quality_gate_node(state, self.reviewer)
             next_node = after_codereview_quality_gate(state)
         elif current_node == "frontend_review":
             import asyncio

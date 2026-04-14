@@ -45,6 +45,12 @@ class ConsistencyCheckAgent(BaseAgent):
 
         # 收集前面所有分析结果
         context = self._build_context(state)
+        # 如果有回流反馈（上次质量闸门不通过），添加到上下文
+        if state.backflow_feedback:
+            context += "\n\n# 上次质量检查反馈\n"
+            context += "上次检查未通过质量检查，反馈意见如下，请根据反馈改进你的检查:\n"
+            context += state.backflow_feedback
+            context += "\n"
         prompt_template = get_prompt("consistency_check")
         full_prompt = prompt_template.replace("{{CONTEXT}}", context)
 
@@ -137,16 +143,24 @@ class ConsistencyCheckAgent(BaseAgent):
         return "\n".join(lines)
 
     def _parse_response(self, response_text: str) -> dict:
-        """解析LLM响应"""
+        """解析LLM响应
+        如果解析失败，尝试从部分输出恢复尽可能多的数据
+        """
         try:
             if "```yaml" in response_text:
                 start = response_text.find("```yaml") + 7
                 end = response_text.find("```", start)
-                yaml_text = response_text[start:end].strip()
+                if end == -1:  # YAML被截断，没有结束标记
+                    yaml_text = response_text[start:].strip()
+                else:
+                    yaml_text = response_text[start:end].strip()
             elif "```" in response_text:
                 start = response_text.find("```") + 3
                 end = response_text.find("```", start)
-                yaml_text = response_text[start:end].strip()
+                if end == -1:
+                    yaml_text = response_text[start:].strip()
+                else:
+                    yaml_text = response_text[start:end].strip()
             else:
                 yaml_text = response_text.strip()
 
@@ -158,9 +172,38 @@ class ConsistencyCheckAgent(BaseAgent):
                     data["summary"] = "Check completed."
                 return data
         except Exception:
+            # YAML解析失败，尝试逐行提取
             pass
 
+        # 解析失败，尝试提取尽可能多的不一致项
+        inconsistencies = []
+        check_id_counter = 1
+        lines = response_text.splitlines()
+        capture_summary = []
+        in_inconsistencies = False
+
+        for line in lines:
+            if "inconsistencies:" in line:
+                in_inconsistencies = True
+                continue
+            if "summary:" in line:
+                in_inconsistencies = False
+                continue
+            if in_inconsistencies and (line.strip().startswith("-") or line.strip().startswith("  -")):
+                # 新不一致项开始
+                inconsistencies.append({
+                    "check_id": f"c-{check_id_counter:02d}",
+                    "location": "unknown",
+                    "description": line.strip().lstrip("- "),
+                    "severity": "warning",
+                })
+                check_id_counter += 1
+            elif in_inconsistencies and inconsistencies and line.strip():
+                inconsistencies[-1]["description"] += " " + line.strip()
+            else:
+                capture_summary.append(line)
+
         return {
-            "inconsistencies": [],
-            "summary": response_text[:1000]
+            "inconsistencies": inconsistencies,
+            "summary": "\n".join(capture_summary)[:1000]
         }

@@ -31,6 +31,12 @@ class CodeReportAgent(BaseAgent):
 
         # 构建上下文
         context = self._build_context(state, all_issues, error_count, warning_count, info_count)
+        # 如果有回流反馈（上次质量闸门不通过），添加到上下文
+        if state.backflow_feedback:
+            context += "\n\n# 上次质量检查反馈\n"
+            context += "上次报告未通过质量检查，反馈意见如下，请根据反馈改进你的报告:\n"
+            context += state.backflow_feedback
+            context += "\n"
         prompt_template = get_prompt("code_report")
         full_prompt = prompt_template.replace("{{CONTEXT}}", context)
 

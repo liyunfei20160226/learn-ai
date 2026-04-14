@@ -2,7 +2,7 @@
 
 ## 任务
 
-根据提供的代码（ORM模型、SQL文件、migrations），推导出数据库表结构，并分析数据库设计质量。
+根据提供的代码（ORM模型、SQL文件、migrations），推导出数据库表结构，并分析数据库设计质量。**只需要输出发现的设计问题，不需要赞美，不需要正面评价。如果设计没问题，可以只输出空问题列表。**
 
 ## 分析要点
 
@@ -19,35 +19,24 @@
 ## 输出要求
 
 你必须按照指定的 YAML 格式输出：
-
-```yaml
-database_type: "数据库类型"
-derived_tables:
-  - table_name: 表名
-    detected_from: 来源文件路径
-    columns:
-      - name: 列名
-        type: 数据类型
-        constraints: 约束说明
-issues:
-  - issue_id: db-01
-    location: 表名或文件路径
-    issue_type: design/normalization/indexes/constraints
-    severity: error/warning/info
-    description: 问题描述
-summary: |
-  整体数据库设计分析总结
-```
-
-每个问题必须包含：
-- `issue_id`: 唯一问题ID
-- `location`: 问题位置（表名或文件）
-- `issue_type`: 问题类型
-- `severity`: 严重程度
-  - `error`: 严重设计问题，影响数据完整性，必须修复
-  - `warning`: 设计问题，建议改进
-  - `info`: 观察建议
-- `description`: 问题描述和原因
+- `database_type`: 识别出的数据库类型
+- `derived_tables`: 推导得到的表结构列表
+  - `table_name`: 表名
+  - `detected_from`: 来源文件路径
+  - `columns`: 列定义列表
+    - `name`: 列名
+    - `type`: 数据类型
+    - `constraints`: 约束说明
+- `issues`: 问题列表，每个问题必须包含：
+  - `issue_id`: 唯一问题ID
+  - `location`: 问题位置（表名或文件路径）
+  - `issue_type`: 问题类型（design/normalization/indexes/constraints/naming）
+  - `severity`: 严重程度（error/warning/info）
+    - `error`: 严重设计问题，影响数据完整性，必须修复
+    - `warning`: 设计问题，建议改进
+    - `info`: 观察建议
+  - `description`: 问题描述、原因和改进建议
+- `summary`: 整体总结**只总结问题**
 
 ## 上下文信息
 

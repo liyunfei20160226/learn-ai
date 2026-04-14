@@ -12,6 +12,7 @@ from ..agents import (
     RequirementsFinalAgent,
 )
 from ..quality_gate import AutoReviewer
+from ..quality_gate.checklists import get_codereview_checklist
 
 
 def analyst_node(state: PipelineState, analyst: RequirementsAnalystAgent) -> PipelineState:
@@ -128,6 +129,147 @@ def after_codereview_quality_gate(state: PipelineState) -> str:
     else:
         # 全部完成
         return "__end__"
+
+
+def codereview_quality_gate_node(state: PipelineState, reviewer: AutoReviewer) -> PipelineState:
+    """质量闸门 - 每个阶段完成后都检查质量
+
+    刚完成的阶段 = 下一个要做的阶段 的前一个阶段
+    因为 after_codereview_quality_gate 返回的就是下一个要做的阶段
+    """
+    # 固定顺序
+    stage_order = [
+        "code_structure",
+        "frontend_review",
+        "backend_review",
+        "database_analyze",
+        "consistency_check",
+        "code_report",
+        "codereview_report",
+    ]
+
+    # 找出下一个要做的阶段
+    next_stage = after_codereview_quality_gate(state)
+
+    if next_stage == "__end__":
+        # 全部完成了，评审最终报告
+        current_stage = "codereview_report"
+    else:
+        # 找到下一个阶段在列表中的索引，前一个就是刚完成的需要评审
+        try:
+            idx = stage_order.index(next_stage)
+            if idx > 0:
+                current_stage = stage_order[idx - 1]
+            else:
+                # 还没有任何阶段完成
+                return state
+        except ValueError:
+            # 未知阶段，直接返回
+            return state
+
+    if current_stage is None:
+        # 还没有任何阶段完成，直接通过
+        return state
+
+    # 特殊处理：一致性检查，如果用户没有上传设计文档（project_background 为空），直接通过
+    # 因为本来就没有内容需要对比，一致性检查会跳过
+    if current_stage == "consistency_check":
+        has_design_doc = False
+        if state.project_background and state.project_background.strip():
+            has_design_doc = True
+        if state.attached_documents and any(doc.parse_success for doc in state.attached_documents):
+            has_design_doc = True
+        if not has_design_doc:
+            # 没有设计文档可供对比，直接通过质量闸门
+            state = state.model_copy(update={
+                "backflow_target_stage": None,
+                "backflow_feedback": None,
+            })
+            return state
+
+    # 获取对应检查清单
+    checklist_stage_map = {
+        "code_structure": "code-structure",
+        "frontend_review": "frontend-review",
+        "backend_review": "backend-review",
+        "database_analyze": "database-analysis",
+        "consistency_check": "consistency-check",
+        "codereview_report": None,
+    }
+    checklist = get_codereview_checklist(checklist_stage_map[current_stage])
+
+    # 获取当前artifact
+    artifact_map = {
+        "code_structure": state.code_structure,
+        "frontend_review": state.frontend_review,
+        "backend_review": state.backend_review,
+        "database_analyze": state.database_analysis,
+        "consistency_check": state.consistency_check,
+        "codereview_report": state.codereview_report,
+    }
+    artifact = artifact_map[current_stage]
+
+    # 评审
+    if current_stage == "codereview_report":
+        # 最终报告，使用专用方法
+        result = reviewer.review_codereview(artifact)
+    else:
+        # 中间阶段，使用泛化方法
+        result = reviewer.review_artifact(artifact, current_stage, checklist)
+
+    # 保存质量闸门评审结果到markdown文档（不管是否通过，都保存供人工查看）
+    from se_pipeline.storage.project_store import ProjectStore
+    store = ProjectStore()
+    project_dir = store.get_project_dir(state.project_id)
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    stage_display_name = {
+        "code_structure": "代码结构分析",
+        "frontend_review": "前端代码评审",
+        "backend_review": "后端代码评审",
+        "database_analyze": "数据库分析",
+        "consistency_check": "一致性检查",
+        "codereview_report": "最终代码评审报告",
+    }.get(current_stage, current_stage)
+
+    lines = []
+    lines.append(f"# 质量闸门评审结果 - {stage_display_name}")
+    lines.append("")
+    lines.append(f"**项目ID**: {state.project_id}")
+    lines.append(f"**阶段**: {current_stage}")
+    lines.append(f"**评审时间**: {state.updated_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("")
+    lines.append(f"**评审结果**: {'✅ 通过' if result.passed else '❌ 不通过'}")
+    lines.append("")
+    if result.feedback:
+        lines.append("## 评审反馈")
+        lines.append("")
+        lines.append(result.feedback)
+        lines.append("")
+
+    md_filename = f"quality-gate-{current_stage}.md"
+    md_path = project_dir / md_filename
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+    if not result.passed:
+        # 质量不通过，将当前阶段artifact设为None，让它回流重做
+        # after_codereview_quality_gate会检测到None，自动回到这个阶段
+        update_kwargs = {
+            current_stage: None,
+            "backflow_target_stage": result.target_stage_for_backflow,
+            "backflow_feedback": result.feedback,
+        }
+        state = state.model_copy(update=update_kwargs)
+    else:
+        # 质量通过，清空回流反馈，进入下一步
+        update_kwargs = {
+            "backflow_target_stage": None,
+            "backflow_feedback": None,
+        }
+        state = state.model_copy(update=update_kwargs)
+
+    return state
 
 
 def build_requirements_internal_graph(
@@ -249,12 +391,8 @@ def build_codereview_subgraph(
     async def code_report_node(state: PipelineState) -> PipelineState:
         return await report_agent.run(state)
 
-    def codereview_quality_gate_node(state: PipelineState) -> PipelineState:
-        """质量闸门"""
-        if state.codereview_report is not None:
-            reviewer.review_codereview(state.codereview_report)
-            # TODO: 如果不通过，设置回流
-        return state
+    def codereview_quality_gate_node_bound(state: PipelineState) -> PipelineState:
+        return codereview_quality_gate_node(state, reviewer)
 
     # 添加节点
     graph.add_node("code_structure", code_structure_node)
@@ -263,7 +401,7 @@ def build_codereview_subgraph(
     graph.add_node("database_analyze", database_analyze_node)
     graph.add_node("consistency_check", consistency_check_node)
     graph.add_node("code_report", code_report_node)
-    graph.add_node("codereview_quality_gate", codereview_quality_gate_node)
+    graph.add_node("codereview_quality_gate", codereview_quality_gate_node_bound)
 
     # 连接流程 - 每个步骤后过质量闸门
     graph.set_entry_point("code_structure")

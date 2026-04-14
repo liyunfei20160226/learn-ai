@@ -60,6 +60,12 @@ class CodeStructureAgent(BaseAgent):
             target_dir, directory_tree, file_type_stats, detected_tech,
             frontend_detected, backend_detected, database_detected
         )
+        # 如果有回流反馈（上次质量闸门不通过），添加到上下文
+        if state.backflow_feedback:
+            context += "\n\n# 上次质量检查反馈\n"
+            context += "上次分析未通过质量检查，反馈意见如下，请根据反馈改进你的分析:\n"
+            context += state.backflow_feedback
+            context += "\n"
         prompt_template = get_prompt("code_structure")
         full_prompt = prompt_template.replace("{{CONTEXT}}", context)
 

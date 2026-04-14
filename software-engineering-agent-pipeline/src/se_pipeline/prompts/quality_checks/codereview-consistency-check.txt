@@ -1,0 +1,7 @@
+# 一致性检查阶段质量检查清单
+# format: id question severity
+
+complete 是否完成了完整的一致性检查 error
+inconsistencies 所有发现的不一致都有明确的位置和描述 error
+no_empty 是否明确说明了一致性状况（有不一致或没有） error
+summary 是否有清晰的检查总结 error
