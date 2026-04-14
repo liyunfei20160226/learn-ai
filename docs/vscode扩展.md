@@ -8,3 +8,6 @@
 # Live Server
 # Continue - open-source AI code agent
 # Markdown Preview Mermaid Support
+# Jinja2 Enhance
+# Prettier
+# HTMLHint

@@ -56,20 +56,9 @@ app.add_middleware(
 )
 
 # 注册路由
-app.get("/")(projects.root)
-app.get("/projects")(projects.list_projects)
-app.post("/projects")(projects.create_project)
-app.get("/projects/{project_id}")(projects.get_project_detail)
-app.delete("/projects/{project_id}")(projects.delete_project)
-app.post("/projects/{project_id}/delete")(projects.delete_project_post)
-app.post("/projects/{project_id}/upload")(documents.upload_file)
-app.delete("/projects/{project_id}/documents/{filename}")(documents.delete_document)
-app.post("/projects/{project_id}/start")(workflow.start_workflow)
-app.post("/projects/{project_id}/answer")(workflow.submit_answers)
-app.get("/projects/{project_id}/stream")(workflow.stream_workflow)
-app.get("/projects/{project_id}/requirements")(workflow.get_requirements)
-app.get("/projects/{project_id}/requirements/download")(workflow.download_requirements)
-app.post("/projects/{project_id}/change-request")(projects.submit_change_request)
+app.include_router(projects.router)
+app.include_router(documents.router)
+app.include_router(workflow.router)
 app.get("/health")(lambda: {"status": "ok"})
 
 # 让模板能访问 node_name_map

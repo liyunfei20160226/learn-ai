@@ -21,7 +21,7 @@ async def root(request: Request):
         state = store.load_state(project_id)
         if state is not None:
             projects.append(state)
-    return templates.TemplateResponse(request, "index.html", {
+    return templates.TemplateResponse(request, "index.html.jinja", {
         "projects": projects
     })
 
@@ -35,7 +35,7 @@ async def list_projects(request: Request):
         state = store.load_state(project_id)
         if state is not None:
             projects.append(state)
-    return templates.TemplateResponse(request, "components/project_list.html", {
+    return templates.TemplateResponse(request, "components/project_list.html.jinja", {
         "projects": projects
     }, headers={"HX-Trigger": "newProjectLoaded"})
 
@@ -108,7 +108,7 @@ async def get_project_detail(request: Request, project_id: str):
         if item["answer"] is None:
             unanswered.append(item)
 
-    return templates.TemplateResponse(request, "project_detail.html", {
+    return templates.TemplateResponse(request, "project_detail.html.jinja", {
         "state": state,
         "unanswered": unanswered,
         "node_name_map": node_name_map
@@ -125,7 +125,7 @@ async def delete_project(request: Request, project_id: str):
         state = store.load_state(pid)
         if state is not None:
             projects.append(state)
-    return templates.TemplateResponse(request, "components/project_list.html", {
+    return templates.TemplateResponse(request, "components/project_list.html.jinja", {
         "projects": projects
     })
 
@@ -143,7 +143,7 @@ async def delete_project_post(request: Request, project_id: str):
         if state is not None:
             projects.append(state)
     print(f"[DEBUG] 删除完成，剩余 {len(projects)} 个项目")
-    return templates.TemplateResponse(request, "components/project_list.html", {
+    return templates.TemplateResponse(request, "components/project_list.html.jinja", {
         "projects": projects
     })
 
@@ -199,7 +199,7 @@ async def submit_change_request(request: Request, project_id: str):
 
     # 保存成功后，直接返回进度流式页面，和点击开始分析一致
     from se_pipeline.web.workflow_manager import node_name_map
-    return templates.TemplateResponse(request, "components/progress_stream.html", {
+    return templates.TemplateResponse(request, "components/progress_stream.html.jinja", {
         "project_id": project_id,
         "current_node": "analyst",
         "node_name_map": node_name_map

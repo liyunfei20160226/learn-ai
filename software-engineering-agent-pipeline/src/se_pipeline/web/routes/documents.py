@@ -70,7 +70,7 @@ async def upload_file(request: Request, project_id: str, files: list[UploadFile]
         store.save_state(project_id, state)
 
     # 返回更新后的文档列表
-    return templates.TemplateResponse(request, "components/document_list.html", {
+    return templates.TemplateResponse(request, "components/document_list.html.jinja", {
         "state": state,
         "project_id": project_id,
         "requirements_already_completed": state.requirements_spec is not None,
@@ -101,7 +101,7 @@ async def delete_document(request: Request, project_id: str, filename: str):
         file_path.unlink()
 
     # 返回更新后的文档列表
-    return templates.TemplateResponse(request, "components/document_list.html", {
+    return templates.TemplateResponse(request, "components/document_list.html.jinja", {
         "state": state,
         "project_id": project_id,
         "requirements_already_completed": state.requirements_spec is not None,

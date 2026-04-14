@@ -17,3 +17,8 @@
 
 ### 4. **验证要求**
 - ✅ 每次宣称成功后必须提供证据，并定期反问：真的完成了？有证据么？
+
+### 5. **HTML检查**
+- ✅ 使用 Prettier 格式化HTML文件
+- ✅ 使用 HTMLHint 检查HTML文件
+- ✅ 新建或修改了项目中的html文件后，建议运行 `npx prettier --check src/se_pipeline/web/templates/` 和 `npx htmlhint src/se_pipeline/web/templates/*.html` 检查
