@@ -1,0 +1,519 @@
+#!/usr/bin/env python3
+# AutoPRD - Automatic PRD Generation Agent
+# 自动PRD生成Agent - 通过多轮自问自答完善需求，生成完整PRD
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+# 设置编码，解决Windows控制台中文显示问题
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
+
+import requests
+from dotenv import load_dotenv
+
+
+def to_kebab_case(text: str) -> str:
+    """将文本转换为kebab-case"""
+    text = re.sub(r'[^a-zA-Z0-9\s]', '', text).lower()
+    words = text.split()[:5]
+    result = '-'.join(words).strip('-')
+    # 如果结果为空，返回默认名称
+    return result if result else 'auto-generated'
+
+
+def call_openai(prompt: str) -> str:
+    """调用 OpenAI API (via LangChain)"""
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import HumanMessage
+    import requests
+
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        print('错误: 使用 openai 工具时必须设置 OPENAI_API_KEY', file=sys.stderr)
+        print('提示: 可以在项目根目录创建 .env 文件添加 OPENAI_API_KEY=your-key', file=sys.stderr)
+        sys.exit(1)
+
+    model = os.getenv('OPENAI_MODEL', 'gpt-4o')
+    base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1').rstrip('/')
+    timeout = int(os.getenv('OPENAI_TIMEOUT', '300'))
+    max_retries = int(os.getenv('OPENAI_MAX_RETRIES', '3'))
+
+    llm = ChatOpenAI(
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
+        temperature=0.7,
+        timeout=timeout,
+        max_retries=max_retries,
+    )
+
+    try:
+        response = llm.invoke([HumanMessage(content=prompt)])
+        return response.content.strip()
+    except Exception as e:
+        print('\n❌ OpenAI API 调用失败', file=sys.stderr)
+        print(f'错误信息: {str(e)}', file=sys.stderr)
+        print('\n可能原因:', file=sys.stderr)
+        print('  1. 网络连接问题或API地址不正确', file=sys.stderr)
+        print('  2. API Key 无效或过期', file=sys.stderr)
+        print('  3. API 服务暂时不可用（已重试后仍然失败）', file=sys.stderr)
+        print('  4. 超过当前API Key的配额限制', file=sys.stderr)
+        print('\n请检查你的 .env 配置后重试。', file=sys.stderr)
+        sys.exit(1)
+
+
+def call_claude_or_amp(prompt: str, tool: str) -> str:
+    """调用本地 claude 或 amp 命令行工具"""
+    if tool == 'claude':
+        cmd = ['claude', '--dangerously-skip-permissions', '--print']
+    else:  # amp
+        cmd = ['amp', '--dangerously-allow-all']
+
+    try:
+        result = subprocess.run(
+            cmd,
+            input=prompt.encode('utf-8'),
+            capture_output=True
+        )
+        result.check_returncode()
+        return result.stdout.decode('utf-8').strip()
+    except Exception as e:
+        print(f'\n❌ {tool} 调用失败', file=sys.stderr)
+        print(f'错误信息: {str(e)}', file=sys.stderr)
+        print(f'\n可能原因:', file=sys.stderr)
+        print(f'  1. {tool} 命令行工具未安装或不在 PATH 中', file=sys.stderr)
+        print(f'  2. 权限不足', file=sys.stderr)
+        print(f'\n请检查你的 {tool} 安装后重试。', file=sys.stderr)
+        sys.exit(1)
+
+
+def call_ai(prompt: str, tool: str) -> str:
+    """根据工具选择调用方式"""
+    if tool == 'openai':
+        return call_openai(prompt)
+    else:
+        return call_claude_or_amp(prompt, tool)
+
+
+def parse_analysis_output(analysis_output: str) -> list[dict[str, str]]:
+    """解析AI分析输出，提取问题和AI回答列表"""
+    questions = []
+    # 按 --- 分隔
+    blocks = re.split(r'^\s*-{3,}\s*$', analysis_output, flags=re.MULTILINE)
+    # 过滤空块
+    blocks = [b.strip() for b in blocks if b.strip()]
+
+    question_pattern = re.compile(r'问题\s*：\s*(.+)', re.UNICODE)
+    answer_pattern = re.compile(r'回答\s*：\s*(.+)', re.UNICODE | re.DOTALL)
+
+    for block in blocks:
+        q_match = question_pattern.search(block)
+        a_match = answer_pattern.search(block)
+        if q_match and a_match:
+            questions.append({
+                'question': q_match.group(1).strip(),
+                'ai_answer': a_match.group(1).strip()
+            })
+
+    return questions
+
+
+def collect_user_answers(questions: list[dict[str, str]]) -> str:
+    """交互式收集用户回答，重新格式化为原输出格式"""
+    if not questions:
+        return ''
+
+    result = []
+    total = len(questions)
+
+    for i, q in enumerate(questions, 1):
+        print()
+        print('=' * 60)
+        print(f'问题 {i} / {total}')
+        print('=' * 60)
+        print(f'\n{q["question"]}\n')
+        print('AI建议回答：')
+        print(f'  {q["ai_answer"]}\n')
+        print('请选择：')
+        print('  [1] 使用AI建议回答')
+        print('  [2] 我自己输入回答')
+        print()
+
+        while True:
+            choice = input('你的选择 (1/2): ').strip()
+            if choice in ['1', '2']:
+                break
+            print('请输入 1 或 2')
+
+        if choice == '1':
+            final_answer = q['ai_answer']
+        else:
+            print('\n请输入你的回答（输入完后按 Ctrl+D 或回车两次结束，或直接回车使用AI回答）：')
+            lines = []
+            try:
+                while True:
+                    line = input()
+                    if not line and lines and lines[-1] == '':
+                        break
+                    lines.append(line)
+            except EOFError:
+                pass
+            user_input = '\n'.join(lines).strip()
+            final_answer = user_input if user_input else q['ai_answer']
+
+        result.append({
+            'question': q['question'],
+            'answer': final_answer
+        })
+        print('=' * 60)
+        print()
+
+    # 重新格式化为原格式
+    output = []
+    for item in result:
+        output.append('---')
+        output.append(f'问题：{item["question"]}')
+        output.append(f'回答：{item["answer"]}')
+        output.append('---')
+
+    return '\n'.join(output)
+
+
+def main():
+    # 加载 .env 文件
+    if Path('.env').exists():
+        print('从 .env 文件加载配置...')
+        load_dotenv()
+
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(
+        description='AutoPRD - Automatic PRD Generation Agent'
+    )
+    parser.add_argument(
+        'requirement',
+        help='需求描述（一句话）'
+    )
+    # 从环境变量读取默认最大迭代次数
+    default_max_iterations = int(os.getenv('MAX_ITERATIONS', '10'))
+    parser.add_argument(
+        '--max-iterations',
+        type=int,
+        default=default_max_iterations,
+        help=f'最大迭代次数 (默认: {default_max_iterations}，可通过 .env 中 MAX_ITERATIONS 配置)'
+    )
+    parser.add_argument(
+        '--output-dir',
+        help='输出目录 (默认: 从需求自动生成)'
+    )
+    parser.add_argument(
+        '--tool',
+        choices=['claude', 'amp', 'openai'],
+        default='claude',
+        help='AI工具 (默认: claude)'
+    )
+    parser.add_argument(
+        '--mode',
+        choices=['auto', 'interactive'],
+        default='auto',
+        help='运行模式: auto=全自动(默认), interactive=交互式问答'
+    )
+    args = parser.parse_args()
+
+    # 如果是 openai，提前检查 API key
+    if args.tool == 'openai' and not os.getenv('OPENAI_API_KEY'):
+        print('错误: 使用 openai 工具时必须设置 OPENAI_API_KEY', file=sys.stderr)
+        print('提示: 可以在项目根目录创建 .env 文件添加 OPENAI_API_KEY=your-key', file=sys.stderr)
+        sys.exit(1)
+
+    # 初始化路径
+    script_dir = Path(__file__).parent
+    prompts_dir = script_dir / 'prompts'
+    logs_dir = script_dir / 'logs'
+
+    # 生成输出目录
+    if not args.output_dir:
+        feature_name = to_kebab_case(args.requirement)
+        output_dir = script_dir / 'output' / feature_name
+    else:
+        output_dir = Path(args.output_dir)
+
+    # 创建目录
+    output_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    # 日志文件
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    log_file = logs_dir / f'autoprd-{timestamp}.log'
+
+    # 打印启动信息
+    print('================================================')
+    print('AutoPRD - Automatic PRD Generation Agent')
+    print(f'需求: {args.requirement}')
+    print(f'最大迭代次数: {args.max_iterations}')
+    print(f'AI工具: {args.tool}')
+    print(f'运行模式: {args.mode}')
+    if args.tool == 'openai':
+        model = os.getenv('OPENAI_MODEL', 'gpt-4o')
+        base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+        print(f'OpenAI模型: {model}')
+        print(f'OpenAI API地址: {base_url}')
+    print(f'输出目录: {output_dir}')
+    print(f'日志文件: {log_file}')
+    print('================================================')
+    print()
+
+    # 写入日志开头
+    with open(log_file, 'w', encoding='utf-8') as f:
+        f.write(f'AutoPRD started at {timestamp}\n')
+        f.write(f'Requirement: {args.requirement}\n')
+        f.write(f'Max iterations: {args.max_iterations}\n')
+        f.write(f'Tool: {args.tool}\n')
+        f.write('\n')
+
+    prd_file = output_dir / 'prd.md'
+    history_file = output_dir / 'iteration_history.md'  # 迭代问答历史记录
+    current_iteration = 1
+
+    # 断点续传检测
+    if prd_file.exists():
+        print('检测到已有PRD文件，启用断点续传...')
+        print('从现有PRD继续迭代...\n')
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write('Resuming from existing PRD\n\n')
+    else:
+        print('首次运行，生成初始PRD...\n')
+        # 读取系统提示
+        with open(prompts_dir / 'autoprd-system.md', 'r', encoding='utf-8') as f:
+            system_prompt = f.read()
+
+        # 构建初始提示
+        initial_prompt = f"""{system_prompt}
+
+# 用户原始需求
+
+{args.requirement}
+
+请根据上述需求生成一份初始的完整PRD。遵循标准PRD结构，使用中文编写。
+
+⚠️  **重要：直接输出PRD内容即可！不要输出思考过程，不要输出自问自答的问答历史，不要写"第一轮分析"这类内容。只需要纯PRD。**"""
+
+        print('生成初始PRD...')
+        initial_output = call_ai(initial_prompt, args.tool)
+
+        # 保存初始PRD
+        with open(prd_file, 'w', encoding='utf-8') as f:
+            f.write(initial_output)
+        # 初始化迭代历史，写入初始PRD
+        with open(history_file, 'w', encoding='utf-8') as f:
+            f.write('# 迭代问答历史\n\n')
+            f.write('## 初始PRD\n\n')
+            f.write(initial_output)
+            f.write('\n\n---\n\n')
+        print(f'初始PRD已保存到 {prd_file}\n')
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write('--- Initial PRD generated ---\n')
+            f.write(initial_output)
+            f.write('\n\n')
+
+    # 开始迭代循环
+    while current_iteration <= args.max_iterations:
+        print('------------------------------------------------')
+        print(f'迭代 {current_iteration} / {args.max_iterations}')
+        print('------------------------------------------------')
+        print()
+
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write('------------------------------------------------\n')
+            f.write(f'Iteration {current_iteration} / {args.max_iterations}\n')
+            f.write('------------------------------------------------\n\n')
+
+        # 读取当前PRD
+        with open(prd_file, 'r', encoding='utf-8') as f:
+            current_prd = f.read()
+
+        # 读取分析提示模板
+        with open(prompts_dir / 'autoprd-analysis.md', 'r', encoding='utf-8') as f:
+            analysis_template = f.read()
+
+        # 替换模板变量
+        analysis_prompt = analysis_template\
+            .replace('{{USER_REQUIREMENT}}', args.requirement)\
+            .replace('{{CURRENT_PRD}}', current_prd)
+
+        # 调用AI进行分析
+        print('正在分析PRD完整性...')
+        analysis_output = call_ai(analysis_prompt, args.tool)
+
+        # 检查是否完成
+        if '<promise>COMPLETE</promise>' in analysis_output:
+            print()
+            print('✅ AI判定PRD已完整，结束迭代')
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write('\n✅ PRD marked as complete, stopping.\n')
+            with open(history_file, 'a', encoding='utf-8') as f:
+                f.write('✅ AI判定PRD已完整，迭代结束\n')
+            break
+
+        # 交互式模式：让用户选择回答
+        if args.mode == 'interactive':
+            questions = parse_analysis_output(analysis_output)
+            if questions:
+                print()
+                print(f'检测到 {len(questions)} 个问题，请回答：')
+                analysis_output = collect_user_answers(questions)
+            else:
+                print()
+                print('⚠️  无法解析问题格式，使用AI原始输出继续')
+
+        # 保存分析结果到日志和历史文件（现在才保存，已经处理完用户回答了）
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f'--- Iteration {current_iteration} 分析结果 ---\n')
+            f.write(analysis_output)
+            f.write('\n\n')
+        with open(history_file, 'a', encoding='utf-8') as f:
+            f.write(f'## 迭代 {current_iteration} - 分析问答\n\n')
+            f.write(analysis_output)
+            f.write('\n\n---\n\n')
+
+        # 如果有问题需要回答，进行整合
+        print('获取了新的问题和回答，正在整合到PRD...')
+
+        # 读取整合提示模板
+        with open(prompts_dir / 'autoprd-integration.md', 'r', encoding='utf-8') as f:
+            integration_template = f.read()
+
+        # 替换模板变量
+        integration_prompt = integration_template\
+            .replace('{{CURRENT_PRD}}', current_prd)\
+            .replace('{{QUESTIONS_ANSWERS}}', analysis_output)
+
+        # 调用AI整合
+        integration_output = call_ai(integration_prompt, args.tool)
+
+        # 保存整合后的新PRD
+        with open(prd_file, 'w', encoding='utf-8') as f:
+            f.write(integration_output)
+        # 将更新后的PRD追加到历史
+        with open(history_file, 'a', encoding='utf-8') as f:
+            f.write(f'## 迭代 {current_iteration} - 更新后PRD\n\n')
+            f.write(integration_output)
+            f.write('\n\n---\n\n')
+        print('PRD已更新\n')
+
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write('--- Updated PRD ---\n')
+            f.write(integration_output)
+            f.write('\n\n')
+
+        current_iteration += 1
+
+        # 检查是否达到最大迭代次数
+        if current_iteration > args.max_iterations:
+            print()
+            print(f'⚠️  达到最大迭代次数 {args.max_iterations}，停止迭代')
+            print('已输出当前所有结果，可增加--max-iterations重新运行断点续传')
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f'\n⚠️  Reached max iterations {args.max_iterations}, stopping.\n')
+            with open(history_file, 'a', encoding='utf-8') as f:
+                f.write(f'⚠️  达到最大迭代次数 {args.max_iterations}，停止迭代\n')
+            break
+
+        time.sleep(2)
+
+    print()
+    print('================================================')
+    print('迭代完成，开始转换为Ralph prd.json格式...')
+    print('================================================')
+    print()
+
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('\n================================================\n')
+        f.write('Iteration complete, converting to Ralph prd.json...\n')
+        f.write('================================================\n\n')
+
+    # 转换为Ralph prd.json
+    with open(prd_file, 'r', encoding='utf-8') as f:
+        final_prd = f.read()
+
+    # 提取项目名称（从第一行标题）
+    project_name = args.requirement
+    for line in final_prd.splitlines():
+        if line.startswith('#'):
+            project_name = re.sub(r'^#\s*', '', line).strip()
+            break
+
+    # 生成branchName
+    branch_name = to_kebab_case(project_name)
+    branch_name = f'autoprd/{branch_name}'[:50]
+
+    # 提取描述（第一段非空行）
+    project_description = args.requirement
+    for line in final_prd.splitlines():
+        line = line.strip()
+        if line and not line.startswith('#'):
+            project_description = line
+            break
+
+    # 读取转换提示模板
+    with open(prompts_dir / 'autoprd-conversion.md', 'r', encoding='utf-8') as f:
+        conversion_template = f.read()
+
+    # 替换模板变量
+    conversion_prompt = conversion_template\
+        .replace('{project_name}', project_name)\
+        .replace('{branch_name}', branch_name)\
+        .replace('{project_description}', project_description)\
+        .replace('{final_prd}', final_prd)
+
+    # 调用AI生成prd.json
+    print('正在生成prd.json...')
+    json_output = call_ai(conversion_prompt, args.tool)
+
+    # 清理JSON输出（提取第一个{到最后一个}）
+    match = re.search(r'(\{.*\})', json_output, re.DOTALL)
+    if match:
+        clean_json = match.group(1)
+    else:
+        clean_json = json_output
+
+    # 保存prd.json
+    json_file = output_dir / 'prd.json'
+    with open(json_file, 'w', encoding='utf-8') as f:
+        f.write(clean_json)
+
+    print(f'prd.json 已保存到 {json_file}')
+    print()
+
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write(f'prd.json saved to {json_file}\n')
+        f.write('\n')
+
+    # 完成
+    print('================================================')
+    print('✅ AutoPRD 完成！')
+    print('================================================')
+    print()
+    print('输出文件：')
+    print(f'  PRD: {prd_file}')
+    print(f'  prd.json: {json_file}')
+    print()
+    print('接下来可以将prd.json复制到Ralph项目目录进行自动化开发：')
+    print(f'  cp {json_file} /path/to/ralph/')
+    print(f'  cd /path/to/ralph && ./ralph.sh')
+    print()
+
+
+if __name__ == '__main__':
+    main()

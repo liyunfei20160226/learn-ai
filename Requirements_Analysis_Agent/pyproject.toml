@@ -1,0 +1,17 @@
+[project]
+name = "autoprd"
+version = "0.1.0"
+description = "AutoPRD - 全自动PRD生成Agent"
+authors = [
+  { name = "AutoPRD", email = "autoprd@example.com" }
+]
+dependencies = [
+  "requests>=2.31.0",
+  "python-dotenv>=1.0.0",
+  "langchain-core>=0.1.0",
+  "langchain-openai>=0.1.0",
+]
+requires-python = ">=3.8.1"
+
+[tool.uv]
+dev-dependencies = []
