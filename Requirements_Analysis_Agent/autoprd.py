@@ -286,7 +286,15 @@ def build_rag_vectorstore(documents):
     if not documents:
         return None
 
-    print(f'\n开始构建RAG索引，共 {len(documents)} 个文档...')
+    # 统计有多少个不同的源文件
+    source_files = set()
+    for doc in documents:
+        source = doc.metadata.get('source', '')
+        if source:
+            source_files.add(source)
+    num_files = len(source_files)
+
+    print(f'\n开始构建RAG索引：{num_files} 个文件，共 {len(documents)} 个原始块...')
 
     # 切分文本
     text_splitter = RecursiveCharacterTextSplitter(
@@ -298,7 +306,20 @@ def build_rag_vectorstore(documents):
     print(f'切分为 {len(chunks)} 个文本块')
 
     # 生成embedding，构建FAISS索引
-    embeddings = OpenAIEmbeddings()
+    embedding_model = os.getenv('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small')
+    base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1').rstrip('/')
+    api_key = os.getenv('OPENAI_API_KEY')
+    timeout = int(os.getenv('OPENAI_TIMEOUT', '300'))
+    max_retries = int(os.getenv('OPENAI_MAX_RETRIES', '3'))
+
+    print(f'使用Embedding模型: {embedding_model}')
+    embeddings = OpenAIEmbeddings(
+        model=embedding_model,
+        openai_api_key=api_key,
+        openai_api_base=base_url,
+        request_timeout=timeout,
+        max_retries=max_retries
+    )
     vectorstore = FAISS.from_documents(chunks, embeddings)
 
     print(f'✅ RAG索引构建完成')
@@ -694,5 +715,75 @@ def main():
     print()
 
 
+def handle_exception(e: Exception, log_file: Path) -> None:
+    """统一异常处理，输出友好信息并保存完整traceback到日志"""
+    import traceback
+
+    # 完整traceback写入日志文件
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('\n' + '='*60 + '\n')
+        f.write('ERROR occurred\n')
+        f.write('='*60 + '\n')
+        tb = traceback.format_exc()
+        f.write(tb)
+        f.write('\n')
+
+    # 根据异常类型给出友好提示
+    print('\n❌ 程序执行出错：')
+
+    # 网络连接错误
+    if 'openai' in str(type(e).__module__) and 'ConnectError' in str(type(e).__name__):
+        print('网络连接失败，请检查：')
+        print('  1. 网络是否连通')
+        print('  2. OPENAI_BASE_URL 配置是否正确')
+        print('  3. DNS解析是否正常')
+    elif 'openai.APIConnectionError' in str(type(e)):
+        print('OpenAI API连接失败，请检查：')
+        print('  1. 网络是否连通')
+        print('  2. OPENAI_BASE_URL 配置是否正确')
+    elif 'openai.BadRequestError' in str(type(e)) or 'openai.APIStatusError' in str(type(e)):
+        msg = str(e)
+        if 'Model does not exist' in msg or 'model' in msg.lower() and ('exist' in msg.lower() or 'found' in msg.lower()):
+            print('模型不存在，请检查：')
+            print('  1. OPENAI_MODEL 配置是否正确')
+            print('  2. OPENAI_EMBEDDING_MODEL 配置是否正确')
+        else:
+            print('API请求错误，请检查：')
+            print('  1. API Key是否正确')
+            print('  2. 模型是否支持当前功能')
+    elif 'openai.AuthenticationError' in str(type(e)):
+        print('API Key认证失败，请检查：')
+        print('  1. OPENAI_API_KEY 配置是否正确')
+    elif 'openai.RateLimitError' in str(type(e)):
+        print('触发API速率限制或额度不足，请检查：')
+        print('  1. API账号剩余额度')
+        print('  2. 请求频率是否过高')
+    elif isinstance(e, KeyboardInterrupt):
+        print('用户中断了程序执行')
+        exit(0)
+    else:
+        # 默认提示
+        print(f'错误类型: {type(e).__name__}')
+        print(f'错误信息: {str(e)}')
+
+    print()
+    print(f'完整错误日志已保存到: {log_file}')
+
+
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        # 尝试获取log_file路径，如果main还没创建就输出到stderr
+        try:
+            from datetime import datetime
+            timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+            logs_dir = Path('logs')
+            logs_dir.mkdir(exist_ok=True)
+            log_file = logs_dir / f'autoprd-error-{timestamp}.log'
+            handle_exception(e, log_file)
+        except:
+            # 如果连写日志都失败，直接print traceback
+            import traceback
+            traceback.print_exc()
+        exit(1)

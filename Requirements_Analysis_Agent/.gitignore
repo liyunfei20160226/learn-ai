@@ -1,0 +1,16 @@
+# Output directory - generated PRDs go here
+output/
+
+# Test documents - may contain large or sensitive files
+test_doc/
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+
+# Logs
+logs/
+*.log
+
+# Env
+.env

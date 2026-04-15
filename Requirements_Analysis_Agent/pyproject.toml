@@ -17,6 +17,11 @@ dependencies = [
   "openpyxl>=3.1.0",
   "networkx>=3.0",
   "pandas>=2.0.0",
+  "msoffcrypto-tool>=5.4.2",
+  "langchain>=0.2.17",
+  "fastapi>=0.124.4",
+  "uvicorn>=0.33.0",
+  "python-multipart>=0.0.20",
 ]
 requires-python = ">=3.8.1"
 
