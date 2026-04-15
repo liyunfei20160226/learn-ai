@@ -191,6 +191,140 @@ def collect_user_answers(questions: list[dict[str, str]]) -> str:
     return '\n'.join(output)
 
 
+def should_skip_path(path: str) -> bool:
+    """判断是否应该跳过这个路径"""
+    skip_dirs = ['.git', 'node_modules', '__pycache__', '.venv', 'venv', '.idea', '.vscode', 'build', 'dist']
+    skip_exts = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.pdf', '.zip', '.tar', '.gz', '.rar', '.exe', '.bin', '.pyc']
+    p = Path(path)
+    # 跳过隐藏目录/文件
+    if p.name.startswith('.') and p.name != '.env':
+        return True
+    # 跳过缓存目录
+    if p.name in skip_dirs:
+        return True
+    # 跳过二进制/图片
+    if p.suffix.lower() in skip_exts:
+        return True
+    return False
+
+
+def load_background_documents(background_path: str):
+    """加载背景资料，支持单个文件或目录"""
+    from langchain_core.documents import Document
+    from langchain_community.document_loaders import (
+        TextLoader, UnstructuredPDFLoader, UnstructuredWordDocumentLoader,
+        UnstructuredPowerPointLoader, UnstructuredExcelLoader
+    )
+
+    documents = []
+    path = Path(background_path)
+
+    if path.is_file():
+        # 单个文件
+        if should_skip_path(str(path)):
+            print(f'⚠️ 跳过不支持的文件类型: {path}')
+            return []
+        try:
+            ext = path.suffix.lower()
+            if ext in ['.pdf']:
+                loader = UnstructuredPDFLoader(str(path))
+            elif ext in ['.docx', '.doc']:
+                loader = UnstructuredWordDocumentLoader(str(path))
+            elif ext in ['.pptx', '.ppt']:
+                loader = UnstructuredPowerPointLoader(str(path))
+            elif ext in ['.xlsx', '.xls']:
+                loader = UnstructuredExcelLoader(str(path), mode="elements")
+            else:
+                # 默认当作文本文件
+                loader = TextLoader(str(path), encoding='utf-8')
+            docs = loader.load()
+            for doc in docs:
+                doc.metadata['source'] = str(path)
+            documents.extend(docs)
+            print(f'✓ 加载文件: {path} ({len(docs)} 块)')
+        except Exception as e:
+            print(f'⚠️ 加载文件失败 {path}: {str(e)}，跳过')
+            return []
+    elif path.is_dir():
+        # 目录，递归遍历
+        for item in path.rglob('*'):
+            if item.is_file() and not should_skip_path(str(item)):
+                rel_path = item.relative_to(path)
+                try:
+                    ext = item.suffix.lower()
+                    if ext in ['.pdf']:
+                        loader = UnstructuredPDFLoader(str(item))
+                    elif ext in ['.docx', '.doc']:
+                        loader = UnstructuredWordDocumentLoader(str(item))
+                    elif ext in ['.pptx', '.ppt']:
+                        loader = UnstructuredPowerPointLoader(str(item))
+                    elif ext in ['.xlsx', '.xls']:
+                        loader = UnstructuredExcelLoader(str(item), mode="elements")
+                    else:
+                        loader = TextLoader(str(item), encoding='utf-8')
+                    docs = loader.load()
+                    for doc in docs:
+                        doc.metadata['source'] = str(rel_path)
+                    documents.extend(docs)
+                    print(f'✓ 加载文件: {rel_path} ({len(docs)} 块)')
+                except Exception as e:
+                    print(f'⚠️ 加载文件失败 {rel_path}: {str(e)}，跳过')
+                    continue
+    else:
+        print(f'错误: 路径不存在: {background_path}', file=sys.stderr)
+        sys.exit(1)
+
+    return documents
+
+
+def build_rag_vectorstore(documents):
+    """构建RAG向量库"""
+    from langchain_openai import OpenAIEmbeddings
+    from langchain_community.vectorstores import FAISS
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+    if not documents:
+        return None
+
+    print(f'\n开始构建RAG索引，共 {len(documents)} 个文档...')
+
+    # 切分文本
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+        add_start_index=True
+    )
+    chunks = text_splitter.split_documents(documents)
+    print(f'切分为 {len(chunks)} 个文本块')
+
+    # 生成embedding，构建FAISS索引
+    embeddings = OpenAIEmbeddings()
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+
+    print(f'✅ RAG索引构建完成')
+    return vectorstore
+
+
+def add_rag_background(prompt: str, query: str, vectorstore, topk: int) -> str:
+    """添加检索到的背景资料到prompt"""
+    if vectorstore is None:
+        return prompt
+
+    retriever = vectorstore.as_retriever(search_kwargs={"k": topk})
+    relevant_docs = retriever.invoke(query)
+
+    if not relevant_docs:
+        return prompt
+
+    prompt += '\n\n## 参考背景资料\n\n以下是现有项目相关资料，请参考这些内容回答问题。如果发现背景资料和当前问题相关，请优先遵循背景资料中的约定。\n\n'
+    for i, doc in enumerate(relevant_docs, 1):
+        source = doc.metadata.get('source', f'片段{i}')
+        content = doc.page_content
+        prompt += f'--- [{source}]\n{content}\n\n'
+
+    return prompt
+
+
 def main():
     # 加载 .env 文件
     if Path('.env').exists():
@@ -229,6 +363,22 @@ def main():
         default='auto',
         help='运行模式: auto=全自动(默认), interactive=交互式问答'
     )
+    parser.add_argument(
+        '--background',
+        type=str,
+        help='单个背景资料文件，AI生成PRD时会参考这些内容'
+    )
+    parser.add_argument(
+        '--background-dir',
+        type=str,
+        help='背景资料目录，递归遍历所有文件，AI生成PRD时会参考相关内容'
+    )
+    parser.add_argument(
+        '--rag-topk',
+        type=int,
+        default=5,
+        help='RAG每次检索返回多少个最相关片段 (默认: 5)'
+    )
     args = parser.parse_args()
 
     # 如果是 openai，提前检查 API key
@@ -253,6 +403,20 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
+    # 初始化RAG（如果指定了背景资料）
+    vectorstore = None
+    if args.background or args.background_dir:
+        print('\n=== 加载背景资料 ===')
+        if args.background:
+            documents = load_background_documents(args.background)
+        else:
+            documents = load_background_documents(args.background_dir)
+        if documents:
+            vectorstore = build_rag_vectorstore(documents)
+        else:
+            print('⚠️ 没有加载到有效文档，不使用背景资料')
+        print()
+
     # 日志文件
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     log_file = logs_dir / f'autoprd-{timestamp}.log'
@@ -269,6 +433,12 @@ def main():
         base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
         print(f'OpenAI模型: {model}')
         print(f'OpenAI API地址: {base_url}')
+    if args.background:
+        print(f'背景文件: {args.background}')
+    if args.background_dir:
+        print(f'背景目录: {args.background_dir}')
+    if vectorstore:
+        print(f'RAG检索片段数: {args.rag_topk}')
     print(f'输出目录: {output_dir}')
     print(f'日志文件: {log_file}')
     print('================================================')
@@ -308,6 +478,10 @@ def main():
 请根据上述需求生成一份初始的完整PRD。遵循标准PRD结构，使用中文编写。
 
 ⚠️  **重要：直接输出PRD内容即可！不要输出思考过程，不要输出自问自答的问答历史，不要写"第一轮分析"这类内容。只需要纯PRD。**"""
+
+        # 添加RAG背景资料
+        if vectorstore:
+            initial_prompt = add_rag_background(initial_prompt, args.requirement, vectorstore, args.rag_topk)
 
         print('生成初始PRD...')
         initial_output = call_ai(initial_prompt, args.tool)
@@ -351,6 +525,11 @@ def main():
         analysis_prompt = analysis_template\
             .replace('{{USER_REQUIREMENT}}', args.requirement)\
             .replace('{{CURRENT_PRD}}', current_prd)
+
+        # 添加RAG背景资料
+        if vectorstore:
+            # 用当前prompt作为查询检索相关背景
+            analysis_prompt = add_rag_background(analysis_prompt, analysis_prompt, vectorstore, args.rag_topk)
 
         # 调用AI进行分析
         print('正在分析PRD完整性...')

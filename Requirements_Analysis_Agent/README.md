@@ -67,6 +67,17 @@ uv run python autoprd.py "我的新项目" --tool openai --output-dir output/my-
 # 交互式模式 + 更多迭代次数
 uv run python autoprd.py "企业内部OA系统" --tool openai --mode interactive --max-iterations 20
 
+# ==== 使用背景资料 ====
+
+# 单个背景文件
+uv run python autoprd.py "基于现有框架重构官网" --tool openai --background ./existing-product-spec.md
+
+# 整个目录作为背景资料（递归遍历所有文件）
+uv run python autoprd.py "在现有项目基础上新增用户管理模块" --tool openai --background-dir ./existing-project
+
+# 自定义每次检索返回多少片段
+uv run python autoprd.py "需求分析" --tool openai --background-dir ./docs --rag-topk 10
+
 # ==== 断点续传 ====
 
 # 接着上次结果继续，增加迭代次数
@@ -82,10 +93,14 @@ uv run python autoprd.py "一个博客系统" --tool openai
 
 | 选项 | 说明 | 默认值 |
 |------|------|--------|
+| **`requirement`** | 需求描述（一句话，必填） | - |
 | `--max-iterations N` | 最大迭代次数 | 10（可通过 `.env` 中 `MAX_ITERATIONS` 配置默认值） |
 | `--output-dir PATH` | 输出目录 | `output/[功能名称-kebabCase]` |
 | `--tool claude\|amp\|openai` | 使用的AI工具：<br>- `claude`/`amp`: 使用本地命令行工具<br>- `openai`: 直接调用OpenAI兼容API | claude |
 | `--mode auto\|interactive` | 运行模式：<br>- `auto`: 全自动，AI自动回答所有问题<br>- `interactive`: 交互式，你可以选择每个问题是用AI回答还是自己回答 | auto |
+| `--background FILE` | 单个背景资料文件，AI生成PRD时会参考内容 | - |
+| `--background-dir DIR` | 背景资料目录，递归遍历所有文件，AI生成PRD时会参考相关内容 | - |
+| `--rag-topk N` | RAG每次检索返回多少个最相关片段 | 5 |
 
 ## 输出结构
 
@@ -207,11 +222,19 @@ export MAX_ITERATIONS=10
 
 ## 依赖
 
-- Python >= 3.8
+- Python >= 3.8.1
 - uv 包管理器
-- 依赖会自动安装：`requests`, `python-dotenv`, `langchain-core`, `langchain-openai`
+- 依赖会自动安装：
+  `requests`, `python-dotenv`,
+  `langchain-core`, `langchain-openai`, `langchain-community`,
+  `faiss-cpu`, `unstructured`, `pypdf`, `openpyxl`
 - 使用 `claude`/`amp` 工具：需要 Claude Code 或 Amp 命令行工具可用
 - 使用 `openai` 工具：只需要配置 `OPENAI_API_KEY`
+
+## TODO
+
+- [ ] 图片内容解析（当前自动跳过图片，无法提取文字）
+- [ ] Excel/Word/PDF 文档中嵌入的图片无法提取文字
 
 ## 许可证
 
