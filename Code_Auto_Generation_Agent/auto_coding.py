@@ -122,7 +122,7 @@ def main():
         dry_run=args.dry_run
     )
 
-    logger.info(f"Starting auto coding with AI backend: {config.ai_backend}")
+    logger.info(f"Starting auto coding with AI tool: {config.ai_backend}")
     summary = engine.run()
 
     if not summary['success']:

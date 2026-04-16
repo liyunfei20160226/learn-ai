@@ -118,14 +118,14 @@ class GenerationEngine:
                 base_url=self.config.openai_base_url
             )
         else:
-            logger.error(f"Unknown AI backend: {self.config.ai_backend}. Expected 'claude' or 'openai'")
+            logger.error(f"Unknown AI tool: {self.config.ai_backend}. Expected 'claude' or 'openai'")
             return False
 
         if not self.ai_backend.is_available():
-            logger.error(f"AI backend {self.config.ai_backend} is not available")
+            logger.error(f"AI tool {self.config.ai_backend} is not available")
             return False
 
-        logger.info(f"AI backend initialized: {self.config.ai_backend}")
+        logger.info(f"AI tool initialized: {self.config.ai_backend}")
         return True
 
     def run(self) -> dict:
