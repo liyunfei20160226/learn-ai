@@ -24,6 +24,7 @@ def detect_project_language(working_dir: str) -> Optional[str]:
        os.path.exists(os.path.join(working_dir, 'requirements.txt')):
         return 'python'
     elif os.path.exists(os.path.join(working_dir, 'package.json')):
+        # JavaScript/TypeScript 包含所有前端框架: React/Vue/Angular/Vite/Next.js etc.
         return 'javascript'
     elif os.path.exists(os.path.join(working_dir, 'go.mod')):
         return 'go'
@@ -36,41 +37,58 @@ def detect_project_language(working_dir: str) -> Optional[str]:
     return None
 
 
-def get_default_commands(language: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+def detect_package_manager(working_dir: str) -> str:
+    """自动探测包管理器（for JavaScript/TypeScript projects）"""
+    if os.path.exists(os.path.join(working_dir, 'pnpm-lock.yaml')):
+        return 'pnpm'
+    elif os.path.exists(os.path.join(working_dir, 'yarn.lock')):
+        return 'yarn'
+    elif os.path.exists(os.path.join(working_dir, 'package-lock.json')):
+        return 'npm'
+    return 'npm'  # 默认npm
+
+
+def get_default_commands(language: str, working_dir: str = '.') -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """根据语言获取默认的质量检查命令"""
-    defaults = {
-        'python': (
+    if language == 'python':
+        return (
             'ruff check .',
             'mypy .',
             'pytest'
-        ),
-        'javascript': (
-            'npm run lint',
+        )
+    elif language == 'javascript':
+        # JavaScript/TypeScript 包括所有前端框架: React/Vue/Angular/Next.js/Vite etc.
+        pm = detect_package_manager(working_dir)
+        return (
+            f'{pm} run lint',
             None,
-            'npm test'
-        ),
-        'go': (
+            f'{pm} test'
+        )
+    elif language == 'go':
+        return (
             'go vet ./...',
             None,
             'go test ./...'
-        ),
-        'java': (
+        )
+    elif language == 'java':
+        return (
             'mvn compile',
             None,
             'mvn test'
-        ),
-        'rust': (
+        )
+    elif language == 'rust':
+        return (
             'cargo check',
             None,
             'cargo test'
-        ),
-        'cpp': (
+        )
+    elif language == 'cpp':
+        return (
             None,
             None,
             None
         )
-    }
-    return defaults.get(language, (None, None, None))
+    return (None, None, None)
 
 
 class QualityChecker:
@@ -88,7 +106,7 @@ class QualityChecker:
             language = detect_project_language(working_dir or '.')
             if language:
                 logger.info(f"Auto-detected project language: {language}")
-                quality_check_cmd, type_check_cmd, test_cmd = get_default_commands(language)
+                quality_check_cmd, type_check_cmd, test_cmd = get_default_commands(language, working_dir or '.')
 
         self.quality_check_cmd = quality_check_cmd
         self.type_check_cmd = type_check_cmd

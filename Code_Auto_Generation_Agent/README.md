@@ -11,7 +11,12 @@
 - 全自动循环开发，无需人工干预
 - 支持断点续传，随时停止恢复
 - 自动质量检查（lint、类型检查、测试）
-- **自动探测项目语言**，根据语言设置正确的质量检查命令（支持Python/JavaScript/Go/Java/Rust）
+- **自动探测项目语言**，根据语言设置正确的质量检查命令
+  - Python: `ruff check .` + `mypy .` + `pytest`
+  - **前端项目** (React/Vue/Angular/Next.js/Vite**: 自动探测包管理器 (npm/pnpm/yarn) → `pm run lint` + `pm test`
+  - Go: `go vet ./...` + `go test ./...`
+  - Java: `mvn compile` + `mvn test`
+  - Rust: `cargo check` + `cargo test`
 - 自动修复错误
 - Git自动提交
 - 模块化 architecture，易于扩展
