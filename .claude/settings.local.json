@@ -22,7 +22,9 @@
       "Bash(ruff check:*)",
       "Bash(pip install:*)",
       "Bash(git status:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(dir C:\\\\work\\\\learn-ai\\\\andrej-karpathy-skills\\\\skills *)",
+      "Bash(dir C:\\\\work\\\\learn-ai\\\\andrej-karpathy-skills\\\\skills\\\\karpathy-guidelines *)"
     ]
   }
 }
