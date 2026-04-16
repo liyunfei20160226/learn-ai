@@ -13,12 +13,12 @@
 - 自动质量检查（lint、类型检查、测试）
 - **自动探测项目语言**，根据语言设置正确的质量检查命令
   - Python: `ruff check .` + `mypy .` + `pytest`
-  - **前端项目** (React/Vue/Angular/Next.js/Vite**: 自动探测包管理器 (npm/pnpm/yarn) → `pm run lint` + `pm test`
+  - **前端项目** (React/Vue/Angular/Next.js/Vite): 自动探测包管理器 (npm/pnpm/yarn) → `pm run lint` + `pm test`
   - Go: `go vet ./...` + `go test ./...`
   - Java: `mvn compile` + `mvn test`
   - Rust: `cargo check` + `cargo test`
 - 自动修复错误
-- Git自动提交
+- **完整Git工作流**: 目标目录不是git仓库会**自动初始化git**，自动创建分支，每个用户故事完成后自动commit
 - 模块化 architecture，易于扩展
 - 支持命令行和Web两种界面（开发中）
 

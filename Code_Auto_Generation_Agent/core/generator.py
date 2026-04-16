@@ -94,11 +94,18 @@ class GenerationEngine:
             auto_commit=self.config.git_auto_commit
         )
 
-        # 准备分支
-        if self.git_manager.is_git_repo():
-            self.git_manager.create_branch(self.prd.branch_name)
+        # 准备git和分支
+        if not self.git_manager.is_git_repo():
+            # 目标目录不是git仓库，自动初始化
+            logger.info("Target directory is not a git repository, initializing...")
+            if not self.git_manager.init_repo():
+                logger.warning("Failed to initialize git repository, Git operations disabled")
+            else:
+                logger.info("Git repository initialized, creating branch...")
+                self.git_manager.create_branch(self.prd.branch_name)
         else:
-            logger.warning("Target directory is not a git repository, Git operations disabled")
+            logger.info("Target directory is already a git repository")
+            self.git_manager.create_branch(self.prd.branch_name)
 
         logger.info("Generation engine initialized successfully")
         return True
