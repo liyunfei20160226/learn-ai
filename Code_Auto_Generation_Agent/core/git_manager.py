@@ -1,0 +1,90 @@
+"""Git管理器 - 检查状态，提交代码"""
+
+from typing import Optional, Tuple
+from utils.subprocess import run_command
+from utils.logger import get_logger
+
+
+logger = get_logger()
+
+
+class GitManager:
+    """Git管理器"""
+
+    def __init__(self, working_dir: str = None, auto_commit: bool = True):
+        self.working_dir = working_dir
+        self.auto_commit = auto_commit
+
+    def is_git_repo(self) -> bool:
+        """检查是否是git仓库"""
+        returncode, _, _ = run_command("git status", cwd=self.working_dir)
+        return returncode == 0
+
+    def get_current_branch(self) -> Optional[str]:
+        """获取当前分支"""
+        returncode, stdout, _ = run_command("git branch --show-current", cwd=self.working_dir)
+        if returncode == 0:
+            return stdout.strip() or None
+        return None
+
+    def create_branch(self, branch_name: str) -> bool:
+        """创建并切换到新分支"""
+        if not self.is_git_repo():
+            logger.warning("Not a git repository, skipping branch creation")
+            return False
+
+        # 检查分支是否已存在
+        returncode, _, _ = run_command(f"git show-ref --verify --quiet refs/heads/{branch_name}", cwd=self.working_dir)
+        if returncode == 0:
+            # 分支已存在，直接切换
+            logger.info(f"Branch {branch_name} already exists, switching to it")
+            returncode, _, _ = run_command(f"git checkout {branch_name}", cwd=self.working_dir)
+            return returncode == 0
+        else:
+            # 创建新分支
+            logger.info(f"Creating new branch: {branch_name}")
+            returncode, _, _ = run_command(f"git checkout -b {branch_name}", cwd=self.working_dir)
+            return returncode == 0
+
+    def has_changes(self) -> bool:
+        """检查是否有未提交的变更"""
+        returncode, stdout, _ = run_command("git status --porcelain", cwd=self.working_dir)
+        if returncode != 0:
+            return False
+        return bool(stdout.strip())
+
+    def commit(self, story_id: str, story_title: str) -> Optional[str]:
+        """提交所有变更"""
+        if not self.auto_commit:
+            logger.info("Auto commit disabled, skipping commit")
+            return None
+
+        if not self.is_git_repo():
+            logger.warning("Not a git repository, skipping commit")
+            return None
+
+        if not self.has_changes():
+            logger.info("No changes to commit")
+            return None
+
+        commit_msg = f"[{story_id}] {story_title}"
+        logger.info(f"Committing changes: {commit_msg}")
+
+        returncode, _, _ = run_command("git add .", cwd=self.working_dir)
+        if returncode != 0:
+            logger.error("git add failed")
+            return None
+
+        returncode, _, _ = run_command(f"git commit -m \"{commit_msg}\"", cwd=self.working_dir)
+        if returncode != 0:
+            logger.error("git commit failed")
+            return None
+
+        # 获取commit hash
+        returncode, stdout, _ = run_command("git rev-parse HEAD", cwd=self.working_dir)
+        if returncode == 0:
+            commit_hash = stdout.strip()
+            logger.info(f"Committed successfully: {commit_hash}")
+            return commit_hash
+
+        return None

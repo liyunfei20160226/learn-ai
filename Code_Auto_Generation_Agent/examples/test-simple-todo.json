@@ -1,0 +1,43 @@
+{
+  "project_name": "简单待办事项应用",
+  "branch_name": "feature/todo-app",
+  "description": "创建一个简单的命令行待办事项应用，支持添加、删除、查看任务。使用Python编写。",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "查看待办列表",
+      "description": "作为用户，我想要查看所有的待办事项，以便了解我需要做什么。",
+      "acceptance_criteria": [
+        "程序启动后显示当前所有待办事项",
+        "如果没有待办事项显示提示信息",
+        "每个任务显示序号和内容"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "US-002",
+      "title": "添加待办事项",
+      "description": "作为用户，我想要添加新的待办事项，以便记录我需要完成的工作。",
+      "acceptance_criteria": [
+        "支持通过命令行参数添加任务",
+        "添加成功后显示确认信息",
+        "新添加的任务出现在列表中"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "US-003",
+      "title": "删除待办事项",
+      "description": "作为用户，我想要删除已完成的待办事项，以便保持列表整洁。",
+      "acceptance_criteria": [
+        "支持通过序号删除任务",
+        "删除成功后显示确认信息",
+        "删除后序号重新排列正确"
+      ],
+      "priority": 3,
+      "passes": false
+    }
+  ]
+}
