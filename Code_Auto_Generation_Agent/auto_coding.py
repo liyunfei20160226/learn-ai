@@ -7,6 +7,11 @@ auto_coding.py - 全自动代码生成Agent命令行入口
 import argparse
 import sys
 import os
+
+# 强制设置标准输出编码为UTF-8，解决Windows控制台中文乱码问题
+if sys.version_info >= (3, 7):
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 from config import get_config, Config
 from core.generator import GenerationEngine
 from utils.logger import setup_logger
