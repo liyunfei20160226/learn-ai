@@ -96,7 +96,7 @@ uv run python autoprd.py "一个博客系统" --tool openai
 | **`requirement`** | 需求描述（一句话，必填） | - |
 | `--max-iterations N` | 最大迭代次数 | 10（可通过 `.env` 中 `MAX_ITERATIONS` 配置默认值） |
 | `--output-dir PATH` | 输出目录 | `output/[功能名称-kebabCase]` |
-| `--tool claude\|amp\|openai` | 使用的AI工具：<br>- `claude`/`amp`: 使用本地命令行工具<br>- `openai`: 直接调用OpenAI兼容API | claude |
+| `--tool claude\|openai` | 使用的AI工具：<br>- `claude`: 使用本地 Claude Code 命令行工具<br>- `openai`: 直接调用OpenAI兼容API | claude |
 | `--mode auto\|interactive` | 运行模式：<br>- `auto`: 全自动，AI自动回答所有问题<br>- `interactive`: 交互式，你可以选择每个问题是用AI回答还是自己回答 | auto |
 | `--background FILE` | 单个背景资料文件，AI生成PRD时会参考内容 | - |
 | `--background-dir DIR` | 背景资料目录，递归遍历所有文件，AI生成PRD时会参考相关内容 | - |
@@ -290,7 +290,7 @@ export MAX_ITERATIONS=10
   `faiss-cpu`, `unstructured`, `pypdf`, `openpyxl`,
   `msoffcrypto-tool` (支持加密Excel文件),
   `fastapi`, `uvicorn`, `python-multipart` (Web UI)
-- 使用 `claude`/`amp` 工具：需要 Claude Code 或 Amp 命令行工具可用
+- 使用 `claude` 工具：需要 Claude Code 命令行工具可用
 - 使用 `openai` 工具：只需要配置 `OPENAI_API_KEY`
 
 ## TODO

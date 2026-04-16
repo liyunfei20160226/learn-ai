@@ -28,7 +28,6 @@
                             <select id="tool" name="tool">
                                 <option value="openai" selected>OpenAI</option>
                                 <option value="claude">Claude (CLI)</option>
-                                <option value="amp">Anthropic CLI (amp)</option>
                             </select>
                         </div>
 
@@ -81,6 +80,14 @@
             <section class="result-section" id="result-section" style="display: none;">
                 <h2>生成结果</h2>
                 <div id="result-files" class="result-files"></div>
+            </section>
+
+            <section class="question-section" id="question-section" style="display: none;">
+                <h2>需要你回答</h2>
+                <div id="questions-container" class="questions-container"></div>
+                <div class="form-actions">
+                    <button type="button" id="submit-answers-btn" class="btn btn-primary">提交回答</button>
+                </div>
             </section>
         </main>
 

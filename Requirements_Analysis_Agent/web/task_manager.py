@@ -20,6 +20,7 @@ sys.path.insert(0, str(project_root))
 class TaskStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
+    WAITING_FOR_ANSWER = "waiting_for_answer"
     COMPLETED = "completed"
     FAILED = "failed"
     STOPPED = "stopped"
@@ -38,6 +39,11 @@ class Task:
     error: Optional[str] = None
     thread: Optional[threading.Thread] = None
     should_stop: bool = False
+    # For interactive mode: waiting for user answers
+    pending_questions: List[dict] = field(default_factory=list)
+    user_answers: List[dict] = field(default_factory=list)
+    answer_condition: Optional[threading.Condition] = None
+    answers_ready: bool = False
 
     @property
     def output_files(self) -> List[str]:

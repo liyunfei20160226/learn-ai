@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -20,7 +21,6 @@ if sys.stdout.encoding != 'utf-8':
     except AttributeError:
         pass
 
-import requests
 from dotenv import load_dotenv
 
 
@@ -37,7 +37,6 @@ def call_openai(prompt: str) -> str:
     """调用 OpenAI API (via LangChain)"""
     from langchain_openai import ChatOpenAI
     from langchain_core.messages import HumanMessage
-    import requests
 
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
@@ -74,12 +73,9 @@ def call_openai(prompt: str) -> str:
         sys.exit(1)
 
 
-def call_claude_or_amp(prompt: str, tool: str) -> str:
-    """调用本地 claude 或 amp 命令行工具"""
-    if tool == 'claude':
-        cmd = ['claude', '--dangerously-skip-permissions', '--print']
-    else:  # amp
-        cmd = ['amp', '--dangerously-allow-all']
+def call_claude(prompt: str, tool: str) -> str:
+    """调用本地 claude 命令行工具"""
+    cmd = ['claude', '--dangerously-skip-permissions', '--print']
 
     try:
         # Windows上需要shell=True才能正确找到.cmd扩展名的命令
@@ -93,12 +89,12 @@ def call_claude_or_amp(prompt: str, tool: str) -> str:
         result.check_returncode()
         return result.stdout.decode('utf-8').strip()
     except Exception as e:
-        print(f'\n❌ {tool} 调用失败', file=sys.stderr)
+        print('\n❌ claude 调用失败', file=sys.stderr)
         print(f'错误信息: {str(e)}', file=sys.stderr)
-        print(f'\n可能原因:', file=sys.stderr)
-        print(f'  1. {tool} 命令行工具未安装或不在 PATH 中', file=sys.stderr)
-        print(f'  2. 权限不足', file=sys.stderr)
-        print(f'\n请检查你的 {tool} 安装后重试。', file=sys.stderr)
+        print('\n可能原因:', file=sys.stderr)
+        print('  1. claude 命令行工具未安装或不在 PATH 中', file=sys.stderr)
+        print('  2. 权限不足', file=sys.stderr)
+        print('\n请检查你的 claude 安装后重试。', file=sys.stderr)
         sys.exit(1)
 
 
@@ -107,19 +103,20 @@ def call_ai(prompt: str, tool: str) -> str:
     if tool == 'openai':
         return call_openai(prompt)
     else:
-        return call_claude_or_amp(prompt, tool)
+        return call_claude(prompt, tool)
 
 
 def parse_analysis_output(analysis_output: str) -> list[dict[str, str]]:
     """解析AI分析输出，提取问题和AI回答列表"""
     questions = []
-    # 按 --- 分隔
-    blocks = re.split(r'^\s*-{3,}\s*$', analysis_output, flags=re.MULTILINE)
-    # 过滤空块
-    blocks = [b.strip() for b in blocks if b.strip()]
 
-    question_pattern = re.compile(r'问题\s*：\s*(.+)', re.UNICODE)
-    answer_pattern = re.compile(r'回答\s*：\s*(.+)', re.UNICODE | re.DOTALL)
+    # 宽松匹配：允许中文或英文冒号，允许任意空白
+    question_pattern = re.compile(r'问题\s*[:：]\s*(.+?)(?=\s*回答\s*[:：])', re.UNICODE | re.DOTALL)
+    answer_pattern = re.compile(r'回答\s*[:：]\s*(.+)', re.UNICODE | re.DOTALL)
+
+    # 方法1: 按 --- 分隔块
+    blocks = re.split(r'^\s*-{3,}\s*$', analysis_output, flags=re.MULTILINE)
+    blocks = [b.strip() for b in blocks if b.strip()]
 
     for block in blocks:
         q_match = question_pattern.search(block)
@@ -130,58 +127,139 @@ def parse_analysis_output(analysis_output: str) -> list[dict[str, str]]:
                 'ai_answer': a_match.group(1).strip()
             })
 
+    # 如果方法1没找到，尝试方法2: 在整个文本中直接查找所有问题-回答对
+    if not questions:
+        # 查找所有 问题:...回答:... 模式
+        all_pairs = re.findall(r'问题\s*[:：]\s*(.+?)\s*回答\s*[:：]\s*(.+?)(?=\s*问题\s*[:：]|$)', analysis_output, re.UNICODE | re.DOTALL)
+        for q_text, a_text in all_pairs:
+            q_text = q_text.strip()
+            a_text = a_text.strip()
+            if q_text and a_text:
+                questions.append({
+                    'question': q_text,
+                    'ai_answer': a_text
+                })
+
+    # 如果方法2还没找到，尝试方法3: 逐行查找，只要找到问题行，后面就是回答直到下一个问题或结束
+    if not questions:
+        lines = analysis_output.splitlines()
+        current_q = None
+        current_a = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            q_match = re.match(r'问题\s*[:：]\s*(.+)', line)
+            if q_match:
+                # 保存上一个问题
+                if current_q is not None and current_a:
+                    questions.append({
+                        'question': current_q.strip(),
+                        'ai_answer': '\n'.join(current_a).strip()
+                    })
+                # 开始新问题
+                current_q = q_match.group(1)
+                current_a = []
+            elif current_q is not None:
+                a_match = re.match(r'回答\s*[:：]\s*(.+)', line)
+                if a_match:
+                    current_a.append(a_match.group(1))
+                else:
+                    current_a.append(line)
+        # 保存最后一个问题
+        if current_q is not None and current_a:
+            questions.append({
+                'question': current_q.strip(),
+                'ai_answer': '\n'.join(current_a).strip()
+            })
+
     return questions
 
 
-def collect_user_answers(questions: list[dict[str, str]]) -> str:
-    """交互式收集用户回答，重新格式化为原输出格式"""
+def collect_user_answers(
+    questions: list[dict[str, str]],
+    task = None,
+) -> str:
+    """交互式收集用户回答，重新格式化为原输出格式
+
+    Args:
+        questions: 问题列表
+        task: 可选，Web 环境下的 Task 对象，如果提供则等待 Web 前端回答
+    """
     if not questions:
         return ''
 
-    result = []
-    total = len(questions)
+    if task is not None:
+        # Web 环境：存储问题等待用户前端回答
+        from web.task_manager import TaskStatus, task_manager
+        with task_manager._lock:
+            task.pending_questions = questions
+            task.status = TaskStatus.WAITING_FOR_ANSWER
+            task.answer_condition = threading.Condition(task_manager._lock)
+            task.answers_ready = False
+            task.user_answers = []
 
-    for i, q in enumerate(questions, 1):
-        print()
-        print('=' * 60)
-        print(f'问题 {i} / {total}')
-        print('=' * 60)
-        print(f'\n{q["question"]}\n')
-        print('AI建议回答：')
-        print(f'  {q["ai_answer"]}\n')
-        print('请选择：')
-        print('  [1] 使用AI建议回答')
-        print('  [2] 我自己输入回答')
-        print()
+        # 等待用户回答
+        print(f"\n⚠️  等待 Web 前端用户回答 {len(questions)} 个问题...\n")
+        with task.answer_condition:
+            task.answer_condition.wait()
 
-        while True:
-            choice = input('你的选择 (1/2): ').strip()
-            if choice in ['1', '2']:
-                break
-            print('请输入 1 或 2')
+        # 用户回答完成，恢复运行
+        from web.task_manager import task_manager
+        with task_manager._lock:
+            task.status = TaskStatus.RUNNING
+            result = []
+            for i, q in enumerate(questions):
+                user_answer = task.user_answers[i]
+                result.append({
+                    'question': q['question'],
+                    'answer': user_answer['answer'],
+                })
+    else:
+        # CLI 环境：终端交互式收集
+        result = []
+        total = len(questions)
+        for i, q in enumerate(questions, 1):
+            print()
+            print('=' * 60)
+            print(f'问题 {i} / {total}')
+            print('=' * 60)
+            print(f'\n{q["question"]}\n')
+            print('AI建议回答：')
+            print(f'  {q["ai_answer"]}\n')
+            print('请选择：')
+            print('  [1] 使用AI建议回答')
+            print('  [2] 我自己输入回答')
+            print()
 
-        if choice == '1':
-            final_answer = q['ai_answer']
-        else:
-            print('\n请输入你的回答（输入完后按 Ctrl+D 或回车两次结束，或直接回车使用AI回答）：')
-            lines = []
-            try:
-                while True:
-                    line = input()
-                    if not line and lines and lines[-1] == '':
-                        break
-                    lines.append(line)
-            except EOFError:
-                pass
-            user_input = '\n'.join(lines).strip()
-            final_answer = user_input if user_input else q['ai_answer']
+            while True:
+                choice = input('你的选择 (1/2): ').strip()
+                if choice in ['1', '2']:
+                    break
+                print('请输入 1 或 2')
 
-        result.append({
-            'question': q['question'],
-            'answer': final_answer
-        })
-        print('=' * 60)
-        print()
+            if choice == '1':
+                final_answer = q['ai_answer']
+            else:
+                print('\n请输入你的回答（输入完后按 Ctrl+D 或回车两次结束，或直接回车使用AI回答）：')
+                lines = []
+                try:
+                    while True:
+                        line = input()
+                        if not line and lines and lines[-1] == '':
+                            break
+                        lines.append(line)
+                except EOFError:
+                    pass
+                user_input = '\n'.join(lines).strip()
+                final_answer = user_input if user_input else q['ai_answer']
+
+            result.append({
+                'question': q['question'],
+                'answer': final_answer,
+            })
+            print('=' * 60)
+            print()
 
     # 重新格式化为原格式
     output = []
@@ -213,7 +291,6 @@ def should_skip_path(path: str) -> bool:
 
 def load_background_documents(background_path: str):
     """加载背景资料，支持单个文件或目录"""
-    from langchain_core.documents import Document
     from langchain_community.document_loaders import (
         TextLoader, UnstructuredPDFLoader, UnstructuredWordDocumentLoader,
         UnstructuredPowerPointLoader, UnstructuredExcelLoader
@@ -325,7 +402,7 @@ def build_rag_vectorstore(documents):
     )
     vectorstore = FAISS.from_documents(chunks, embeddings)
 
-    print(f'✅ RAG索引构建完成')
+    print('✅ RAG索引构建完成')
     return vectorstore
 
 
@@ -357,12 +434,13 @@ def run_prd_generation(
     output_dir: Path,
     vectorstore = None,
     rag_topk: int = 5,
+    task = None,
 ) -> None:
     """Run the full PRD generation process.
 
     Args:
         requirement: User requirement description
-        tool: AI tool to use (claude/amp/openai)
+        tool: AI tool to use (claude/openai)
         mode: run mode (auto/interactive)
         max_iterations: maximum number of iterations
         output_dir: output directory path
@@ -507,7 +585,7 @@ def run_prd_generation(
             if questions:
                 print()
                 print(f'检测到 {len(questions)} 个问题，请回答：')
-                analysis_output = collect_user_answers(questions)
+                analysis_output = collect_user_answers(questions, task)
             else:
                 print()
                 print('⚠️  无法解析问题格式，使用AI原始输出继续')
@@ -565,7 +643,6 @@ def run_prd_generation(
                 f.write(f'⚠️  达到最大迭代次数 {max_iterations}，停止迭代\n')
             break
 
-        import time
         time.sleep(2)
 
     print()
@@ -671,7 +748,6 @@ def run_prd_generation(
 
     # Parse and re-serialize with Python to ensure correct escaping of quotes
     # This fixes issues where AI doesn't properly escape double quotes in content
-    import json
     try:
         parsed = json.loads(clean_json)
         # Save prd.json with proper JSON formatting and escaping
@@ -681,6 +757,7 @@ def run_prd_generation(
         print(f'✅ prd.json 已保存到 {json_file}')
     except json.JSONDecodeError as e:
         print(f'⚠️ AI输出JSON格式不正确，尝试修复后仍然无法解析，保存原始输出: {e}')
+        print('⚠️ 请手动修复JSON格式后使用')
         # Fallback: save original output
         json_file = output_dir / 'prd.json'
         with open(json_file, 'w', encoding='utf-8') as f:
@@ -704,7 +781,7 @@ def run_prd_generation(
     print()
     print('接下来可以将prd.json复制到Ralph项目目录进行自动化开发：')
     print(f'  cp {json_file} /path/to/ralph/')
-    print(f'  cd /path/to/ralph && ./ralph.sh')
+    print('  cd /path/to/ralph && ./ralph.sh')
     print()
 
 
@@ -736,7 +813,7 @@ def main():
     )
     parser.add_argument(
         '--tool',
-        choices=['claude', 'amp', 'openai'],
+        choices=['claude', 'openai'],
         default='claude',
         help='AI工具 (默认: claude)'
     )
@@ -871,7 +948,7 @@ if __name__ == '__main__':
             logs_dir.mkdir(exist_ok=True)
             log_file = logs_dir / f'autoprd-error-{timestamp}.log'
             handle_exception(e, log_file)
-        except:
+        except Exception:
             # 如果连写日志都失败，直接print traceback
             import traceback
             traceback.print_exc()

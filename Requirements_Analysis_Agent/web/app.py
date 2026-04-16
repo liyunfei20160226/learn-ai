@@ -129,6 +129,7 @@ async def start_task(
                     output_dir=Path(task.output_dir),
                     vectorstore=vectorstore,
                     rag_topk=rag_topk,
+                    task=task,
                 )
 
                 if task.should_stop:
@@ -190,8 +191,8 @@ async def stream_events(request: Request, task_id: str):
                             yield f"data: {line}\n\n"
                     last_index = len(logs)
 
-            # Check if task is done
-            if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.STOPPED]:
+            # Check if task is done or waiting for user answer
+            if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.STOPPED, TaskStatus.WAITING_FOR_ANSWER]:
                 yield f"data: [DONE] {task.status}\n\n"
                 break
 
@@ -234,6 +235,52 @@ async def download_file(task_id: str, filename: str):
         filename=filename,
         media_type="text/plain"
     )
+
+
+@app.get("/api/questions/{task_id}")
+async def get_pending_questions(task_id: str):
+    """Get pending questions for interactive mode"""
+    task = task_manager.get_task(task_id)
+    if not task:
+        return {"error": "Task not found"}
+    return {
+        "task_id": task_id,
+        "status": task.status,
+        "pending_questions": task.pending_questions,
+    }
+
+
+@app.post("/api/answer/{task_id}")
+async def submit_user_answers(task_id: str, request: Request):
+    """Submit user answers for interactive mode"""
+    task = task_manager.get_task(task_id)
+    if not task:
+        return {"error": "Task not found"}
+
+    # Parse form data manually since FastAPI Form doesn't support List[dict] directly
+    form_data = await request.form()
+    answers = []
+    i = 0
+    while True:
+        question_key = f"answers[{i}][question]"
+        choice_key = f"answers[{i}][choice]"
+        answer_key = f"answers[{i}][answer]"
+        if question_key not in form_data:
+            break
+        answers.append({
+            "question": form_data[question_key],
+            "choice": form_data[choice_key],
+            "answer": form_data[answer_key],
+        })
+        i += 1
+
+    with task_manager._lock:
+        task.user_answers = answers
+        task.answers_ready = True
+        if task.answer_condition:
+            task.answer_condition.notify_all()
+
+    return {"success": True}
 
 
 if __name__ == "__main__":
