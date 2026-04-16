@@ -160,6 +160,50 @@ AutoPRD + Ralph 可以实现从需求到产品的全链路自动化：
 
 整个过程从需求到产品，完全由AI自动完成，人工只需要等待结果。
 
+## Web UI 使用
+
+除了命令行，AutoPRD还提供了友好的Web用户界面：
+
+### 启动Web UI
+
+```bash
+uv run uvicorn web.app:app --reload --host 0.0.0.0 --port 8000
+```
+
+然后在浏览器打开 **http://localhost:8000**
+
+### Web UI 功能
+
+- ✅ 表单填写需求描述
+- ✅ 可视化配置参数（工具、模式、迭代次数等）
+- ✅ 直接在网页上传多个背景资料文件
+- ✅ 实时推送运行日志到浏览器
+- ✅ 生成完成后一键下载输出文件（prd.md / prd.json / iteration_history.md）
+
+### 截图
+
+Web UI界面：
+```
++-------------------------+
+|    AutoPRD Web UI      |
++-------------------------+
+| 需求描述 [textarea]    |
+| AI工具       [select]   |
+| 运行模式     [select]   |
+| 最大迭代次数 [input]   |
+| RAG检索片段 [input]   |
+| 背景文件   [upload]    |
+| [开始生成] [停止]      |
++-------------------------+
+| 运行日志               |
+| [ 实时滚动显示...     ] |
++-------------------------+
+| 生成结果               |
+| [下载 prd.md]          |
+| [下载 prd.json]        |
++-------------------------+
+```
+
 ## 项目结构
 
 ```
@@ -168,6 +212,7 @@ Requirements_Analysis_Agent/
 ├── pyproject.toml           # uv 项目配置
 ├── .python-version          # Python 版本
 ├── .env.example             # OpenAI 配置示例
+├── .gitignore              # Git ignore
 ├── README.md                # 本文档
 ├── skills/
 │   └── autoprd/
@@ -177,6 +222,15 @@ Requirements_Analysis_Agent/
 │   ├── autoprd-analysis.md   # PRD完整性分析提示词
 │   ├── autoprd-integration.md # 整合回答到PRD提示词
 │   └── autoprd-conversion.md # 转换为Ralph prd.json提示词
+├── web/
+│   ├── __init__.py
+│   ├── app.py               # FastAPI 应用主入口
+│   ├── task_manager.py      # 后台任务管理
+│   ├── templates/
+│   │   └── index.html       # 主页HTML
+│   └── static/
+│       ├── style.css        # 样式
+│       └── script.js        # 前端交互逻辑
 ├── output/                  # 输出目录（生成的PRD存放在这里）
 └── logs/                    # 日志目录
 ```
@@ -207,6 +261,12 @@ OPENAI_MODEL=gpt-4o
 
 # 可选：默认最大迭代次数，默认 10（可通过命令行 --max-iterations 覆盖）
 # MAX_ITERATIONS=10
+
+# 可选：Embedding模型名称，默认 text-embedding-3-small
+# 如果使用兼容OpenAI格式的第三方接口（如硅基流动），需要配置正确的模型名
+# OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+# OPENAI_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-8B (硅基流动)
+# OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 ```
 
 ### 方式二：通过环境变量
@@ -226,8 +286,10 @@ export MAX_ITERATIONS=10
 - uv 包管理器
 - 依赖会自动安装：
   `requests`, `python-dotenv`,
-  `langchain-core`, `langchain-openai`, `langchain-community`,
-  `faiss-cpu`, `unstructured`, `pypdf`, `openpyxl`
+  `langchain-core`, `langchain-openai`, `langchain-community`, `langchain`,
+  `faiss-cpu`, `unstructured`, `pypdf`, `openpyxl`,
+  `msoffcrypto-tool` (支持加密Excel文件),
+  `fastapi`, `uvicorn`, `python-multipart` (Web UI)
 - 使用 `claude`/`amp` 工具：需要 Claude Code 或 Amp 命令行工具可用
 - 使用 `openai` 工具：只需要配置 `OPENAI_API_KEY`
 

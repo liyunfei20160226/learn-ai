@@ -82,10 +82,13 @@ def call_claude_or_amp(prompt: str, tool: str) -> str:
         cmd = ['amp', '--dangerously-allow-all']
 
     try:
+        # Windows上需要shell=True才能正确找到.cmd扩展名的命令
+        is_windows = sys.platform.startswith('win')
         result = subprocess.run(
             cmd,
             input=prompt.encode('utf-8'),
-            capture_output=True
+            capture_output=True,
+            shell=is_windows
         )
         result.check_returncode()
         return result.stdout.decode('utf-8').strip()
@@ -346,6 +349,365 @@ def add_rag_background(prompt: str, query: str, vectorstore, topk: int) -> str:
     return prompt
 
 
+def run_prd_generation(
+    requirement: str,
+    tool: str,
+    mode: str,
+    max_iterations: int,
+    output_dir: Path,
+    vectorstore = None,
+    rag_topk: int = 5,
+) -> None:
+    """Run the full PRD generation process.
+
+    Args:
+        requirement: User requirement description
+        tool: AI tool to use (claude/amp/openai)
+        mode: run mode (auto/interactive)
+        max_iterations: maximum number of iterations
+        output_dir: output directory path
+        vectorstore: optional pre-built RAG vectorstore
+        rag_topk: number of top documents to retrieve from RAG
+    """
+    script_dir = Path(__file__).parent
+    prompts_dir = script_dir / 'prompts'
+    logs_dir = script_dir / 'logs'
+
+    # Create directories
+    output_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    # Log file
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    log_file = logs_dir / f'autoprd-{timestamp}.log'
+
+    # Print startup info
+    print('================================================')
+    print('AutoPRD - Automatic PRD Generation Agent')
+    print(f'需求: {requirement}')
+    print(f'最大迭代次数: {max_iterations}')
+    print(f'AI工具: {tool}')
+    print(f'运行模式: {mode}')
+    if tool == 'openai':
+        model = os.getenv('OPENAI_MODEL', 'gpt-4o')
+        base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+        print(f'OpenAI模型: {model}')
+        print(f'OpenAI API地址: {base_url}')
+    if vectorstore:
+        print(f'RAG检索片段数: {rag_topk}')
+    print(f'输出目录: {output_dir}')
+    print(f'日志文件: {log_file}')
+    print('================================================')
+    print()
+
+    # Write log header
+    with open(log_file, 'w', encoding='utf-8') as f:
+        f.write(f'AutoPRD started at {timestamp}\n')
+        f.write(f'Requirement: {requirement}\n')
+        f.write(f'Max iterations: {max_iterations}\n')
+        f.write(f'Tool: {tool}\n')
+        f.write('\n')
+
+    prd_file = output_dir / 'prd.md'
+    history_file = output_dir / 'iteration_history.md'
+    current_iteration = 1
+
+    # Resume from existing PRD if it exists
+    if prd_file.exists():
+        print('检测到已有PRD文件，启用断点续传...')
+        print('从现有PRD继续迭代...\n')
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write('Resuming from existing PRD\n\n')
+    else:
+        print('首次运行，生成初始PRD...\n')
+        # Read system prompt
+        with open(prompts_dir / 'autoprd-system.md', 'r', encoding='utf-8') as f:
+            system_prompt = f.read()
+
+        # Build initial prompt
+        initial_prompt = f"""{system_prompt}
+
+# 用户原始需求
+
+{requirement}
+
+请根据上述需求生成一份初始的完整PRD。遵循标准PRD结构，使用中文编写。
+
+⚠️  **重要：直接输出PRD内容即可！不要输出思考过程，不要输出自问自答的问答历史，不要写"第一轮分析"这类内容。只需要纯PRD。**"""
+
+        # Add RAG background
+        if vectorstore:
+            initial_prompt = add_rag_background(initial_prompt, requirement, vectorstore, rag_topk)
+
+        print('生成初始PRD...')
+        initial_output = call_ai(initial_prompt, tool)
+
+        # Save initial PRD
+        with open(prd_file, 'w', encoding='utf-8') as f:
+            f.write(initial_output)
+        # Initialize iteration history
+        with open(history_file, 'w', encoding='utf-8') as f:
+            f.write('# 迭代问答历史\n\n')
+            f.write('## 初始PRD\n\n')
+            f.write(initial_output)
+            f.write('\n\n---\n\n')
+        print(f'初始PRD已保存到 {prd_file}\n')
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write('--- Initial PRD generated ---\n')
+            f.write(initial_output)
+            f.write('\n\n')
+
+    # Start iteration loop
+    while current_iteration <= max_iterations:
+        print('------------------------------------------------')
+        print(f'迭代 {current_iteration} / {max_iterations}')
+        print('------------------------------------------------')
+        print()
+
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write('------------------------------------------------\n')
+            f.write(f'Iteration {current_iteration} / {max_iterations}\n')
+            f.write('------------------------------------------------\n\n')
+
+        # Read current PRD
+        with open(prd_file, 'r', encoding='utf-8') as f:
+            current_prd = f.read()
+
+        # Read analysis prompt template
+        with open(prompts_dir / 'autoprd-analysis.md', 'r', encoding='utf-8') as f:
+            analysis_template = f.read()
+
+        # Replace template variables
+        analysis_prompt = analysis_template\
+            .replace('{{USER_REQUIREMENT}}', requirement)\
+            .replace('{{CURRENT_PRD}}', current_prd)
+
+        # Add RAG background
+        if vectorstore:
+            analysis_prompt = add_rag_background(analysis_prompt, analysis_prompt, vectorstore, rag_topk)
+
+        # Call AI for analysis
+        print('正在分析PRD完整性...')
+        analysis_output = call_ai(analysis_prompt, tool)
+
+        # Check if complete
+        if '<promise>COMPLETE</promise>' in analysis_output:
+            print()
+            print('✅ AI判定PRD已完整，结束迭代')
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write('\n✅ PRD marked as complete, stopping.\n')
+            with open(history_file, 'a', encoding='utf-8') as f:
+                f.write('✅ AI判定PRD已完整，迭代结束\n')
+            break
+
+        # Interactive mode: let user answer
+        if mode == 'interactive':
+            questions = parse_analysis_output(analysis_output)
+            if questions:
+                print()
+                print(f'检测到 {len(questions)} 个问题，请回答：')
+                analysis_output = collect_user_answers(questions)
+            else:
+                print()
+                print('⚠️  无法解析问题格式，使用AI原始输出继续')
+
+        # Save analysis result to log and history
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f'--- Iteration {current_iteration} 分析结果 ---\n')
+            f.write(analysis_output)
+            f.write('\n\n')
+        with open(history_file, 'a', encoding='utf-8') as f:
+            f.write(f'## 迭代 {current_iteration} - 分析问答\n\n')
+            f.write(analysis_output)
+            f.write('\n\n---\n\n')
+
+        # Integrate if there are new answers
+        print('获取了新的问题和回答，正在整合到PRD...')
+
+        # Read integration template
+        with open(prompts_dir / 'autoprd-integration.md', 'r', encoding='utf-8') as f:
+            integration_template = f.read()
+
+        # Replace template variables
+        integration_prompt = integration_template\
+            .replace('{{CURRENT_PRD}}', current_prd)\
+            .replace('{{QUESTIONS_ANSWERS}}', analysis_output)
+
+        # Call AI integration
+        integration_output = call_ai(integration_prompt, tool)
+
+        # Save updated PRD
+        with open(prd_file, 'w', encoding='utf-8') as f:
+            f.write(integration_output)
+        # Append to history
+        with open(history_file, 'a', encoding='utf-8') as f:
+            f.write(f'## 迭代 {current_iteration} - 更新后PRD\n\n')
+            f.write(integration_output)
+            f.write('\n\n---\n\n')
+        print('PRD已更新\n')
+
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write('--- Updated PRD ---\n')
+            f.write(integration_output)
+            f.write('\n\n')
+
+        current_iteration += 1
+
+        # Check max iterations
+        if current_iteration > max_iterations:
+            print()
+            print(f'⚠️  达到最大迭代次数 {max_iterations}，停止迭代')
+            print('已输出当前所有结果，可增加--max-iterations重新运行断点续传')
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f'\n⚠️  Reached max iterations {max_iterations}, stopping.\n')
+            with open(history_file, 'a', encoding='utf-8') as f:
+                f.write(f'⚠️  达到最大迭代次数 {max_iterations}，停止迭代\n')
+            break
+
+        import time
+        time.sleep(2)
+
+    print()
+    print('================================================')
+    print('迭代完成，开始转换为Ralph prd.json格式...')
+    print('================================================')
+    print()
+
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write('\n================================================\n')
+        f.write('Iteration complete, converting to Ralph prd.json...\n')
+        f.write('================================================\n\n')
+
+    # Convert to Ralph prd.json
+    with open(prd_file, 'r', encoding='utf-8') as f:
+        final_prd = f.read()
+
+    # Extract project name from first heading
+    project_name = requirement
+    for line in final_prd.splitlines():
+        if line.startswith('#'):
+            project_name = re.sub(r'^#\s*', '', line).strip()
+            break
+
+    # Generate branch name
+    branch_name = to_kebab_case(project_name)
+    branch_name = f'autoprd/{branch_name}'[:50]
+
+    # Extract project description from first non-empty line
+    project_description = requirement
+    for line in final_prd.splitlines():
+        line = line.strip()
+        if line and not line.startswith('#'):
+            project_description = line
+            break
+
+    # Read conversion template
+    with open(prompts_dir / 'autoprd-conversion.md', 'r', encoding='utf-8') as f:
+        conversion_template = f.read()
+
+    # Replace template variables
+    conversion_prompt = conversion_template\
+        .replace('{project_name}', project_name)\
+        .replace('{branch_name}', branch_name)\
+        .replace('{project_description}', project_description)\
+        .replace('{final_prd}', final_prd)
+
+    # Call AI to generate prd.json
+    print('正在生成prd.json...')
+    json_output = call_ai(conversion_prompt, tool)
+
+    # Clean JSON output - extract JSON from possible markdown wrapping
+    match = re.search(r'(\{.*\})', json_output, re.DOTALL)
+    if match:
+        clean_json = match.group(1)
+    else:
+        # Remove markdown code block markers ```json ... ```
+        clean_json = re.sub(r'^```(?:json)?\n', '', json_output)
+        clean_json = re.sub(r'\n```$', '', clean_json)
+        clean_json = clean_json.strip()
+
+    # Pre-processing: fix common JSON formatting issues
+    # 1. Remove any trailing commas before closing brackets
+    clean_json = re.sub(r',\s*([\]}])', r'\1', clean_json)
+    # 2. Fix common issue: unescaped quotes inside strings
+    # This is a heuristic but helps with common cases
+    def fix_unescaped_quotes(s):
+        # Find positions between " that are not preceded by \
+        result = []
+        i = 0
+        in_string = False
+        while i < len(s):
+            if s[i] == '"' and (i == 0 or s[i-1] != '\\'):
+                if in_string:
+                    # closing quote
+                    result.append('"')
+                    in_string = False
+                else:
+                    # opening quote
+                    result.append('"')
+                    in_string = True
+            elif s[i] == '"' and s[i-1] == '\\':
+                # already escaped, keep it
+                result.append(s[i])
+                i += 1
+                in_string = not in_string if not in_string else in_string
+            else:
+                if in_string and s[i] == '"':
+                    # unescaped quote inside string, escape it
+                    result.append('\\')
+                    result.append('"')
+                else:
+                    result.append(s[i])
+                in_string = not in_string if not in_string else in_string
+            i += 1
+        return ''.join(result)
+
+    try:
+        clean_json = fix_unescaped_quotes(clean_json)
+    except Exception:
+        # if our heuristic fails, proceed with original
+        pass
+
+    # Parse and re-serialize with Python to ensure correct escaping of quotes
+    # This fixes issues where AI doesn't properly escape double quotes in content
+    import json
+    try:
+        parsed = json.loads(clean_json)
+        # Save prd.json with proper JSON formatting and escaping
+        json_file = output_dir / 'prd.json'
+        with open(json_file, 'w', encoding='utf-8') as f:
+            json.dump(parsed, f, ensure_ascii=False, indent=2)
+        print(f'✅ prd.json 已保存到 {json_file}')
+    except json.JSONDecodeError as e:
+        print(f'⚠️ AI输出JSON格式不正确，尝试修复后仍然无法解析，保存原始输出: {e}')
+        # Fallback: save original output
+        json_file = output_dir / 'prd.json'
+        with open(json_file, 'w', encoding='utf-8') as f:
+            f.write(clean_json)
+
+    print(f'prd.json 已保存到 {json_file}')
+    print()
+
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write(f'prd.json saved to {json_file}\n')
+        f.write('\n')
+
+    # Done
+    print('================================================')
+    print('✅ AutoPRD 完成！')
+    print('================================================')
+    print()
+    print('输出文件：')
+    print(f'  PRD: {prd_file}')
+    print(f'  prd.json: {json_file}')
+    print()
+    print('接下来可以将prd.json复制到Ralph项目目录进行自动化开发：')
+    print(f'  cp {json_file} /path/to/ralph/')
+    print(f'  cd /path/to/ralph && ./ralph.sh')
+    print()
+
+
 def main():
     # 加载 .env 文件
     if Path('.env').exists():
@@ -408,21 +770,13 @@ def main():
         print('提示: 可以在项目根目录创建 .env 文件添加 OPENAI_API_KEY=your-key', file=sys.stderr)
         sys.exit(1)
 
-    # 初始化路径
-    script_dir = Path(__file__).parent
-    prompts_dir = script_dir / 'prompts'
-    logs_dir = script_dir / 'logs'
-
     # 生成输出目录
+    script_dir = Path(__file__).parent
     if not args.output_dir:
         feature_name = to_kebab_case(args.requirement)
         output_dir = script_dir / 'output' / feature_name
     else:
         output_dir = Path(args.output_dir)
-
-    # 创建目录
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logs_dir.mkdir(parents=True, exist_ok=True)
 
     # 初始化RAG（如果指定了背景资料）
     vectorstore = None
@@ -438,281 +792,16 @@ def main():
             print('⚠️ 没有加载到有效文档，不使用背景资料')
         print()
 
-    # 日志文件
-    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    log_file = logs_dir / f'autoprd-{timestamp}.log'
-
-    # 打印启动信息
-    print('================================================')
-    print('AutoPRD - Automatic PRD Generation Agent')
-    print(f'需求: {args.requirement}')
-    print(f'最大迭代次数: {args.max_iterations}')
-    print(f'AI工具: {args.tool}')
-    print(f'运行模式: {args.mode}')
-    if args.tool == 'openai':
-        model = os.getenv('OPENAI_MODEL', 'gpt-4o')
-        base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
-        print(f'OpenAI模型: {model}')
-        print(f'OpenAI API地址: {base_url}')
-    if args.background:
-        print(f'背景文件: {args.background}')
-    if args.background_dir:
-        print(f'背景目录: {args.background_dir}')
-    if vectorstore:
-        print(f'RAG检索片段数: {args.rag_topk}')
-    print(f'输出目录: {output_dir}')
-    print(f'日志文件: {log_file}')
-    print('================================================')
-    print()
-
-    # 写入日志开头
-    with open(log_file, 'w', encoding='utf-8') as f:
-        f.write(f'AutoPRD started at {timestamp}\n')
-        f.write(f'Requirement: {args.requirement}\n')
-        f.write(f'Max iterations: {args.max_iterations}\n')
-        f.write(f'Tool: {args.tool}\n')
-        f.write('\n')
-
-    prd_file = output_dir / 'prd.md'
-    history_file = output_dir / 'iteration_history.md'  # 迭代问答历史记录
-    current_iteration = 1
-
-    # 断点续传检测
-    if prd_file.exists():
-        print('检测到已有PRD文件，启用断点续传...')
-        print('从现有PRD继续迭代...\n')
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write('Resuming from existing PRD\n\n')
-    else:
-        print('首次运行，生成初始PRD...\n')
-        # 读取系统提示
-        with open(prompts_dir / 'autoprd-system.md', 'r', encoding='utf-8') as f:
-            system_prompt = f.read()
-
-        # 构建初始提示
-        initial_prompt = f"""{system_prompt}
-
-# 用户原始需求
-
-{args.requirement}
-
-请根据上述需求生成一份初始的完整PRD。遵循标准PRD结构，使用中文编写。
-
-⚠️  **重要：直接输出PRD内容即可！不要输出思考过程，不要输出自问自答的问答历史，不要写"第一轮分析"这类内容。只需要纯PRD。**"""
-
-        # 添加RAG背景资料
-        if vectorstore:
-            initial_prompt = add_rag_background(initial_prompt, args.requirement, vectorstore, args.rag_topk)
-
-        print('生成初始PRD...')
-        initial_output = call_ai(initial_prompt, args.tool)
-
-        # 保存初始PRD
-        with open(prd_file, 'w', encoding='utf-8') as f:
-            f.write(initial_output)
-        # 初始化迭代历史，写入初始PRD
-        with open(history_file, 'w', encoding='utf-8') as f:
-            f.write('# 迭代问答历史\n\n')
-            f.write('## 初始PRD\n\n')
-            f.write(initial_output)
-            f.write('\n\n---\n\n')
-        print(f'初始PRD已保存到 {prd_file}\n')
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write('--- Initial PRD generated ---\n')
-            f.write(initial_output)
-            f.write('\n\n')
-
-    # 开始迭代循环
-    while current_iteration <= args.max_iterations:
-        print('------------------------------------------------')
-        print(f'迭代 {current_iteration} / {args.max_iterations}')
-        print('------------------------------------------------')
-        print()
-
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write('------------------------------------------------\n')
-            f.write(f'Iteration {current_iteration} / {args.max_iterations}\n')
-            f.write('------------------------------------------------\n\n')
-
-        # 读取当前PRD
-        with open(prd_file, 'r', encoding='utf-8') as f:
-            current_prd = f.read()
-
-        # 读取分析提示模板
-        with open(prompts_dir / 'autoprd-analysis.md', 'r', encoding='utf-8') as f:
-            analysis_template = f.read()
-
-        # 替换模板变量
-        analysis_prompt = analysis_template\
-            .replace('{{USER_REQUIREMENT}}', args.requirement)\
-            .replace('{{CURRENT_PRD}}', current_prd)
-
-        # 添加RAG背景资料
-        if vectorstore:
-            # 用当前prompt作为查询检索相关背景
-            analysis_prompt = add_rag_background(analysis_prompt, analysis_prompt, vectorstore, args.rag_topk)
-
-        # 调用AI进行分析
-        print('正在分析PRD完整性...')
-        analysis_output = call_ai(analysis_prompt, args.tool)
-
-        # 检查是否完成
-        if '<promise>COMPLETE</promise>' in analysis_output:
-            print()
-            print('✅ AI判定PRD已完整，结束迭代')
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write('\n✅ PRD marked as complete, stopping.\n')
-            with open(history_file, 'a', encoding='utf-8') as f:
-                f.write('✅ AI判定PRD已完整，迭代结束\n')
-            break
-
-        # 交互式模式：让用户选择回答
-        if args.mode == 'interactive':
-            questions = parse_analysis_output(analysis_output)
-            if questions:
-                print()
-                print(f'检测到 {len(questions)} 个问题，请回答：')
-                analysis_output = collect_user_answers(questions)
-            else:
-                print()
-                print('⚠️  无法解析问题格式，使用AI原始输出继续')
-
-        # 保存分析结果到日志和历史文件（现在才保存，已经处理完用户回答了）
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(f'--- Iteration {current_iteration} 分析结果 ---\n')
-            f.write(analysis_output)
-            f.write('\n\n')
-        with open(history_file, 'a', encoding='utf-8') as f:
-            f.write(f'## 迭代 {current_iteration} - 分析问答\n\n')
-            f.write(analysis_output)
-            f.write('\n\n---\n\n')
-
-        # 如果有问题需要回答，进行整合
-        print('获取了新的问题和回答，正在整合到PRD...')
-
-        # 读取整合提示模板
-        with open(prompts_dir / 'autoprd-integration.md', 'r', encoding='utf-8') as f:
-            integration_template = f.read()
-
-        # 替换模板变量
-        integration_prompt = integration_template\
-            .replace('{{CURRENT_PRD}}', current_prd)\
-            .replace('{{QUESTIONS_ANSWERS}}', analysis_output)
-
-        # 调用AI整合
-        integration_output = call_ai(integration_prompt, args.tool)
-
-        # 保存整合后的新PRD
-        with open(prd_file, 'w', encoding='utf-8') as f:
-            f.write(integration_output)
-        # 将更新后的PRD追加到历史
-        with open(history_file, 'a', encoding='utf-8') as f:
-            f.write(f'## 迭代 {current_iteration} - 更新后PRD\n\n')
-            f.write(integration_output)
-            f.write('\n\n---\n\n')
-        print('PRD已更新\n')
-
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write('--- Updated PRD ---\n')
-            f.write(integration_output)
-            f.write('\n\n')
-
-        current_iteration += 1
-
-        # 检查是否达到最大迭代次数
-        if current_iteration > args.max_iterations:
-            print()
-            print(f'⚠️  达到最大迭代次数 {args.max_iterations}，停止迭代')
-            print('已输出当前所有结果，可增加--max-iterations重新运行断点续传')
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f'\n⚠️  Reached max iterations {args.max_iterations}, stopping.\n')
-            with open(history_file, 'a', encoding='utf-8') as f:
-                f.write(f'⚠️  达到最大迭代次数 {args.max_iterations}，停止迭代\n')
-            break
-
-        time.sleep(2)
-
-    print()
-    print('================================================')
-    print('迭代完成，开始转换为Ralph prd.json格式...')
-    print('================================================')
-    print()
-
-    with open(log_file, 'a', encoding='utf-8') as f:
-        f.write('\n================================================\n')
-        f.write('Iteration complete, converting to Ralph prd.json...\n')
-        f.write('================================================\n\n')
-
-    # 转换为Ralph prd.json
-    with open(prd_file, 'r', encoding='utf-8') as f:
-        final_prd = f.read()
-
-    # 提取项目名称（从第一行标题）
-    project_name = args.requirement
-    for line in final_prd.splitlines():
-        if line.startswith('#'):
-            project_name = re.sub(r'^#\s*', '', line).strip()
-            break
-
-    # 生成branchName
-    branch_name = to_kebab_case(project_name)
-    branch_name = f'autoprd/{branch_name}'[:50]
-
-    # 提取描述（第一段非空行）
-    project_description = args.requirement
-    for line in final_prd.splitlines():
-        line = line.strip()
-        if line and not line.startswith('#'):
-            project_description = line
-            break
-
-    # 读取转换提示模板
-    with open(prompts_dir / 'autoprd-conversion.md', 'r', encoding='utf-8') as f:
-        conversion_template = f.read()
-
-    # 替换模板变量
-    conversion_prompt = conversion_template\
-        .replace('{project_name}', project_name)\
-        .replace('{branch_name}', branch_name)\
-        .replace('{project_description}', project_description)\
-        .replace('{final_prd}', final_prd)
-
-    # 调用AI生成prd.json
-    print('正在生成prd.json...')
-    json_output = call_ai(conversion_prompt, args.tool)
-
-    # 清理JSON输出（提取第一个{到最后一个}）
-    match = re.search(r'(\{.*\})', json_output, re.DOTALL)
-    if match:
-        clean_json = match.group(1)
-    else:
-        clean_json = json_output
-
-    # 保存prd.json
-    json_file = output_dir / 'prd.json'
-    with open(json_file, 'w', encoding='utf-8') as f:
-        f.write(clean_json)
-
-    print(f'prd.json 已保存到 {json_file}')
-    print()
-
-    with open(log_file, 'a', encoding='utf-8') as f:
-        f.write(f'prd.json saved to {json_file}\n')
-        f.write('\n')
-
-    # 完成
-    print('================================================')
-    print('✅ AutoPRD 完成！')
-    print('================================================')
-    print()
-    print('输出文件：')
-    print(f'  PRD: {prd_file}')
-    print(f'  prd.json: {json_file}')
-    print()
-    print('接下来可以将prd.json复制到Ralph项目目录进行自动化开发：')
-    print(f'  cp {json_file} /path/to/ralph/')
-    print(f'  cd /path/to/ralph && ./ralph.sh')
-    print()
+    # 运行PRD生成
+    run_prd_generation(
+        requirement=args.requirement,
+        tool=args.tool,
+        mode=args.mode,
+        max_iterations=args.max_iterations,
+        output_dir=output_dir,
+        vectorstore=vectorstore,
+        rag_topk=args.rag_topk,
+    )
 
 
 def handle_exception(e: Exception, log_file: Path) -> None:

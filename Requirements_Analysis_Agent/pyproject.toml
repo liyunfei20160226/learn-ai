@@ -26,4 +26,6 @@ dependencies = [
 requires-python = ">=3.8.1"
 
 [tool.uv]
-dev-dependencies = []
+dev-dependencies = [
+    "ruff>=0.15.10",
+]
