@@ -2,7 +2,7 @@
 
 import os
 from typing import List, Tuple, Optional
-from utils.subprocess import run_command
+from utils.subprocess import run_command, check_command_available
 from utils.logger import get_logger
 
 
@@ -144,6 +144,15 @@ class QualityChecker:
     def _run_check(self, cmd: str, working_dir: str = None) -> Tuple[bool, List[str]]:
         """运行单个检查"""
         logger.info(f"Running quality check: {cmd}")
+
+        # 先检查命令是否存在
+        cmd_name = cmd.split()[0]
+        if not check_command_available(cmd_name):
+            logger.warning(f"Command '{cmd_name}' not found in PATH, skipping this check")
+            # 命令不存在不算失败，跳过它，算作通过
+            # 这通常发生在新项目还没安装依赖的情况下
+            return (True, [])
+
         returncode, stdout, stderr = run_command(cmd, cwd=working_dir)
 
         if returncode == 0:

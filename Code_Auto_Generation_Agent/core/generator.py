@@ -124,7 +124,8 @@ class GenerationEngine:
             self.ai_backend = OpenAIBackend(
                 api_key=self.config.openai_api_key,
                 model=self.config.openai_model,
-                base_url=self.config.openai_base_url
+                base_url=self.config.openai_base_url,
+                working_dir=self.target_dir
             )
         else:
             logger.error(f"Unknown AI tool: {self.config.ai_backend}. Expected 'claude' or 'openai'")
