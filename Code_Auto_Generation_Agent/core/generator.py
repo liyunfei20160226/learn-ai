@@ -80,10 +80,12 @@ class GenerationEngine:
             return False
 
         # 初始化质量检查器
+        # 如果配置为空，QualityChecker会自动探测项目语言并设置默认命令
         self.quality_checker = QualityChecker(
             quality_check_cmd=self.config.quality_check_cmd,
             type_check_cmd=self.config.type_check_cmd,
-            test_cmd=self.config.test_cmd
+            test_cmd=self.config.test_cmd,
+            working_dir=self.target_dir
         )
 
         # 初始化Git管理器
