@@ -60,12 +60,12 @@ def _convert_legacy_prd(data: dict) -> dict:
 def load_prd(prd_path: str) -> Optional[PRD]:
     """加载并解析prd.json"""
     if not os.path.exists(prd_path):
-        logger.error(f"PRD file not found: {prd_path}")
+        logger.error(f"PRD文件不存在: {prd_path}")
         return None
 
     data = read_json(prd_path)
     if data is None:
-        logger.error(f"Failed to read PRD from {prd_path}")
+        logger.error(f"读取PRD文件 {prd_path} 失败")
         return None
 
     try:
@@ -96,8 +96,8 @@ def load_prd(prd_path: str) -> Optional[PRD]:
             user_stories.append(story)
 
         prd = PRD(
-            project=data.get('project', data.get('project_name', 'Unknown Project')),
-            project_name=data.get('project_name', data.get('project', 'Unknown Project')),
+            project=data.get('project', data.get('project_name', '未知项目')),
+            project_name=data.get('project_name', data.get('project', '未知项目')),
             branchName=data.get('branchName', data.get('branch_name', 'auto-coding')),
             branch_name=data.get('branch_name', data.get('branchName', 'auto-coding')),
             description=data.get('description', ''),
@@ -105,9 +105,9 @@ def load_prd(prd_path: str) -> Optional[PRD]:
             user_stories=user_stories
         )
 
-        logger.info(f"Loaded PRD: {prd.project_name}, {len(prd.user_stories)} user stories")
+        logger.info(f"已加载PRD: {prd.project_name}, {len(prd.user_stories)} 个用户故事")
         return prd
 
     except Exception as e:
-        logger.error(f"Failed to parse PRD: {str(e)}")
+        logger.error(f"解析PRD失败: {str(e)}")
         return None

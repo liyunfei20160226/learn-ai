@@ -17,7 +17,7 @@ def run_command(
     """
     运行命令，返回退出码、stdout、stderr
     """
-    logger.info(f"Running command: {cmd}")
+    logger.info(f"运行命令: {cmd}")
 
     try:
         result = subprocess.run(
@@ -34,10 +34,10 @@ def run_command(
             result.stderr if capture_output else ""
         )
     except subprocess.TimeoutExpired:
-        logger.error(f"Command timed out: {cmd}")
-        return (-1, "", f"Timeout after {timeout} seconds")
+        logger.error(f"命令超时: {cmd}")
+        return (-1, "", f"超时 {timeout} 秒")
     except Exception as e:
-        logger.error(f"Command failed: {cmd}, error: {str(e)}")
+        logger.error(f"命令执行失败: {cmd}, 错误: {str(e)}")
         return (-1, "", str(e))
 
 

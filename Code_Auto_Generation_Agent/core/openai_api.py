@@ -36,13 +36,13 @@ class OpenAIBackend(AIBackend):
     def is_available(self) -> bool:
         """检查配置是否完整"""
         if not self.api_key:
-            logger.error("OpenAI API key not provided")
+            logger.error("OpenAI API key 未提供")
             return False
         return True
 
     def implement_story(self, prompt: str) -> str:
         """实现用户故事 - 调用OpenAI API并写入文件"""
-        logger.info(f"Calling OpenAI API model={self.model}")
+        logger.info(f"调用 OpenAI API 模型={self.model}")
 
         try:
             response = self.client.chat.completions.create(
@@ -56,9 +56,9 @@ class OpenAIBackend(AIBackend):
 
             content = response.choices[0].message.content
             if not content:
-                raise RuntimeError("Empty response from OpenAI")
+                raise RuntimeError("OpenAI 返回空响应")
 
-            logger.info("OpenAI API call completed successfully")
+            logger.info("OpenAI API 调用成功完成")
 
             # 解析AI输出，提取文件并写入磁盘
             self._write_files_from_output(content)
@@ -66,8 +66,8 @@ class OpenAIBackend(AIBackend):
             return content
 
         except Exception as e:
-            logger.error(f"OpenAI API call failed: {str(e)}")
-            raise RuntimeError(f"OpenAI API failed: {str(e)}")
+            logger.error(f"OpenAI API 调用失败: {str(e)}")
+            raise RuntimeError(f"OpenAI API 失败: {str(e)}")
 
     def fix_errors(self, original_prompt: str, errors: List[str]) -> str:
         """修复错误"""
@@ -112,7 +112,7 @@ class OpenAIBackend(AIBackend):
                 file_blocks.append((path, content))
 
         if not file_blocks:
-            logger.warning("No file blocks found in AI output")
+            logger.warning("AI输出中没有找到文件块")
             return
 
         # 写入每个文件
@@ -129,9 +129,9 @@ class OpenAIBackend(AIBackend):
             full_path = os.path.normpath(full_path)
 
             if write_file(full_path, content):
-                logger.info(f"Wrote file: {rel_path}")
+                logger.info(f"已写入文件: {rel_path}")
                 written += 1
             else:
-                logger.error(f"Failed to write file: {rel_path}")
+                logger.error(f"写入文件失败: {rel_path}")
 
-        logger.info(f"Wrote {written} files from AI output")
+        logger.info(f"AI输出中共写入 {written} 个文件")

@@ -46,7 +46,7 @@ class GenerationEngine:
 
     def initialize(self) -> bool:
         """初始化引擎"""
-        logger.info("Initializing generation engine")
+        logger.info("正在初始化生成引擎")
 
         # 确保目标目录存在
         ensure_dir(self.target_dir)
@@ -54,7 +54,7 @@ class GenerationEngine:
         # 加载PRD
         self.prd = load_prd(self.prd_path)
         if self.prd is None:
-            logger.error("Failed to load PRD")
+            logger.error("加载PRD失败")
             return False
 
         # 初始化故事管理器
@@ -70,7 +70,7 @@ class GenerationEngine:
 
         # 尝试恢复进度
         if self.progress_tracker.has_progress():
-            logger.info("Found existing progress file, attempting to resume")
+            logger.info("发现现有进度文件，尝试恢复")
             progress_data = self.progress_tracker.load()
             if progress_data:
                 self.story_manager.load_from_progress(progress_data)
@@ -97,17 +97,17 @@ class GenerationEngine:
         # 准备git和分支
         if not self.git_manager.is_git_repo():
             # 目标目录不是git仓库，自动初始化
-            logger.info("Target directory is not a git repository, initializing...")
+            logger.info("目标目录不是Git仓库，正在初始化...")
             if not self.git_manager.init_repo():
-                logger.warning("Failed to initialize git repository, Git operations disabled")
+                logger.warning("初始化Git仓库失败，Git操作已禁用")
             else:
-                logger.info("Git repository initialized, creating branch...")
+                logger.info("Git仓库初始化完成，正在创建分支...")
                 self.git_manager.create_branch(self.prd.branch_name)
         else:
-            logger.info("Target directory is already a git repository")
+            logger.info("目标目录已经是Git仓库")
             self.git_manager.create_branch(self.prd.branch_name)
 
-        logger.info("Generation engine initialized successfully")
+        logger.info("生成引擎初始化成功")
         return True
 
     def _init_ai_backend(self) -> bool:
@@ -119,7 +119,7 @@ class GenerationEngine:
             )
         elif self.config.ai_backend == "openai":
             if not self.config.openai_api_key:
-                logger.error("OpenAI API key not configured. Set OPENAI_API_KEY in .env")
+                logger.error("OpenAI API key 未配置，请在 .env 中设置 OPENAI_API_KEY")
                 return False
             self.ai_backend = OpenAIBackend(
                 api_key=self.config.openai_api_key,
@@ -128,23 +128,23 @@ class GenerationEngine:
                 working_dir=self.target_dir
             )
         else:
-            logger.error(f"Unknown AI tool: {self.config.ai_backend}. Expected 'claude' or 'openai'")
+            logger.error(f"未知AI工具: {self.config.ai_backend}，应为 'claude' 或 'openai'")
             return False
 
         if not self.ai_backend.is_available():
-            logger.error(f"AI tool {self.config.ai_backend} is not available")
+            logger.error(f"AI工具 {self.config.ai_backend} 不可用")
             return False
 
-        logger.info(f"AI tool initialized: {self.config.ai_backend}")
+        logger.info(f"AI工具已初始化: {self.config.ai_backend}")
         return True
 
     def run(self) -> dict:
         """运行生成流程"""
         if not self.initialize():
-            return {"success": False, "error": "Initialization failed"}
+            return {"success": False, "error": "初始化失败"}
 
         if self.dry_run:
-            logger.info("Dry run mode enabled, exiting without actual generation")
+            logger.info("干运行模式，不实际生成，直接退出")
             return self._get_summary()
 
         completed_count = 0
@@ -153,18 +153,18 @@ class GenerationEngine:
         while True:
             # 检查是否所有故事都完成
             if self.story_manager.is_all_completed():
-                logger.info("All user stories completed!")
+                logger.info("所有用户故事已完成!")
                 break
 
             # 检查是否达到max_stories限制
             if self.max_stories and stories_processed >= self.max_stories:
-                logger.info(f"Reached max stories limit ({self.max_stories}), stopping")
+                logger.info(f"已达到最大故事数量限制 ({self.max_stories})，停止")
                 break
 
             # 获取下一个故事
             story = self.story_manager.get_next_story()
             if story is None:
-                logger.info("No more pending stories")
+                logger.info("没有更多待处理故事")
                 break
 
             stories_processed += 1
@@ -176,14 +176,14 @@ class GenerationEngine:
 
         # 最终总结
         summary = self._get_summary()
-        logger.info("Generation completed")
-        logger.info(f"Total: {summary['total_stories']}, Completed: {summary['completed_stories']}, Failed: {summary['failed_stories']}")
+        logger.info("生成完成")
+        logger.info(f"总计: {summary['total_stories']}, 已完成: {summary['completed_stories']}, 失败: {summary['failed_stories']}")
 
         return summary
 
     def _process_story(self, story: StoryState):
         """处理单个用户故事"""
-        logger.info(f"Processing story: {story.id} - {story.title}")
+        logger.info(f"正在处理故事: {story.id} - {story.title}")
         self.story_manager.mark_in_progress(story)
 
         # 构建prompt
@@ -196,7 +196,7 @@ class GenerationEngine:
 
         try:
             # 调用AI实现
-            logger.info(f"Calling {self.config.ai_backend} to implement story...")
+            logger.info(f"调用 {self.config.ai_backend} 实现故事...")
             if self.dry_run:
                 return
 
@@ -209,17 +209,15 @@ class GenerationEngine:
                 # 如果不通过，尝试修复
                 fix_attempts = 0
                 while not result.passed and fix_attempts < self.config.max_fix_attempts:
-                    logger.warning(f"Quality check failed, attempt {fix_attempts + 1}/{self.config.max_fix_attempts} to fix")
+                    logger.warning(f"质量检查失败，第 {fix_attempts + 1}/{self.config.max_fix_attempts} 次修复尝试")
                     output = self.ai_backend.fix_errors(prompt, result.errors)
                     result = self.quality_checker.run_all(working_dir=self.target_dir)
                     fix_attempts += 1
 
                 if not result.passed:
                     # 修复失败
-                    error_messages = [f"Fix attempt {i + 1}: " + "\n".join(e for e in result.errors)
-                                     for i, result in enumerate([result])]
                     self.story_manager.mark_failed(story, result.errors)
-                    self.progress_tracker.add_lesson(f"{story.id} {story.title} failed quality check after {fix_attempts} fix attempts")
+                    self.progress_tracker.add_lesson(f"{story.id} {story.title} 经过 {fix_attempts} 次修复尝试后质量检查仍然失败")
                     return
 
             # 质量检查通过，提交
@@ -229,12 +227,12 @@ class GenerationEngine:
 
             # 标记完成
             self.story_manager.mark_completed(story, commit_hash)
-            logger.info(f"Story {story.id} completed successfully")
+            logger.info(f"故事 {story.id} 成功完成")
 
         except Exception as e:
-            logger.error(f"Failed to process story {story.id}: {str(e)}")
+            logger.error(f"处理故事 {story.id} 失败: {str(e)}")
             self.story_manager.mark_failed(story, [str(e)])
-            self.progress_tracker.add_lesson(f"{story.id} {story.title} failed with error: {str(e)}")
+            self.progress_tracker.add_lesson(f"{story.id} {story.title} 发生错误: {str(e)}")
 
     def _get_summary(self) -> dict:
         """获取生成总结"""

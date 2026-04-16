@@ -59,7 +59,7 @@ class StoryManager:
     def load_from_progress(self, progress_data: dict) -> bool:
         """从进度文件恢复状态"""
         if 'stories' not in progress_data:
-            logger.warning("No stories in progress data")
+            logger.warning("进度数据中没有故事信息")
             return False
 
         try:
@@ -75,10 +75,10 @@ class StoryManager:
                     story.retries = loaded_story.get('retries', 0)
                     story.errors = loaded_story.get('errors', [])
 
-            logger.info(f"Restored {len(progress_data['stories'])} stories from progress")
+            logger.info(f"已从进度恢复 {len(progress_data['stories'])} 个故事")
             return True
         except Exception as e:
-            logger.error(f"Failed to restore from progress: {str(e)}")
+            logger.error(f"从进度恢复失败: {str(e)}")
             return False
 
     def get_next_story(self) -> Optional[StoryState]:

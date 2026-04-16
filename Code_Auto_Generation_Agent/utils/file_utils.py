@@ -24,7 +24,7 @@ def read_json(path: str) -> Optional[Any]:
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        logger.error(f"Failed to read JSON from {path}: {str(e)}")
+        logger.error(f"从 {path} 读取JSON失败: {str(e)}")
         return None
 
 
@@ -36,7 +36,7 @@ def write_json(path: str, data: Any) -> bool:
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
-        logger.error(f"Failed to write JSON to {path}: {str(e)}")
+        logger.error(f"写入JSON到 {path} 失败: {str(e)}")
         return False
 
 
@@ -48,7 +48,7 @@ def read_file(path: str) -> Optional[str]:
         with open(path, 'r', encoding='utf-8') as f:
             return f.read()
     except Exception as e:
-        logger.error(f"Failed to read file {path}: {str(e)}")
+        logger.error(f"读取文件 {path} 失败: {str(e)}")
         return None
 
 
@@ -60,5 +60,5 @@ def write_file(path: str, content: str) -> bool:
             f.write(content)
         return True
     except Exception as e:
-        logger.error(f"Failed to write file {path}: {str(e)}")
+        logger.error(f"写入文件 {path} 失败: {str(e)}")
         return False

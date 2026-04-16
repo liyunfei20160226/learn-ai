@@ -105,7 +105,7 @@ class QualityChecker:
         if quality_check_cmd is None and type_check_cmd is None and test_cmd is None:
             language = detect_project_language(working_dir or '.')
             if language:
-                logger.info(f"Auto-detected project language: {language}")
+                logger.info(f"自动探测到项目语言: {language}")
                 quality_check_cmd, type_check_cmd, test_cmd = get_default_commands(language, working_dir or '.')
 
         self.quality_check_cmd = quality_check_cmd
@@ -138,12 +138,12 @@ class QualityChecker:
                 all_passed = False
                 all_errors.extend(errors)
 
-        logger.info(f"Quality check done: passed={all_passed}, errors={len(all_errors)}")
+        logger.info(f"质量检查完成: 通过={all_passed}, 错误数={len(all_errors)}")
         return QualityCheckResult(all_passed, all_errors)
 
     def _run_check(self, cmd: str, working_dir: str = None) -> Tuple[bool, List[str]]:
         """运行单个检查"""
-        logger.info(f"Running quality check: {cmd}")
+        logger.info(f"运行质量检查: {cmd}")
 
         # 先检查命令是否存在
         cmd_name = cmd.split()[0]
@@ -154,41 +154,41 @@ class QualityChecker:
             # 给出具体的安装提示，根据项目类型
             if os.path.exists(os.path.join(cwd, 'pyproject.toml')):
                 hint = (
-                    f"Required command '{cmd_name}' not found.\n"
-                    f"Install dependencies first in directory: {cwd}\n"
-                    f"Example: 'uv sync' or 'pip install -r requirements.txt'\n"
-                    f"Then run again with --resume to continue."
+                    f"需要的命令 '{cmd_name}' 找不到。\n"
+                    f"请先在目录 {cwd} 安装依赖:\n"
+                    f"示例: 'uv sync' 或 'pip install -r requirements.txt'\n"
+                    f"安装完成后使用 --resume 参数重新运行继续。"
                 )
             elif os.path.exists(os.path.join(cwd, 'package.json')):
                 pm = detect_package_manager(cwd)
                 hint = (
-                    f"Required command '{cmd_name}' not found.\n"
-                    f"Install dependencies first: '{pm} install' in directory: {cwd}\n"
-                    f"Then run again with --resume to continue."
+                    f"需要的命令 '{cmd_name}' 找不到。\n"
+                    f"请先在目录 {cwd} 安装依赖: '{pm} install'\n"
+                    f"安装完成后使用 --resume 参数重新运行继续。"
                 )
             elif os.path.exists(os.path.join(cwd, 'requirements.txt')):
                 hint = (
-                    f"Required command '{cmd_name}' not found.\n"
-                    f"Install dependencies first: 'pip install -r requirements.txt' in directory: {cwd}\n"
-                    f"Then run again with --resume to continue."
+                    f"需要的命令 '{cmd_name}' 找不到。\n"
+                    f"请先在目录 {cwd} 安装依赖: 'pip install -r requirements.txt'\n"
+                    f"安装完成后使用 --resume 参数重新运行继续。"
                 )
             elif os.path.exists(os.path.join(cwd, 'pom.xml')):
                 hint = (
-                    f"Required command '{cmd_name}' not found.\n"
-                    f"Install Maven and run 'mvn install' in directory: {cwd}\n"
-                    f"Then run again with --resume to continue."
+                    f"需要的命令 '{cmd_name}' 找不到。\n"
+                    f"请先安装 Maven 并在目录 {cwd} 运行 'mvn install'\n"
+                    f"安装完成后使用 --resume 参数重新运行继续。"
                 )
             elif os.path.exists(os.path.join(cwd, 'Cargo.toml')):
                 hint = (
-                    f"Required command '{cmd_name}' not found.\n"
-                    f"Install Rust and run 'cargo build' in directory: {cwd}\n"
-                    f"Then run again with --resume to continue."
+                    f"需要的命令 '{cmd_name}' 找不到。\n"
+                    f"请先安装 Rust 并在目录 {cwd} 运行 'cargo build'\n"
+                    f"安装完成后使用 --resume 参数重新运行继续。"
                 )
             else:
                 hint = (
-                    f"Required command '{cmd_name}' not found in PATH.\n"
-                    f"Install the required tool/dependencies in directory: {cwd}\n"
-                    f"Then run again with --resume to continue."
+                    f"需要的命令 '{cmd_name}' 在PATH中找不到。\n"
+                    f"请在目录 {cwd} 安装所需工具或依赖\n"
+                    f"安装完成后使用 --resume 参数重新运行继续。"
                 )
             logger.error(hint)
             return (False, [hint])
@@ -196,19 +196,19 @@ class QualityChecker:
         returncode, stdout, stderr = run_command(cmd, cwd=working_dir)
 
         if returncode == 0:
-            logger.info(f"Check passed: {cmd}")
+            logger.info(f"检查通过: {cmd}")
             return (True, [])
 
         errors = []
         if stdout:
-            errors.append(f"{cmd} failed:\n{stdout}")
+            errors.append(f"{cmd} 失败:\n{stdout}")
         if stderr:
-            errors.append(f"{cmd} stderr:\n{stderr}")
+            errors.append(f"{cmd} 标准错误:\n{stderr}")
 
         if not errors:
-            errors.append(f"{cmd} exited with code {returncode}")
+            errors.append(f"{cmd} 退出码 {returncode}")
 
-        logger.warning(f"Check failed: {cmd}, {len(errors)} errors")
+        logger.warning(f"检查失败: {cmd}, {len(errors)} 个错误")
         return (False, errors)
 
     def is_enabled(self) -> bool:

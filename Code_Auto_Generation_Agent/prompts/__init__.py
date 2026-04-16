@@ -21,7 +21,7 @@ def get_implementation_prompt(
     template_path = os.path.join(os.path.dirname(__file__), "implement-story.md")
     template = read_file(template_path)
     if not template:
-        logger.error(f"Prompt template not found: {template_path}")
+        logger.error(f"提示词模板找不到: {template_path}")
         template = DEFAULT_TEMPLATE
 
     # 填充验收标准

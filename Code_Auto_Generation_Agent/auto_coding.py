@@ -93,7 +93,7 @@ def main():
 
     # 验证prd文件存在
     if not os.path.exists(args.prd_path):
-        logger.error(f"PRD file not found: {args.prd_path}")
+        logger.error(f"PRD文件不存在: {args.prd_path}")
         sys.exit(1)
 
     # 如果没有指定target-dir，自动生成默认路径
@@ -104,14 +104,14 @@ def main():
         dir_name = os.path.splitext(prd_basename)[0]
         # 默认放在 output/ 目录下
         target_dir = os.path.join("output", dir_name)
-        logger.info(f"No target directory specified, using default: {target_dir}")
+        logger.info(f"未指定目标目录，使用默认路径: {target_dir}")
     else:
         target_dir = args.target_dir
 
     # 确保目标目录存在
     if not os.path.exists(target_dir):
         os.makedirs(target_dir, exist_ok=True)
-        logger.info(f"Created target directory: {target_dir}")
+        logger.info(f"已创建目标目录: {target_dir}")
 
     # 创建并运行生成引擎
     engine = GenerationEngine(
@@ -122,24 +122,24 @@ def main():
         dry_run=args.dry_run
     )
 
-    logger.info(f"Starting auto coding with AI tool: {config.ai_backend}")
+    logger.info(f"开始自动编码，AI工具: {config.ai_backend}")
     summary = engine.run()
 
     if not summary['success']:
-        logger.error(f"Generation failed: {summary.get('error', 'Unknown error')}")
+        logger.error(f"生成失败: {summary.get('error', '未知错误')}")
         sys.exit(1)
 
     # 打印总结
     logger.info("=" * 60)
-    logger.info("Generation Complete!")
-    logger.info(f"Project: {summary['project_name']}")
-    logger.info(f"Total stories: {summary['total_stories']}")
-    logger.info(f"Completed: {summary['completed_stories']}")
-    logger.info(f"Failed: {summary['failed_stories']}")
-    logger.info(f"Output directory: {summary['target_dir']}")
+    logger.info("生成完成!")
+    logger.info(f"项目: {summary['project_name']}")
+    logger.info(f"总故事数: {summary['total_stories']}")
+    logger.info(f"已完成: {summary['completed_stories']}")
+    logger.info(f"失败: {summary['failed_stories']}")
+    logger.info(f"输出目录: {summary['target_dir']}")
 
     if summary['lessons_learned']:
-        logger.info("Lessons learned:")
+        logger.info("经验教训:")
         for lesson in summary['lessons_learned'][-5:]:
             logger.info(f"  {lesson}")
 

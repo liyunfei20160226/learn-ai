@@ -33,7 +33,7 @@ class ProgressTracker:
         if 'lessons_learned' in data:
             self.lessons_learned = data['lessons_learned']
 
-        logger.info(f"Loaded existing progress from {self.progress_file}")
+        logger.info(f"已从 {self.progress_file} 加载现有进度")
         return data
 
     def save(self, story_manager: StoryManager):
@@ -54,9 +54,9 @@ class ProgressTracker:
 
         success = write_json(self.progress_file, data)
         if success:
-            logger.debug(f"Progress saved to {self.progress_file}")
+            logger.debug(f"进度已保存到 {self.progress_file}")
         else:
-            logger.error(f"Failed to save progress to {self.progress_file}")
+            logger.error(f"保存进度到 {self.progress_file} 失败")
 
         return success
 

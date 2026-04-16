@@ -23,7 +23,7 @@ class ClaudeCLIBackend(AIBackend):
         """检查claude命令是否可用"""
         available = check_command_available(self.claude_cmd)
         if not available:
-            logger.error(f"Claude CLI not available: {self.claude_cmd} not found in PATH")
+            logger.error(f"Claude CLI 不可用: {self.claude_cmd} 在PATH中找不到")
         return available
 
     def implement_story(self, prompt: str) -> str:
@@ -37,14 +37,14 @@ class ClaudeCLIBackend(AIBackend):
             cwd = self.working_dir or os.getcwd()
             cmd = f"{self.claude_cmd} --print {temp_file}"
 
-            logger.info(f"Calling Claude CLI: {cmd}")
+            logger.info(f"调用 Claude CLI: {cmd}")
             returncode, stdout, stderr = run_command(cmd, cwd=cwd, timeout=3600)
 
             if returncode != 0:
-                logger.error(f"Claude CLI failed: returncode={returncode}, stderr={stderr}")
-                raise RuntimeError(f"Claude CLI failed: {stderr}")
+                logger.error(f"Claude CLI 失败: 退出码={returncode}, 错误={stderr}")
+                raise RuntimeError(f"Claude CLI 失败: {stderr}")
 
-            logger.info("Claude CLI completed successfully")
+            logger.info("Claude CLI 执行成功完成")
             return stdout
 
         finally:
