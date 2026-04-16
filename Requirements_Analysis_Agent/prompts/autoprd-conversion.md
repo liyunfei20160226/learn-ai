@@ -11,7 +11,7 @@
 ```json
 {
   "project": "[项目名称]",
-  "branchName": "ralph/[功能名称-短横线连接]",
+  "branchName": "autoprd/[功能名称-短横线连接]",
   "description": "[项目描述]",
   "userStories": [
     {
@@ -112,7 +112,7 @@ Ralph 每次迭代都是一个全新的 Amp 实例，没有之前工作的记忆
 2. **ID**：顺序编号（US-001, US-002, ...）
 3. **优先级**：基于依赖顺序，文档顺序，数字越小优先级越高
 4. **所有故事**：设置 `passes: false` 和 `notes: ""`
-5. **branchName**：从功能名派生，使用短横线连接(kebab-case)，前缀 `ralph/`
+5. **branchName**：从功能名派生，使用短横线连接(kebab-case)，前缀 `autoprd/`
 6. **总是添加**：`"类型检查通过"` 到每个故事的验收标准
 
 ---

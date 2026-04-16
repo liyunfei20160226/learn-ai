@@ -647,16 +647,16 @@ def run_prd_generation(
 
     print()
     print('================================================')
-    print('迭代完成，开始转换为Ralph prd.json格式...')
+    print('迭代完成，开始转换为Code_Auto_Generation_Agent使用的 prd.json格式...')
     print('================================================')
     print()
 
     with open(log_file, 'a', encoding='utf-8') as f:
         f.write('\n================================================\n')
-        f.write('Iteration complete, converting to Ralph prd.json...\n')
+        f.write('Iteration complete, converting to Code_Auto_Generation_Agent prd.json...\n')
         f.write('================================================\n\n')
 
-    # Convert to Ralph prd.json
+    # Convert to Code_Auto_Generation_Agent prd.json
     with open(prd_file, 'r', encoding='utf-8') as f:
         final_prd = f.read()
 
@@ -779,9 +779,7 @@ def run_prd_generation(
     print(f'  PRD: {prd_file}')
     print(f'  prd.json: {json_file}')
     print()
-    print('接下来可以将prd.json复制到Ralph项目目录进行自动化开发：')
-    print(f'  cp {json_file} /path/to/ralph/')
-    print('  cd /path/to/ralph && ./ralph.sh')
+    print('接下来可以将prd.json复制到Code_Auto_Generation_Agent项目目录进行自动化开发：')
     print()
 
 
