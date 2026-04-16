@@ -57,6 +57,27 @@ def _convert_legacy_prd(data: dict) -> dict:
     return converted
 
 
+def _generate_default_branch_name(prd_path: str) -> str:
+    """根据prd文件路径自动生成分支名称: feature/文件名"""
+    # 获取文件名（不含扩展名）
+    prd_basename = os.path.basename(prd_path)
+    branch_name = os.path.splitext(prd_basename)[0]
+
+    # 清理文件名，替换不适合分支名的字符
+    # git分支名不允许空格、特殊字符，替换为连字符
+    import re
+    branch_name = re.sub(r'[^\w\-./]', '-', branch_name)
+    branch_name = re.sub(r'-+', '-', branch_name)
+    branch_name = branch_name.strip('-')
+
+    # 如果已经是feature/开头就不用再加了
+    if branch_name.startswith('feature/'):
+        return branch_name
+
+    # 添加feature/前缀
+    return f'feature/{branch_name}'
+
+
 def load_prd(prd_path: str) -> Optional[PRD]:
     """加载并解析prd.json"""
     if not os.path.exists(prd_path):
@@ -95,11 +116,13 @@ def load_prd(prd_path: str) -> Optional[PRD]:
             )
             user_stories.append(story)
 
+        # 如果没有指定branch_name，根据prd文件名自动生成
+        default_branch_name = _generate_default_branch_name(prd_path)
         prd = PRD(
             project=data.get('project', data.get('project_name', '未知项目')),
             project_name=data.get('project_name', data.get('project', '未知项目')),
-            branchName=data.get('branchName', data.get('branch_name', 'auto-coding')),
-            branch_name=data.get('branch_name', data.get('branchName', 'auto-coding')),
+            branchName=data.get('branchName', data.get('branch_name', default_branch_name)),
+            branch_name=data.get('branch_name', data.get('branchName', default_branch_name)),
             description=data.get('description', ''),
             userStories=user_stories,
             user_stories=user_stories
