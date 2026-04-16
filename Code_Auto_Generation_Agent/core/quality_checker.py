@@ -148,10 +148,18 @@ class QualityChecker:
         # 先检查命令是否存在
         cmd_name = cmd.split()[0]
         if not check_command_available(cmd_name):
-            logger.warning(f"Command '{cmd_name}' not found in PATH, skipping this check")
-            # 命令不存在不算失败，跳过它，算作通过
-            # 这通常发生在新项目还没安装依赖的情况下
-            return (True, [])
+            # 区分系统级命令和项目级依赖:
+            # - 系统级命令 (java, go, rustc, cargo, mvn, cmake, gcc): 必须存在，不存在提示用户安装
+            # - 项目级依赖 (ruff, mypy, pytest, npm, pnpm, yarn): 新项目可能还没安装依赖，可以跳过
+            system_commands = {'java', 'go', 'rustc', 'cargo', 'mvn', 'cmake', 'gcc', 'g++'}
+            if cmd_name in system_commands:
+                error_msg = f"System command '{cmd_name}' not found in PATH. Please install {cmd_name} first and then resume."
+                logger.error(error_msg)
+                return (False, [error_msg])
+            else:
+                logger.warning(f"Command '{cmd_name}' not found in PATH, skipping this check (this is normal for new projects before installing dependencies)")
+                # 项目级依赖不存在不算失败，跳过它，算作通过
+                return (True, [])
 
         returncode, stdout, stderr = run_command(cmd, cwd=working_dir)
 
