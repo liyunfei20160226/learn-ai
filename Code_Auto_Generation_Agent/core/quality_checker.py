@@ -148,42 +148,50 @@ class QualityChecker:
         # 先检查命令是否存在
         cmd_name = cmd.split()[0]
         if not check_command_available(cmd_name):
-            # 区分系统级命令和项目级依赖:
-            # - 系统级命令 (java, go, rustc, cargo, mvn, cmake, gcc): 必须存在，不存在提示用户安装，标记失败
-            # - 项目级依赖 (ruff, mypy, pytest, npm, pnpm, yarn): 新项目可能还没安装依赖，可以跳过但提示用户
-            system_commands = {'java', 'go', 'rustc', 'cargo', 'mvn', 'cmake', 'gcc', 'g++'}
-            if cmd_name in system_commands:
-                error_msg = f"System command '{cmd_name}' not found in PATH. Please install {cmd_name} first on your system, then run again with --resume."
-                logger.error(error_msg)
-                return (False, [error_msg])
+            # 只要配置了检查命令但命令不存在，就标记为失败
+            # 需要用户安装好依赖/工具后，用 --resume 重新运行检查
+            cwd = working_dir or os.getcwd()
+            # 给出具体的安装提示，根据项目类型
+            if os.path.exists(os.path.join(cwd, 'pyproject.toml')):
+                hint = (
+                    f"Required command '{cmd_name}' not found.\n"
+                    f"Install dependencies first in directory: {cwd}\n"
+                    f"Example: 'uv sync' or 'pip install -r requirements.txt'\n"
+                    f"Then run again with --resume to continue."
+                )
+            elif os.path.exists(os.path.join(cwd, 'package.json')):
+                pm = detect_package_manager(cwd)
+                hint = (
+                    f"Required command '{cmd_name}' not found.\n"
+                    f"Install dependencies first: '{pm} install' in directory: {cwd}\n"
+                    f"Then run again with --resume to continue."
+                )
+            elif os.path.exists(os.path.join(cwd, 'requirements.txt')):
+                hint = (
+                    f"Required command '{cmd_name}' not found.\n"
+                    f"Install dependencies first: 'pip install -r requirements.txt' in directory: {cwd}\n"
+                    f"Then run again with --resume to continue."
+                )
+            elif os.path.exists(os.path.join(cwd, 'pom.xml')):
+                hint = (
+                    f"Required command '{cmd_name}' not found.\n"
+                    f"Install Maven and run 'mvn install' in directory: {cwd}\n"
+                    f"Then run again with --resume to continue."
+                )
+            elif os.path.exists(os.path.join(cwd, 'Cargo.toml')):
+                hint = (
+                    f"Required command '{cmd_name}' not found.\n"
+                    f"Install Rust and run 'cargo build' in directory: {cwd}\n"
+                    f"Then run again with --resume to continue."
+                )
             else:
-                # 项目级依赖：给出具体的安装提示
-                cwd = working_dir or os.getcwd()
-                # 根据项目语言推断包管理器
-                if os.path.exists(os.path.join(cwd, 'pyproject.toml')):
-                    hint = (
-                        f"Project dependency '{cmd_name}' not found.\n"
-                        f"After code generation completes, run: 'uv sync' (or 'pip install -r requirements.txt') in directory: {cwd}"
-                    )
-                elif os.path.exists(os.path.join(cwd, 'package.json')):
-                    pm = detect_package_manager(cwd)
-                    hint = (
-                        f"Project dependency '{cmd_name}' not found.\n"
-                        f"After code generation completes, run: '{pm} install' in directory: {cwd}"
-                    )
-                elif os.path.exists(os.path.join(cwd, 'requirements.txt')):
-                    hint = (
-                        f"Project dependency '{cmd_name}' not found.\n"
-                        f"After code generation completes, run: 'pip install -r requirements.txt' in directory: {cwd}"
-                    )
-                else:
-                    hint = (
-                        f"Project dependency '{cmd_name}' not found.\n"
-                        f"After code generation completes, install dependencies in directory: {cwd}"
-                    )
-                logger.warning(hint)
-                # 添加到错误信息但不算检查失败，允许继续生成代码
-                return (True, [hint])
+                hint = (
+                    f"Required command '{cmd_name}' not found in PATH.\n"
+                    f"Install the required tool/dependencies in directory: {cwd}\n"
+                    f"Then run again with --resume to continue."
+                )
+            logger.error(hint)
+            return (False, [hint])
 
         returncode, stdout, stderr = run_command(cmd, cwd=working_dir)
 
