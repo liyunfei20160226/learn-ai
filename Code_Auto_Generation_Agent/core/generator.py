@@ -1,20 +1,19 @@
 """主生成引擎 - 控制整个生成流程"""
 
-import os
-from typing import Optional, List
+from typing import Optional
+
 from config import Config
-from core.prd_loader import PRD, load_prd
-from core.story_manager import StoryManager, StoryState
-from core.progress_tracker import ProgressTracker
 from core.ai_backend import AIBackend
 from core.claude_cli import ClaudeCLIBackend
-from core.openai_api import OpenAIBackend
-from core.quality_checker import QualityChecker, QualityCheckResult
 from core.git_manager import GitManager
-from utils.logger import get_logger
-from utils.file_utils import read_file, ensure_dir
+from core.openai_api import OpenAIBackend
+from core.prd_loader import PRD, load_prd
+from core.progress_tracker import ProgressTracker
+from core.quality_checker import QualityChecker
+from core.story_manager import StoryManager, StoryState
 from prompts import get_implementation_prompt
-
+from utils.file_utils import ensure_dir
+from utils.logger import get_logger
 
 logger = get_logger()
 
@@ -74,17 +73,19 @@ class GenerationEngine:
             progress_data = self.progress_tracker.load()
             if progress_data:
                 self.story_manager.load_from_progress(progress_data)
+                # 如果进度中已有AI生成的构建命令，加载到质量检查器
+                build_commands = self.progress_tracker.get_build_commands()
+                if build_commands and self.quality_checker:
+                    # 将保存的命令注入到quality_checker
+                    self.quality_checker.ai_commands = build_commands
 
         # 初始化AI后端
         if not self._init_ai_backend():
             return False
 
         # 初始化质量检查器
-        # 如果配置为空，QualityChecker会自动探测项目语言并设置默认命令
+        # 所有命令完全由AI动态决定，不需要用户配置
         self.quality_checker = QualityChecker(
-            quality_check_cmd=self.config.quality_check_cmd,
-            type_check_cmd=self.config.type_check_cmd,
-            test_cmd=self.config.test_cmd,
             working_dir=self.target_dir
         )
 
@@ -200,22 +201,134 @@ class GenerationEngine:
             if self.dry_run:
                 return
 
-            output = self.ai_backend.implement_story(prompt)
+            self.ai_backend.implement_story(prompt)
 
-            # 运行质量检查
-            if self.quality_checker.is_enabled():
-                result = self.quality_checker.run_all(working_dir=self.target_dir)
+            # 运行质量检查（如果启用）
+            if self.config.quality_check_enabled and self.quality_checker.is_enabled():
+                result = self.quality_checker.run_all(
+                    working_dir=self.target_dir,
+                    ai_backend=self.ai_backend,
+                    project_description=self.prd.description
+                )
+
+                # 如果AI生成了构建命令，保存到进度跟踪器
+                ai_commands = self.quality_checker.get_ai_commands()
+                if ai_commands and self.progress_tracker:
+                    self.progress_tracker.set_build_commands(
+                        install=ai_commands.get('install', []),
+                        quality_check=ai_commands.get('quality_check', []),
+                        type_check=ai_commands.get('type_check', []),
+                        test=ai_commands.get('test', [])
+                    )
 
                 # 如果不通过，尝试修复
                 fix_attempts = 0
                 while not result.passed and fix_attempts < self.config.max_fix_attempts:
-                    logger.warning(f"质量检查失败，第 {fix_attempts + 1}/{self.config.max_fix_attempts} 次修复尝试")
-                    output = self.ai_backend.fix_errors(prompt, result.errors)
-                    result = self.quality_checker.run_all(working_dir=self.target_dir)
+                    # 打印当前错误信息
+                    logger.warning(f"质量检查失败，第 {fix_attempts + 1}/{self.config.max_fix_attempts} 次修复尝试，当前错误：")
+                    for i, err in enumerate(result.errors, 1):
+                        logger.warning(f"[错误 {i}/{len(result.errors)}]\n{err}\n")
+                    logger.warning("正在调用AI修复...")
+
+                    # 根据核心设计理念：把错误信息发给AI，让AI决定需要改什么
+                    # 检查错误是否只涉及构建命令，还是需要修改代码
+                    # 如果所有错误都是"命令不存在/no module"，说明只是构建命令问题，只修复命令
+                    # 如果有其他错误（比如文件结构错误、编译错误），说明需要修改代码
+                    only_command_errors = True
+                    for err in result.errors:
+                        if "No module named" not in err and "program not found" not in err and "command not found" not in err:
+                            only_command_errors = False
+                            break
+
+                    ai_commands = self.quality_checker.get_ai_commands()
+                    if ai_commands is not None and only_command_errors:
+                        # 只有命令相关错误 ⇒ 只修复构建命令，不碰代码
+                        logger.info("只有构建命令错误，正在让AI重新获取构建命令...")
+                        from prompts import get_build_commands_prompt
+                        repair_prompt = get_build_commands_prompt(self.prd.description, self.target_dir)
+                        repair_prompt += "\n\n## 重要：上次获取的构建命令执行失败\n\n错误信息：\n\n"
+                        for err in result.errors:
+                            repair_prompt += f"- {err}\n"
+                        repair_prompt += """
+
+## 你的任务
+请根据错误信息**重新给出完整正确的构建和检查命令**。
+修改错误的命令，保持正确的命令不变。
+**必须严格保持原来的JSON输出格式**。
+"""
+                        # 打印prompt方便调试
+                        logger.info("=" * 60)
+                        logger.info("发送给AI修复构建命令的prompt:")
+                        logger.info("\n" + repair_prompt + "\n")
+                        logger.info("=" * 60)
+                        # 不需要写入文件，只获取命令
+                        content = self.ai_backend.implement_story(repair_prompt, write_files=False)
+                        # 打印AI回复方便调试
+                        logger.info("=" * 60)
+                        logger.info("AI修复构建命令回复:")
+                        logger.info("\n" + content + "\n")
+                        logger.info("=" * 60)
+                        # 解析AI返回的新命令并更新quality_checker
+                        commands = self.quality_checker._parse_ai_response(content)
+                        self.quality_checker.ai_commands = commands
+                    else:
+                        # 存在非命令错误 ⇒ 需要修改代码，把完整错误信息发给AI修复代码
+                        logger.info("存在代码错误，正在调用AI修复代码...")
+                        self.ai_backend.fix_errors(prompt, result.errors)
+
+                    # 决定从哪个阶段开始重试
+                    start_from_stage = 1
+                    need_restart_install = False
+                    if 'result' in locals():
+                        # 如果这不是第一次尝试，检查错误类型决定从哪里开始
+                        # 如果错误包含"command not found"/"No module named"，说明新增了依赖但没安装
+                        # 需要强制从头安装，不能从失败阶段继续
+                        for err in result.errors:
+                            if ("command not found" in err.lower()
+                                or "program not found" in err.lower()
+                                or "no module named" in err.lower()
+                                or "cannot find module" in err.lower()
+                                or "cannot find package" in err.lower()
+                                or "err_module_not_found" in err.lower()
+                                or "認識されていません" in err  # Japanese Windows
+                                or "不能被识别为" in err  # Chinese Windows
+                                or "不是内部或外部命令" in err):  # Chinese Windows
+                                need_restart_install = True
+                                break
+
+                        if need_restart_install:
+                            logger.info("检测到缺少命令/模块错误，需要重新运行安装阶段")
+                            start_from_stage = 1
+                        else:
+                            # 正常情况：从上次失败的阶段开始重试，不重复已经成功的阶段
+                            # 例如：上次安装成功了，失败在质量检查，这次从质量检查开始
+                            start_from_stage = result.failed_stage if result.failed_stage > 0 else 1
+
+                    result = self.quality_checker.run_all(
+                        working_dir=self.target_dir,
+                        ai_backend=self.ai_backend,
+                        project_description=self.prd.description,
+                        start_from_stage=start_from_stage
+                    )
+
+                    # 更新构建命令到进度跟踪器
+                    ai_commands = self.quality_checker.get_ai_commands()
+                    if ai_commands and self.progress_tracker:
+                        self.progress_tracker.set_build_commands(
+                            install=ai_commands.get('install', []),
+                            quality_check=ai_commands.get('quality_check', []),
+                            type_check=ai_commands.get('type_check', []),
+                            test=ai_commands.get('test', [])
+                        )
+
                     fix_attempts += 1
 
                 if not result.passed:
-                    # 修复失败
+                    # 修复失败，打印所有错误信息到日志
+                    logger.error(f"故事 {story.id} 经过 {fix_attempts} 次修复尝试后质量检查仍然失败，错误信息汇总：")
+                    for i, err in enumerate(result.errors, 1):
+                        logger.error(f"[错误 {i}/{len(result.errors)}]\n{err}\n")
+                    # 标记失败
                     self.story_manager.mark_failed(story, result.errors)
                     self.progress_tracker.add_lesson(f"{story.id} {story.title} 经过 {fix_attempts} 次修复尝试后质量检查仍然失败")
                     return
