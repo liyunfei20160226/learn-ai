@@ -16,7 +16,15 @@ class GitManager:
         self.auto_commit = auto_commit
 
     def is_git_repo(self) -> bool:
-        """检查是否是git仓库"""
+        """检查是否是git仓库
+        注意：git status会向上查找父目录的.git，所以必须检查是否存在.git目录
+        """
+        # 直接检查是否存在.git目录在当前工作目录
+        import os
+        git_dir = os.path.join(self.working_dir, '.git')
+        if os.path.exists(git_dir):
+            return True
+        # 二级检查：运行git status确认
         returncode, _, _ = run_command("git status", cwd=self.working_dir)
         return returncode == 0
 
