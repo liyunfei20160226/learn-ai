@@ -3,7 +3,6 @@
 import logging
 import os
 from datetime import datetime
-from typing import Optional
 
 
 def setup_logger(name: str = "auto_coding", log_dir: str = "./logs") -> logging.Logger:

@@ -1,40 +1,23 @@
-"""质量检查器 - 运行lint、类型检查、测试等"""
+"""质量检查器 - 运行lint、类型检查、测试等，AI动态决定命令"""
 
+import json
 import os
-from typing import List, Tuple, Optional
-from utils.subprocess import run_command, check_command_available
-from utils.logger import get_logger
+from typing import Dict, List, Optional, Tuple
 
+from core.ai_backend import AIBackend
+from prompts import get_build_commands_prompt
+from utils.logger import get_logger
+from utils.subprocess import run_command
 
 logger = get_logger()
 
 
 class QualityCheckResult:
     """质量检查结果"""
-    def __init__(self, passed: bool, errors: List[str]):
+    def __init__(self, passed: bool, errors: List[str], failed_stage: int = 0):
         self.passed = passed
         self.errors = errors
-
-
-def detect_project_language(working_dir: str) -> Optional[str]:
-    """自动探测项目语言"""
-    # 探测优先级：特征文件存在与否
-    if os.path.exists(os.path.join(working_dir, 'pyproject.toml')) or \
-       os.path.exists(os.path.join(working_dir, 'setup.py')) or \
-       os.path.exists(os.path.join(working_dir, 'requirements.txt')):
-        return 'python'
-    elif os.path.exists(os.path.join(working_dir, 'package.json')):
-        # JavaScript/TypeScript 包含所有前端框架: React/Vue/Angular/Vite/Next.js etc.
-        return 'javascript'
-    elif os.path.exists(os.path.join(working_dir, 'go.mod')):
-        return 'go'
-    elif os.path.exists(os.path.join(working_dir, 'pom.xml')):
-        return 'java'
-    elif os.path.exists(os.path.join(working_dir, 'Cargo.toml')):
-        return 'rust'
-    elif os.path.exists(os.path.join(working_dir, 'CMakeLists.txt')):
-        return 'cpp'
-    return None
+        self.failed_stage = failed_stage  # 在哪一步失败的 (1-4), 0 = 全部完成
 
 
 def detect_package_manager(working_dir: str) -> str:
@@ -48,253 +31,173 @@ def detect_package_manager(working_dir: str) -> str:
     return 'npm'  # 默认npm
 
 
-def get_default_commands(language: str, working_dir: str = '.') -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """根据语言获取默认的质量检查命令"""
-    if language == 'python':
-        return (
-            'ruff check .',
-            'mypy .',
-            'pytest'
-        )
-    elif language == 'javascript':
-        # JavaScript/TypeScript 包括所有前端框架: React/Vue/Angular/Next.js/Vite etc.
-        pm = detect_package_manager(working_dir)
-        return (
-            f'{pm} run lint',
-            None,
-            f'{pm} test'
-        )
-    elif language == 'go':
-        return (
-            'go vet ./...',
-            None,
-            'go test ./...'
-        )
-    elif language == 'java':
-        return (
-            'mvn compile',
-            None,
-            'mvn test'
-        )
-    elif language == 'rust':
-        return (
-            'cargo check',
-            None,
-            'cargo test'
-        )
-    elif language == 'cpp':
-        return (
-            None,
-            None,
-            None
-        )
-    return (None, None, None)
-
-
 class QualityChecker:
-    """质量检查器"""
+    """质量检查器
+    所有安装/检查命令完全由AI动态决定，基于项目结构分析。
+    第一次检查前调用AI获取命令，之后缓存复用。
+    """
 
     def __init__(
         self,
-        quality_check_cmd: Optional[str] = None,
-        type_check_cmd: Optional[str] = None,
-        test_cmd: Optional[str] = None,
         working_dir: str = None
     ):
-        # 如果用户手动配置了，直接使用
-        self.configured_quality_check_cmd = quality_check_cmd
-        self.configured_type_check_cmd = type_check_cmd
-        self.configured_test_cmd = test_cmd
+        # 不再接受用户配置，所有命令都由AI动态决定
         self.initial_working_dir = working_dir
+        # AI动态获取的命令（缓存）
+        self.ai_commands: Optional[Dict[str, List[str]]] = None
 
-    def auto_install_dependencies(self, working_dir: str = None) -> Tuple[bool, List[str]]:
-        """自动安装项目依赖
-        探测项目类型，检查是否已安装，如果没安装就运行安装命令
+    def _parse_ai_response(self, content: str) -> Dict[str, List[str]]:
+        """解析AI返回的JSON，提取命令"""
+        import re
+        # 尝试提取JSON，可能被markdown代码块包围
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)
+        if json_match:
+            content = json_match.group(1)
+
+        try:
+            data = json.loads(content)
+            result = {
+                'install': data.get('install', []),
+                'quality_check': data.get('quality_check', []),
+                'type_check': data.get('type_check', []),
+                'test': data.get('test', []),
+            }
+            # 确保都是列表
+            for k in result:
+                if not isinstance(result[k], list):
+                    if result[k]:
+                        result[k] = [result[k]]
+                    else:
+                        result[k] = []
+            return result
+        except Exception as e:
+            logger.error(f"解析AI返回的JSON失败: {str(e)}")
+            # 返回默认空
+            return {
+                'install': [],
+                'quality_check': [],
+                'type_check': [],
+                'test': [],
+            }
+
+    def run_all(self, working_dir: str = None, ai_backend: Optional[AIBackend] = None, project_description: str = None, start_from_stage: int = 1) -> QualityCheckResult:
+        """运行所有质量检查
+        如果没有预配置命令，调用AI获取
+        逐阶段执行：安装 → 质量检查 → 类型检查 → 测试
+        每个阶段失败立即返回，让AI修复后重试，不继续执行后续阶段
+        start_from_stage: 从哪个阶段开始执行（用于重试，默认从1开始）
+        1 = 安装, 2 = 质量检查, 3 = 类型检查, 4 = 测试
         """
         cwd = working_dir or self.initial_working_dir or '.'
-        errors = []
-
-        # Python + uv + pyproject.toml
-        if os.path.exists(os.path.join(cwd, 'pyproject.toml')):
-            venv_dir = os.path.join(cwd, '.venv')
-            if not os.path.exists(venv_dir):
-                logger.info("检测到Python pyproject.toml项目，.venv不存在，正在自动运行uv sync...")
-                if check_command_available('uv'):
-                    returncode, stdout, stderr = run_command('uv sync', cwd=cwd)
-                    if returncode != 0:
-                        error_msg = stderr or stdout
-                        errors.append(f"uv sync 安装依赖失败:\n{error_msg}")
-                        logger.error(f"uv sync 失败: {error_msg}")
-                else:
-                    logger.info("uv sync 完成")
-            else:
-                logger.info(".venv 已存在，跳过依赖安装")
-
-        # Python + requirements.txt (no uv)
-        elif os.path.exists(os.path.join(cwd, 'requirements.txt')) and not os.path.exists(os.path.join(cwd, '.venv')):
-            logger.info("检测到Python requirements.txt项目，.venv不存在，正在自动安装依赖...")
-            if check_command_available('pip'):
-                returncode, stdout, stderr = run_command('pip install -r requirements.txt', cwd=cwd)
-                if returncode != 0:
-                    error_msg = stderr or stdout
-                    errors.append(f"pip install -r requirements.txt 失败:\n{error_msg}")
-                    logger.error(f"pip install 失败: {error_msg}")
-            else:
-                logger.info("pip install 完成")
-
-        # JavaScript/package.json
-        if os.path.exists(os.path.join(cwd, 'package.json')):
-            node_modules = os.path.join(cwd, 'node_modules')
-            if not os.path.exists(node_modules):
-                pm = detect_package_manager(cwd)
-                logger.info(f"检测到JavaScript package.json项目，node_modules不存在，正在自动运行{pm} install...")
-                if check_command_available(pm):
-                    returncode, stdout, stderr = run_command(f'{pm} install', cwd=cwd)
-                    if returncode != 0:
-                        error_msg = stderr or stdout
-                        errors.append(f"{pm} install 安装依赖失败:\n{error_msg}")
-                        logger.error(f"{pm} install 失败: {error_msg}")
-                else:
-                    logger.info(f"{pm} install 完成")
-            else:
-                logger.info("node_modules 已存在，跳过依赖安装")
-
-        # Java/mvn
-        if os.path.exists(os.path.join(cwd, 'pom.xml')):
-            target = os.path.join(cwd, 'target')
-            if not os.path.exists(target):
-                logger.info("检测到Java Maven项目，target不存在，正在自动运行mvn install...")
-                if check_command_available('mvn'):
-                    returncode, stdout, stderr = run_command('mvn install', cwd=cwd)
-                    if returncode != 0:
-                        error_msg = stderr or stdout
-                        errors.append(f"mvn install 安装依赖失败:\n{error_msg}")
-                        logger.error(f"mvn install 失败: {error_msg}")
-                else:
-                    logger.info("mvn install 完成")
-            else:
-                logger.info("target 已存在，跳过依赖安装")
-
-        # Rust/cargo
-        if os.path.exists(os.path.join(cwd, 'Cargo.toml')):
-            target = os.path.join(cwd, 'target')
-            if not os.path.exists(target):
-                logger.info("检测到Rust Cargo项目，target不存在，正在自动运行cargo build...")
-                if check_command_available('cargo'):
-                    returncode, stdout, stderr = run_command('cargo build', cwd=cwd)
-                    if returncode != 0:
-                        error_msg = stderr or stdout
-                        errors.append(f"cargo build 失败:\n{error_msg}")
-                        logger.error(f"cargo build 失败: {error_msg}")
-                else:
-                    logger.info("cargo build 完成")
-            else:
-                logger.info("target 已存在，跳过依赖安装")
-
-        if errors:
-            return (False, errors)
-        return (True, [])
-
-    def run_all(self, working_dir: str = None) -> QualityCheckResult:
-        """运行所有质量检查"""
-        # 自动探测：如果没有手动配置，在运行前探测（此时AI已经生成了文件）
-        cwd = working_dir or self.initial_working_dir or '.'
-        quality_check_cmd = self.configured_quality_check_cmd
-        type_check_cmd = self.configured_type_check_cmd
-        test_cmd = self.configured_test_cmd
-
-        if quality_check_cmd is None and type_check_cmd is None and test_cmd is None:
-            language = detect_project_language(cwd)
-            if language:
-                logger.info(f"自动探测到项目语言: {language}")
-                quality_check_cmd, type_check_cmd, test_cmd = get_default_commands(language, cwd)
-
         all_errors = []
         all_passed = True
 
-        # 自动安装依赖
-        install_ok, install_errors = self.auto_install_dependencies(working_dir)
-        if not install_ok:
-            all_passed = False
-            all_errors.extend(install_errors)
+        # 如果AI已经缓存了命令，直接使用；如果没有，调用AI获取
+        has_cached_commands = self.ai_commands is not None
 
-        # Lint检查
-        if quality_check_cmd:
-            passed, errors = self._run_check(quality_check_cmd, working_dir)
-            if not passed:
-                all_passed = False
-                all_errors.extend(errors)
+        install_commands: List[str] = []
+        quality_check_commands: List[str] = []
+        type_check_commands: List[str] = []
+        test_commands: List[str] = []
 
-        # 类型检查
-        if type_check_cmd:
-            passed, errors = self._run_check(type_check_cmd, working_dir)
-            if not passed:
-                all_passed = False
-                all_errors.extend(errors)
+        if has_cached_commands:
+            # 使用缓存的AI命令
+            install_commands = self.ai_commands.get('install', [])
+            quality_check_commands = self.ai_commands.get('quality_check', [])
+            type_check_commands = self.ai_commands.get('type_check', [])
+            test_commands = self.ai_commands.get('test', [])
 
-        # 测试
-        if test_cmd:
-            passed, errors = self._run_check(test_cmd, working_dir)
-            if not passed:
-                all_passed = False
-                all_errors.extend(errors)
+        if not has_cached_commands and ai_backend is not None and project_description is not None:
+            # 调用AI获取构建命令 - 所有命令都由AI动态决定
+            logger.info("正在调用AI获取构建和检查命令（所有命令由AI动态决定）...")
+            prompt = get_build_commands_prompt(project_description, cwd)
+            # 不需要写入文件，只获取JSON命令
+            content = ai_backend.implement_story(prompt, write_files=False)
+            commands = self._parse_ai_response(content)
+            self.ai_commands = commands
+
+            install_commands = commands.get('install', [])
+            quality_check_commands = commands.get('quality_check', [])
+            type_check_commands = commands.get('type_check', [])
+            test_commands = commands.get('test', [])
+
+            logger.info(f"AI返回: 安装={len(install_commands)} 命令, 质量检查={len(quality_check_commands)}, 类型检查={len(type_check_commands)}, 测试={len(test_commands)}")
+
+        # ========== 阶段1: 安装 ==========
+        if start_from_stage <= 1:
+            for cmd in install_commands:
+                logger.info(f"[阶段1/4 - 安装] 运行: {cmd}")
+                returncode, stdout, stderr = run_command(cmd, cwd=cwd)
+                if returncode != 0:
+                    error_msg = ""
+                    if stdout:
+                        error_msg += f"{stdout}\n"
+                    if stderr:
+                        error_msg += stderr
+                    all_passed = False
+                    all_errors.append(f"安装命令 '{cmd}' 失败:\n{error_msg.strip()}")
+                    logger.error(f"安装失败: {cmd}")
+                    # 安装失败，立即返回，不继续后续阶段
+                    # AI修复后会重试
+                    break
+                else:
+                    logger.info(f"安装完成: {cmd}")
+
+            if not all_passed:
+                logger.info(f"质量检查完成: 通过={all_passed}, 错误数={len(all_errors)}")
+                return QualityCheckResult(all_passed, all_errors, failed_stage=1)
+
+        # ========== 阶段2: 质量检查 ==========
+        # 全部成功后才进入下一阶段
+        if start_from_stage <= 2:
+            for cmd in quality_check_commands:
+                logger.info(f"[阶段2/4 - 质量检查] 运行: {cmd}")
+                passed, errors = self._run_single_check(cmd, working_dir)
+                if not passed:
+                    all_passed = False
+                    all_errors.extend(errors)
+                    # 质量检查失败，立即返回，不继续后续阶段
+                    break
+
+            if not all_passed:
+                logger.info(f"质量检查完成: 通过={all_passed}, 错误数={len(all_errors)}")
+                return QualityCheckResult(all_passed, all_errors, failed_stage=2)
+
+        # ========== 阶段3: 类型检查 ==========
+        if start_from_stage <= 3:
+            for cmd in type_check_commands:
+                logger.info(f"[阶段3/4 - 类型检查] 运行: {cmd}")
+                passed, errors = self._run_single_check(cmd, working_dir)
+                if not passed:
+                    all_passed = False
+                    all_errors.extend(errors)
+                    # 类型检查失败，立即返回，不继续后续阶段
+                    break
+
+            if not all_passed:
+                logger.info(f"质量检查完成: 通过={all_passed}, 错误数={len(all_errors)}")
+                return QualityCheckResult(all_passed, all_errors, failed_stage=3)
+
+        # ========== 阶段4: 测试 ==========
+        if start_from_stage <= 4:
+            for cmd in test_commands:
+                logger.info(f"[阶段4/4 - 测试] 运行: {cmd}")
+                passed, errors = self._run_single_check(cmd, working_dir)
+                if not passed:
+                    all_passed = False
+                    all_errors.extend(errors)
+                    # 测试失败，立即返回
+                    break
 
         logger.info(f"质量检查完成: 通过={all_passed}, 错误数={len(all_errors)}")
-        return QualityCheckResult(all_passed, all_errors)
+        return QualityCheckResult(all_passed, all_errors, failed_stage=0)
 
-    def _run_check(self, cmd: str, working_dir: str = None) -> Tuple[bool, List[str]]:
+    def _run_single_check(self, cmd: str, working_dir: str = None) -> Tuple[bool, List[str]]:
         """运行单个检查"""
-        logger.info(f"运行质量检查: {cmd}")
+        logger.info(f"运行检查命令: {cmd}")
+        cwd = working_dir or self.initial_working_dir or '.'
 
-        # 先检查命令是否存在
-        cmd_name = cmd.split()[0]
-        if not check_command_available(cmd_name):
-            # 只要配置了检查命令但命令不存在，就标记为失败
-            # 需要用户安装好依赖/工具后，用 --resume 重新运行检查
-            cwd = working_dir or os.getcwd()
-            # 给出具体的安装提示，根据项目类型
-            if os.path.exists(os.path.join(cwd, 'pyproject.toml')):
-                hint = (
-                    f"需要的命令 '{cmd_name}' 找不到。\n"
-                    f"请先在目录 {cwd} 安装依赖:\n"
-                    f"示例: 'uv sync' 或 'pip install -r requirements.txt'\n"
-                    f"安装完成后使用 --resume 参数重新运行继续。"
-                )
-            elif os.path.exists(os.path.join(cwd, 'package.json')):
-                pm = detect_package_manager(cwd)
-                hint = (
-                    f"需要的命令 '{cmd_name}' 找不到。\n"
-                    f"请先在目录 {cwd} 安装依赖: '{pm} install'\n"
-                    f"安装完成后使用 --resume 参数重新运行继续。"
-                )
-            elif os.path.exists(os.path.join(cwd, 'requirements.txt')):
-                hint = (
-                    f"需要的命令 '{cmd_name}' 找不到。\n"
-                    f"请先在目录 {cwd} 安装依赖: 'pip install -r requirements.txt'\n"
-                    f"安装完成后使用 --resume 参数重新运行继续。"
-                )
-            elif os.path.exists(os.path.join(cwd, 'pom.xml')):
-                hint = (
-                    f"需要的命令 '{cmd_name}' 找不到。\n"
-                    f"请先安装 Maven 并在目录 {cwd} 运行 'mvn install'\n"
-                    f"安装完成后使用 --resume 参数重新运行继续。"
-                )
-            elif os.path.exists(os.path.join(cwd, 'Cargo.toml')):
-                hint = (
-                    f"需要的命令 '{cmd_name}' 找不到。\n"
-                    f"请先安装 Rust 并在目录 {cwd} 运行 'cargo build'\n"
-                    f"安装完成后使用 --resume 参数重新运行继续。"
-                )
-            else:
-                hint = (
-                    f"需要的命令 '{cmd_name}' 在PATH中找不到。\n"
-                    f"请在目录 {cwd} 安装所需工具或依赖\n"
-                    f"安装完成后使用 --resume 参数重新运行继续。"
-                )
-            logger.error(hint)
-            return (False, [hint])
-
-        returncode, stdout, stderr = run_command(cmd, cwd=working_dir)
+        returncode, stdout, stderr = run_command(cmd, cwd=cwd)
 
         if returncode == 0:
             logger.info(f"检查通过: {cmd}")
@@ -302,16 +205,36 @@ class QualityChecker:
 
         errors = []
         if stdout:
-            errors.append(f"{cmd} 失败:\n{stdout}")
+            error_msg = f"{cmd} 失败:\n{stdout}"
+            errors.append(error_msg)
+            logger.warning(error_msg)
         if stderr:
-            errors.append(f"{cmd} 标准错误:\n{stderr}")
+            error_msg = f"{cmd} 标准错误:\n{stderr}"
+            errors.append(error_msg)
+            logger.warning(error_msg)
 
         if not errors:
-            errors.append(f"{cmd} 退出码 {returncode}")
+            error_msg = f"{cmd} 退出码 {returncode}"
+            errors.append(error_msg)
+            logger.warning(error_msg)
 
         logger.warning(f"检查失败: {cmd}, {len(errors)} 个错误")
         return (False, errors)
 
     def is_enabled(self) -> bool:
-        """是否启用了任何质量检查"""
-        return any([self.configured_quality_check_cmd, self.configured_type_check_cmd, self.configured_test_cmd])
+        """是否启用了任何质量检查
+        只要ai_commands有任何命令，就启用检查
+        """
+        if self.ai_commands is None:
+            # 还没调用AI获取命令，第一次检查会调用AI
+            return True  # 总是启用，让AI决定
+        return (
+            len(self.ai_commands.get('install', [])) > 0
+            or len(self.ai_commands.get('quality_check', [])) > 0
+            or len(self.ai_commands.get('type_check', [])) > 0
+            or len(self.ai_commands.get('test', [])) > 0
+        )
+
+    def get_ai_commands(self) -> Optional[Dict[str, List[str]]]:
+        """获取AI动态生成的命令"""
+        return self.ai_commands

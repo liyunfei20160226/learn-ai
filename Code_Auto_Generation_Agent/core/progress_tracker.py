@@ -2,11 +2,11 @@
 
 import os
 from datetime import datetime
-from typing import Optional, List
+from typing import Dict, List, Optional
+
 from core.story_manager import StoryManager
 from utils.file_utils import read_json, write_json
 from utils.logger import get_logger
-
 
 logger = get_logger()
 
@@ -21,6 +21,8 @@ class ProgressTracker:
         self.ai_backend = ai_backend
         self.progress_file = os.path.join(output_dir, "progress.json")
         self.lessons_learned: List[str] = []
+        # 保存AI动态决定的构建和检查命令
+        self.build_commands: Optional[Dict[str, List[str]]] = None
         self.started_at = datetime.now().isoformat()
 
     def load(self) -> Optional[dict]:
@@ -32,6 +34,9 @@ class ProgressTracker:
         # 加载经验教训
         if 'lessons_learned' in data:
             self.lessons_learned = data['lessons_learned']
+        # 加载构建/检查命令
+        if 'build_commands' in data:
+            self.build_commands = data['build_commands']
 
         logger.info(f"已从 {self.progress_file} 加载现有进度")
         return data
@@ -49,7 +54,8 @@ class ProgressTracker:
             'completed_stories': counts['completed'],
             'failed_stories': counts['failed'],
             'stories': story_manager.to_dict_list(),
-            'lessons_learned': self.lessons_learned
+            'lessons_learned': self.lessons_learned,
+            'build_commands': self.build_commands
         }
 
         success = write_json(self.progress_file, data)
@@ -65,6 +71,19 @@ class ProgressTracker:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.lessons_learned.append(f"[{timestamp}] {lesson}")
 
+    def set_build_commands(self, install: List[str], quality_check: List[str], type_check: List[str], test: List[str]):
+        """保存AI决定的构建和检查命令"""
+        self.build_commands = {
+            'install': install,
+            'quality_check': quality_check,
+            'type_check': type_check,
+            'test': test
+        }
+
+    def get_build_commands(self) -> Optional[Dict[str, List[str]]]:
+        """获取构建和检查命令"""
+        return self.build_commands
+
     def has_progress(self) -> bool:
         """是否已有进度文件"""
         return os.path.exists(self.progress_file)
@@ -75,5 +94,6 @@ class ProgressTracker:
             'project_name': self.project_name,
             'started_at': self.started_at,
             'lessons_count': len(self.lessons_learned),
-            'lessons_learned': self.lessons_learned
+            'lessons_learned': self.lessons_learned,
+            'build_commands': self.build_commands
         }

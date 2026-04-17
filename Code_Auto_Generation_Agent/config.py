@@ -1,8 +1,9 @@
 """配置管理模块"""
 
 import os
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
+
 from dotenv import load_dotenv
 
 
@@ -20,17 +21,15 @@ class Config:
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o"
 
-    # 质量检查命令
-    quality_check_cmd: Optional[str] = "ruff check ."
-    type_check_cmd: Optional[str] = None
-    test_cmd: Optional[str] = "pytest"
-
     # 重试配置
     max_retries: int = 3
     max_fix_attempts: int = 3
 
     # Git配置
     git_auto_commit: bool = True
+
+    # 是否启用质量检查
+    quality_check_enabled: bool = True
 
     # 输出配置
     output_base_dir: str = "./output"
@@ -59,12 +58,8 @@ def load_config() -> Config:
         config.openai_model = os.getenv("OPENAI_MODEL").strip()
 
     # 质量检查
-    if os.getenv("QUALITY_CHECK_CMD") is not None:
-        config.quality_check_cmd = os.getenv("QUALITY_CHECK_CMD").strip() or None
-    if os.getenv("TYPE_CHECK_CMD") is not None:
-        config.type_check_cmd = os.getenv("TYPE_CHECK_CMD").strip() or None
-    if os.getenv("TEST_CMD") is not None:
-        config.test_cmd = os.getenv("TEST_CMD").strip() or None
+    if os.getenv("QUALITY_CHECK_ENABLED") is not None:
+        config.quality_check_enabled = os.getenv("QUALITY_CHECK_ENABLED").lower() in ("true", "1", "yes")
 
     # 重试配置
     if os.getenv("MAX_RETRIES"):

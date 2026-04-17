@@ -5,17 +5,16 @@ auto_coding.py - 全自动代码生成Agent命令行入口
 """
 
 import argparse
-import sys
 import os
+import sys
 
 # 强制设置标准输出编码为UTF-8，解决Windows控制台中文乱码问题
 if sys.version_info >= (3, 7):
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
-from config import get_config, Config
+from config import get_config
 from core.generator import GenerationEngine
 from utils.logger import setup_logger
-from utils.logger import get_logger
 
 
 def parse_args():
@@ -92,9 +91,7 @@ def main():
     if args.no_git:
         config.git_auto_commit = False
     if args.no_quality_check:
-        config.quality_check_cmd = None
-        config.type_check_cmd = None
-        config.test_cmd = None
+        config.quality_check_enabled = False
 
     # 验证prd文件存在
     if not os.path.exists(args.prd_path):

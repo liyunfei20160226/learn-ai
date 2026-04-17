@@ -1,9 +1,9 @@
 """Git管理器 - 检查状态，提交代码"""
 
-from typing import Optional, Tuple
-from utils.subprocess import run_command
-from utils.logger import get_logger
+from typing import Optional
 
+from utils.logger import get_logger
+from utils.subprocess import run_command
 
 logger = get_logger()
 
@@ -29,8 +29,9 @@ class GitManager:
 
     def init_repo(self) -> bool:
         """初始化git仓库"""
-        from utils.file_utils import read_file, write_file
         import os
+
+        from utils.file_utils import read_file, write_file
 
         logger.info("正在目标目录初始化Git仓库")
 

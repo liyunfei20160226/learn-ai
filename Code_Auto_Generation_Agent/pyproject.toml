@@ -20,3 +20,8 @@ auto-coding = "auto_coding:main"
 line-length = 100
 select = ["E", "W", "F", "I"]
 ignore = ["E501"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.11",
+]

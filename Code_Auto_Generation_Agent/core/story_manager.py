@@ -1,12 +1,11 @@
 """用户故事管理器 - 跟踪完成状态，选择下一个故事"""
 
-from typing import List, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from core.prd_loader import PRD, UserStory
-from utils.logger import get_logger
-from utils.file_utils import read_json, write_json
+from typing import List, Optional
 
+from core.prd_loader import PRD
+from utils.logger import get_logger
 
 logger = get_logger()
 

@@ -8,10 +8,11 @@ class AIBackend(ABC):
     """AI后端抽象基类"""
 
     @abstractmethod
-    def implement_story(self, prompt: str) -> str:
+    def implement_story(self, prompt: str, write_files: bool = True) -> str:
         """
         实现一个用户故事
         返回AI输出内容
+        如果write_files=True，解析代码块并写入文件（OpenAI API后端）
         """
         pass
 

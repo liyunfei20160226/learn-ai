@@ -3,11 +3,12 @@
 import os
 import re
 from typing import List
-import openai
-from core.ai_backend import AIBackend
-from utils.logger import get_logger
-from utils.file_utils import write_file, ensure_dir
 
+import openai
+
+from core.ai_backend import AIBackend
+from utils.file_utils import write_file
+from utils.logger import get_logger
 
 logger = get_logger()
 
@@ -40,8 +41,10 @@ class OpenAIBackend(AIBackend):
             return False
         return True
 
-    def implement_story(self, prompt: str) -> str:
-        """实现用户故事 - 调用OpenAI API并写入文件"""
+    def implement_story(self, prompt: str, write_files: bool = True) -> str:
+        """实现用户故事 - 调用OpenAI API
+        如果write_files=True，解析代码块并写入文件
+        """
         logger.info(f"调用 OpenAI API 模型={self.model}")
 
         try:
@@ -60,8 +63,9 @@ class OpenAIBackend(AIBackend):
 
             logger.info("OpenAI API 调用成功完成")
 
-            # 解析AI输出，提取文件并写入磁盘
-            self._write_files_from_output(content)
+            # 如果需要，解析AI输出，提取文件并写入磁盘
+            if write_files:
+                self._write_files_from_output(content)
 
             return content
 
@@ -71,10 +75,12 @@ class OpenAIBackend(AIBackend):
 
     def fix_errors(self, original_prompt: str, errors: List[str]) -> str:
         """修复错误"""
+        from prompts import get_fix_errors_prompt
+        template = get_fix_errors_prompt()
         error_text = "\n".join(f"- {error}" for error in errors)
         prompt = f"""{original_prompt}
 
-# 当前实现完成后，运行质量检查发现以下错误：
+{template}
 
 {error_text}
 
@@ -103,29 +109,54 @@ class OpenAIBackend(AIBackend):
                 file_blocks.append((path, content))
 
         # 查找 ```path 格式
-        # 支持两种情况：
+        # 支持多种情况：
         # 1. ```filepath\ncontent``` (路径在第一行)
         # 2. ```language\nfilepath\ncontent``` (路径在第二行，第一行是语言标记)
+        # 3. ```\n### 标题说明\n...\nfilepath\ncontent``` (有markdown标题说明，需要跳过说明找路径)
         pattern2 = r'```([^\n`]*)\n(.*?)\n```'
         matches2 = re.finditer(pattern2, output, re.DOTALL)
         for match in matches2:
             first_line = match.group(1).strip()
             rest = match.group(2)
-            # 检查第一行是否看起来像文件路径（包含斜杠或点）
-            if '/' in first_line or '.' in first_line:
+
+            path = None
+            content = None
+
+            # 检查第一行是否看起来像文件路径（包含斜杠或点，且不是markdown标题）
+            if ('/' in first_line or '.' in first_line) and not first_line.startswith('#') and '`' not in first_line:
                 # 第一行就是路径
                 path = first_line
                 content = rest
             else:
-                # 第一行是语言标记，第二行才是路径
-                lines = rest.split('\n', 1)
-                if len(lines) >= 2:
-                    path = lines[0].strip()
-                    content = lines[1]
-                else:
-                    # 无法解析，跳过
+                # 第一行不是路径，需要逐行找真正的路径
+                lines = rest.split('\n')
+                # 跳过markdown标题、说明等，找第一个看起来像路径的行
+                for i, line in enumerate(lines):
+                    line_stripped = line.strip()
+                    # 跳过空行、markdown标题、反引号包裹的标题行
+                    if (not line_stripped
+                        or line_stripped.startswith('#')
+                        or line_stripped.startswith('`')
+                        or line_stripped.endswith('`')):
+                        continue
+                    # 检查这行是否看起来像文件路径
+                    if '/' in line_stripped or '.' in line_stripped:
+                        # 找到路径了，后面都是内容
+                        path = line_stripped
+                        content = '\n'.join(lines[i+1:])
+                        break
+                # 如果没找到，第一行是语言标记，第二行试一下
+                if path is None and len(lines) >= 2:
+                    second_line = lines[0].strip()
+                    if second_line:
+                        path = second_line
+                        content = '\n'.join(lines[1:])
+                if path is None:
+                    # 还是找不到，跳过
                     continue
             if path:
+                # 清理路径：移除反引号
+                path = path.replace('`', '').strip()
                 file_blocks.append((path, content))
 
         if not file_blocks:

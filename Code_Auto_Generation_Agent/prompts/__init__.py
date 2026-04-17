@@ -2,10 +2,10 @@
 
 import os
 from typing import List
-from core.story_manager import StoryState
-from utils.logger import get_logger
-from utils.file_utils import read_file
 
+from core.story_manager import StoryState
+from utils.file_utils import read_file
+from utils.logger import get_logger
 
 logger = get_logger()
 
@@ -61,12 +61,36 @@ def get_fix_errors_prompt() -> str:
     return template
 
 
+def get_build_commands_prompt(
+    project_description: str,
+    target_dir: str
+) -> str:
+    """获取询问构建命令的prompt"""
+    template_path = os.path.join(os.path.dirname(__file__), "get-build-commands.md")
+    template = read_file(template_path)
+    if not template:
+        logger.error(f"提示词模板找不到: {template_path}")
+        return ""
+
+    # 获取当前项目目录结构
+    project_tree = _get_project_tree(target_dir)
+    tree_text = ""
+    if project_tree:
+        tree_text = f"\n## 当前项目目录结构\n\n```\n{project_tree}\n```\n"
+
+    prompt = template.replace("{{PROJECT_DESCRIPTION}}", project_description)
+    prompt = prompt.replace("{{PROJECT_TREE}}", tree_text)
+
+    return prompt
+
+
 def _get_project_tree(target_dir: str) -> str:
     """获取项目目录树"""
     try:
         import subprocess
+        # 排除 .venv, node_modules, .git, __pycache__ 等目录
         result = subprocess.run(
-            "find . -type f -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.html' -o -name '*.css' -o -name '*.go' -o -name '*.rs' -o -name '*.toml' -o -name '*.json' | head -50",
+            "find . \\( -path '*/.venv/*' -o -path '*/node_modules/*' -o -path '*/.git/*' -o -path '*/__pycache__/*' \\) -prune -o \\( -type f \\( -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.html' -o -name '*.css' -o -name '*.go' -o -name '*.rs' -o -name '*.toml' -o -name '*.json' -o -name '*.md' \\) \\) -print | head -50",
             shell=True,
             cwd=target_dir,
             capture_output=True,

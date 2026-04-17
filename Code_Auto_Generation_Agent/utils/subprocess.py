@@ -1,9 +1,10 @@
 """子进程执行封装"""
 
+import locale
 import subprocess
-from typing import Tuple, Optional
-from .logger import get_logger
+from typing import Optional, Tuple
 
+from .logger import get_logger
 
 logger = get_logger()
 
@@ -20,6 +21,8 @@ def run_command(
     logger.info(f"运行命令: {cmd}")
 
     try:
+        # 在Windows上使用系统默认编码，避免乱码
+        encoding = locale.getpreferredencoding()
         result = subprocess.run(
             cmd,
             shell=True,
@@ -27,7 +30,7 @@ def run_command(
             timeout=timeout,
             capture_output=capture_output,
             text=True,
-            encoding='utf-8',
+            encoding=encoding,
             errors='replace'
         )
         return (

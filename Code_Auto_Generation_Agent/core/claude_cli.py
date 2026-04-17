@@ -3,11 +3,10 @@
 import os
 import tempfile
 from typing import List
-from core.ai_backend import AIBackend
-from utils.subprocess import run_command, check_command_available
-from utils.logger import get_logger
-from utils.file_utils import read_file
 
+from core.ai_backend import AIBackend
+from utils.logger import get_logger
+from utils.subprocess import check_command_available, run_command
 
 logger = get_logger()
 
@@ -26,8 +25,10 @@ class ClaudeCLIBackend(AIBackend):
             logger.error(f"Claude CLI 不可用: {self.claude_cmd} 在PATH中找不到")
         return available
 
-    def implement_story(self, prompt: str) -> str:
-        """实现用户故事 - 写入临时文件并调用claude"""
+    def implement_story(self, prompt: str, write_files: bool = True) -> str:
+        """实现用户故事 - 写入临时文件并调用claude
+        write_files参数兼容接口，Claude CLI不直接写入文件，由外部处理
+        """
         # 将prompt写入临时文件
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
             f.write(prompt)
@@ -51,15 +52,17 @@ class ClaudeCLIBackend(AIBackend):
             # 清理临时文件
             try:
                 os.unlink(temp_file)
-            except:
+            except Exception:
                 pass
 
     def fix_errors(self, original_prompt: str, errors: List[str]) -> str:
         """修复错误"""
+        from prompts import get_fix_errors_prompt
+        template = get_fix_errors_prompt()
         error_text = "\n".join(f"- {error}" for error in errors)
         prompt = f"""{original_prompt}
 
-# 当前实现完成后，运行质量检查发现以下错误：
+{template}
 
 {error_text}
 
