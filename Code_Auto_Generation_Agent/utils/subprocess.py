@@ -26,7 +26,9 @@ def run_command(
             cwd=cwd,
             timeout=timeout,
             capture_output=capture_output,
-            text=True
+            text=True,
+            encoding='utf-8',
+            errors='replace'
         )
         return (
             result.returncode,
