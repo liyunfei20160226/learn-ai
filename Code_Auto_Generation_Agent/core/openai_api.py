@@ -103,11 +103,28 @@ class OpenAIBackend(AIBackend):
                 file_blocks.append((path, content))
 
         # 查找 ```path 格式
-        pattern2 = r'```(?:[^\n]*?)([^\n`]+)\n(.*?)\n```'
+        # 支持两种情况：
+        # 1. ```filepath\ncontent``` (路径在第一行)
+        # 2. ```language\nfilepath\ncontent``` (路径在第二行，第一行是语言标记)
+        pattern2 = r'```([^\n`]*)\n(.*?)\n```'
         matches2 = re.finditer(pattern2, output, re.DOTALL)
         for match in matches2:
-            path = match.group(1).strip()
-            content = match.group(2)
+            first_line = match.group(1).strip()
+            rest = match.group(2)
+            # 检查第一行是否看起来像文件路径（包含斜杠或点）
+            if '/' in first_line or '.' in first_line:
+                # 第一行就是路径
+                path = first_line
+                content = rest
+            else:
+                # 第一行是语言标记，第二行才是路径
+                lines = rest.split('\n', 1)
+                if len(lines) >= 2:
+                    path = lines[0].strip()
+                    content = lines[1]
+                else:
+                    # 无法解析，跳过
+                    continue
             if path:
                 file_blocks.append((path, content))
 

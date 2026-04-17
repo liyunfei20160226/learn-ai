@@ -98,14 +98,16 @@ class GitManager:
         commit_msg = f"[{story_id}] {story_title}"
         logger.info(f"正在提交变更: {commit_msg}")
 
-        returncode, _, _ = run_command("git add .", cwd=self.working_dir)
+        returncode, stdout, stderr = run_command("git add .", cwd=self.working_dir)
         if returncode != 0:
-            logger.error("git add 失败")
+            error_msg = stderr or stdout
+            logger.error(f"git add 失败: {error_msg}")
             return None
 
-        returncode, _, _ = run_command(f"git commit -m \"{commit_msg}\"", cwd=self.working_dir)
+        returncode, stdout, stderr = run_command(f"git commit -m \"{commit_msg}\"", cwd=self.working_dir)
         if returncode != 0:
-            logger.error("git commit 失败")
+            error_msg = stderr or stdout
+            logger.error(f"git commit 失败: {error_msg}")
             return None
 
         # 获取commit hash

@@ -101,39 +101,46 @@ class QualityChecker:
         test_cmd: Optional[str] = None,
         working_dir: str = None
     ):
-        # 如果用户没有手动配置，尝试自动探测语言并设置默认命令
-        if quality_check_cmd is None and type_check_cmd is None and test_cmd is None:
-            language = detect_project_language(working_dir or '.')
-            if language:
-                logger.info(f"自动探测到项目语言: {language}")
-                quality_check_cmd, type_check_cmd, test_cmd = get_default_commands(language, working_dir or '.')
-
-        self.quality_check_cmd = quality_check_cmd
-        self.type_check_cmd = type_check_cmd
-        self.test_cmd = test_cmd
+        # 如果用户手动配置了，直接使用
+        self.configured_quality_check_cmd = quality_check_cmd
+        self.configured_type_check_cmd = type_check_cmd
+        self.configured_test_cmd = test_cmd
+        self.initial_working_dir = working_dir
 
     def run_all(self, working_dir: str = None) -> QualityCheckResult:
         """运行所有质量检查"""
+        # 自动探测：如果没有手动配置，在运行前探测（此时AI已经生成了文件）
+        cwd = working_dir or self.initial_working_dir or '.'
+        quality_check_cmd = self.configured_quality_check_cmd
+        type_check_cmd = self.configured_type_check_cmd
+        test_cmd = self.configured_test_cmd
+
+        if quality_check_cmd is None and type_check_cmd is None and test_cmd is None:
+            language = detect_project_language(cwd)
+            if language:
+                logger.info(f"自动探测到项目语言: {language}")
+                quality_check_cmd, type_check_cmd, test_cmd = get_default_commands(language, cwd)
+
         all_errors = []
         all_passed = True
 
         # Lint检查
-        if self.quality_check_cmd:
-            passed, errors = self._run_check(self.quality_check_cmd, working_dir)
+        if quality_check_cmd:
+            passed, errors = self._run_check(quality_check_cmd, working_dir)
             if not passed:
                 all_passed = False
                 all_errors.extend(errors)
 
         # 类型检查
-        if self.type_check_cmd:
-            passed, errors = self._run_check(self.type_check_cmd, working_dir)
+        if type_check_cmd:
+            passed, errors = self._run_check(type_check_cmd, working_dir)
             if not passed:
                 all_passed = False
                 all_errors.extend(errors)
 
         # 测试
-        if self.test_cmd:
-            passed, errors = self._run_check(self.test_cmd, working_dir)
+        if test_cmd:
+            passed, errors = self._run_check(test_cmd, working_dir)
             if not passed:
                 all_passed = False
                 all_errors.extend(errors)
@@ -213,4 +220,4 @@ class QualityChecker:
 
     def is_enabled(self) -> bool:
         """是否启用了任何质量检查"""
-        return any([self.quality_check_cmd, self.type_check_cmd, self.test_cmd])
+        return any([self.configured_quality_check_cmd, self.configured_type_check_cmd, self.configured_test_cmd])

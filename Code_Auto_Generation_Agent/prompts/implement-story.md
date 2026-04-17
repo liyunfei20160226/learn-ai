@@ -30,4 +30,38 @@
 
 当前工作目录就是项目目录，所有文件操作都相对于这个目录。
 
+## 输出格式要求
+
+你必须使用以下markdown代码块格式输出**每个需要创建或修改的文件**：
+
+```
+filepath
+file content here
+```
+
+示例：
+```
+backend/app/main.py
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
+```
+
+```
+frontend/src/App.tsx
+import React from 'react';
+
+function App() {
+  return <div>Hello World</div>;
+}
+
+export default App;
+```
+
+每个文件一个代码块。第一行必须是**完整的文件相对路径**。不要省略路径。
+
 请开始实现。
