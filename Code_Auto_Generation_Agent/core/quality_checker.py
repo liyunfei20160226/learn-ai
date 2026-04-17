@@ -107,6 +107,94 @@ class QualityChecker:
         self.configured_test_cmd = test_cmd
         self.initial_working_dir = working_dir
 
+    def auto_install_dependencies(self, working_dir: str = None) -> Tuple[bool, List[str]]:
+        """自动安装项目依赖
+        探测项目类型，检查是否已安装，如果没安装就运行安装命令
+        """
+        cwd = working_dir or self.initial_working_dir or '.'
+        errors = []
+
+        # Python + uv + pyproject.toml
+        if os.path.exists(os.path.join(cwd, 'pyproject.toml')):
+            venv_dir = os.path.join(cwd, '.venv')
+            if not os.path.exists(venv_dir):
+                logger.info("检测到Python pyproject.toml项目，.venv不存在，正在自动运行uv sync...")
+                if check_command_available('uv'):
+                    returncode, stdout, stderr = run_command('uv sync', cwd=cwd)
+                    if returncode != 0:
+                        error_msg = stderr or stdout
+                        errors.append(f"uv sync 安装依赖失败:\n{error_msg}")
+                        logger.error(f"uv sync 失败: {error_msg}")
+                else:
+                    logger.info("uv sync 完成")
+            else:
+                logger.info(".venv 已存在，跳过依赖安装")
+
+        # Python + requirements.txt (no uv)
+        elif os.path.exists(os.path.join(cwd, 'requirements.txt')) and not os.path.exists(os.path.join(cwd, '.venv')):
+            logger.info("检测到Python requirements.txt项目，.venv不存在，正在自动安装依赖...")
+            if check_command_available('pip'):
+                returncode, stdout, stderr = run_command('pip install -r requirements.txt', cwd=cwd)
+                if returncode != 0:
+                    error_msg = stderr or stdout
+                    errors.append(f"pip install -r requirements.txt 失败:\n{error_msg}")
+                    logger.error(f"pip install 失败: {error_msg}")
+            else:
+                logger.info("pip install 完成")
+
+        # JavaScript/package.json
+        if os.path.exists(os.path.join(cwd, 'package.json')):
+            node_modules = os.path.join(cwd, 'node_modules')
+            if not os.path.exists(node_modules):
+                pm = detect_package_manager(cwd)
+                logger.info(f"检测到JavaScript package.json项目，node_modules不存在，正在自动运行{pm} install...")
+                if check_command_available(pm):
+                    returncode, stdout, stderr = run_command(f'{pm} install', cwd=cwd)
+                    if returncode != 0:
+                        error_msg = stderr or stdout
+                        errors.append(f"{pm} install 安装依赖失败:\n{error_msg}")
+                        logger.error(f"{pm} install 失败: {error_msg}")
+                else:
+                    logger.info(f"{pm} install 完成")
+            else:
+                logger.info("node_modules 已存在，跳过依赖安装")
+
+        # Java/mvn
+        if os.path.exists(os.path.join(cwd, 'pom.xml')):
+            target = os.path.join(cwd, 'target')
+            if not os.path.exists(target):
+                logger.info("检测到Java Maven项目，target不存在，正在自动运行mvn install...")
+                if check_command_available('mvn'):
+                    returncode, stdout, stderr = run_command('mvn install', cwd=cwd)
+                    if returncode != 0:
+                        error_msg = stderr or stdout
+                        errors.append(f"mvn install 安装依赖失败:\n{error_msg}")
+                        logger.error(f"mvn install 失败: {error_msg}")
+                else:
+                    logger.info("mvn install 完成")
+            else:
+                logger.info("target 已存在，跳过依赖安装")
+
+        # Rust/cargo
+        if os.path.exists(os.path.join(cwd, 'Cargo.toml')):
+            target = os.path.join(cwd, 'target')
+            if not os.path.exists(target):
+                logger.info("检测到Rust Cargo项目，target不存在，正在自动运行cargo build...")
+                if check_command_available('cargo'):
+                    returncode, stdout, stderr = run_command('cargo build', cwd=cwd)
+                    if returncode != 0:
+                        error_msg = stderr or stdout
+                        errors.append(f"cargo build 失败:\n{error_msg}")
+                        logger.error(f"cargo build 失败: {error_msg}")
+                else:
+                    logger.info("cargo build 完成")
+            else:
+                logger.info("target 已存在，跳过依赖安装")
+
+        if errors:
+            return (False, errors)
+        return (True, [])
+
     def run_all(self, working_dir: str = None) -> QualityCheckResult:
         """运行所有质量检查"""
         # 自动探测：如果没有手动配置，在运行前探测（此时AI已经生成了文件）
@@ -123,6 +211,12 @@ class QualityChecker:
 
         all_errors = []
         all_passed = True
+
+        # 自动安装依赖
+        install_ok, install_errors = self.auto_install_dependencies(working_dir)
+        if not install_ok:
+            all_passed = False
+            all_errors.extend(install_errors)
 
         # Lint检查
         if quality_check_cmd:
