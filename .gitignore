@@ -22,3 +22,5 @@ node_modules
 .coverage
 
 settings.local.json
+
+output/
