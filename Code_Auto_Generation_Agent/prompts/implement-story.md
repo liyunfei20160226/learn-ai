@@ -64,4 +64,12 @@ export default App;
 
 每个文件一个代码块。第一行必须是**完整的文件相对路径**。不要省略路径。
 
+## 项目依赖配置说明
+
+对于Python项目：
+- 使用 `pyproject.toml` 作为项目配置文件
+- **所有依赖必须放在 `[project]`  section 的 `dependencies` 列表中**
+- 如果使用uv包管理器，**不需要单独的 `requirements.txt` 文件**
+- 工具配置（ruff、mypy等）也放在 `pyproject.toml` 中
+
 请开始实现。
