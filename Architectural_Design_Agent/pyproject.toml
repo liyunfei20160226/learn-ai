@@ -1,0 +1,27 @@
+[project]
+name = "architectural-design-agent"
+version = "0.1.0"
+description = "Automatic Architecture Design Agent - generate architecture.json from PRD json"
+requires-python = ">=3.10"
+dependencies = [
+  "python-dotenv>=1.0.0",
+  "pydantic>=2.0.0",
+  "openai>=1.0.0",
+  "fastapi>=0.100.0",
+  "uvicorn>=0.24.0",
+  "jinja2>=3.0.0",
+  "python-multipart>=0.0.6",
+]
+
+[project.scripts]
+auto-design = "auto_design:main"
+
+[tool.ruff]
+line-length = 100
+select = ["E", "W", "F", "I"]
+ignore = ["E501"]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.15.11",
+]

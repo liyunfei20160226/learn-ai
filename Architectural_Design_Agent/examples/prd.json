@@ -1,0 +1,348 @@
+{
+  "project": "产品需求文档 (PRD) - 待办事项系统",
+  "branchName": "autoprd/todo-system",
+  "description": "在日常工作与生活中，个人用户需要一个轻量级的工具来管理任务。本系统旨在提供一个简洁、高效的待办事项管理平台，帮助用户记录任务、追踪进度并提升个人效率。",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "初始化项目结构和配置",
+      "description": "作为开发者, 我想要初始化前后端项目结构和基础配置, 以便后续开发有统一的起点。",
+      "acceptanceCriteria": [
+        "创建前后端项目目录结构",
+        "配置后端 FastAPI 基础框架和依赖",
+        "配置前端 React + Vite + Tailwind CSS 基础框架",
+        "配置环境变量管理机制",
+        "类型检查通过"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "创建数据库模型和迁移文件",
+      "description": "作为开发者, 我想要创建 users 和 tasks 数据表模型及迁移文件, 以便存储用户和任务数据。",
+      "acceptanceCriteria": [
+        "创建 users 表模型：id(UUID主键), email(唯一索引), hashed_password, created_at",
+        "创建 tasks 表模型：id(UUID主键), user_id(外键), title(最大50字符), description(最大50字符), due_date, is_completed, priority(默认值2), created_at, updated_at",
+        "使用 Alembic 生成初始化迁移脚本",
+        "类型检查通过"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "实现用户注册接口",
+      "description": "作为后端开发者, 我想要实现用户注册接口, 以便新用户可以创建账号。",
+      "acceptanceCriteria": [
+        "创建 /auth/register POST 接口",
+        "校验邮箱唯一性，已存在则返回错误",
+        "校验密码复杂度：最小8位，必须包含字母和数字",
+        "使用 bcrypt 加密密码存储",
+        "注册成功后生成 JWT Token（有效期7天）并返回",
+        "统一响应格式：{code, message, data}",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "实现用户登录接口",
+      "description": "作为后端开发者, 我想要实现用户登录接口, 以便已注册用户可以获取 Token。",
+      "acceptanceCriteria": [
+        "创建 /auth/login POST 接口",
+        "验证邮箱和密码正确性",
+        "错误凭证返回提示“用户名或密码错误”",
+        "登录成功返回 JWT Token（有效期7天）",
+        "统一响应格式",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "实现 JWT 认证中间件",
+      "description": "作为后端开发者, 我想要实现 JWT 认证中间件, 以便保护需要登录的接口。",
+      "acceptanceCriteria": [
+        "实现 JWT Token 验证逻辑（HS256算法）",
+        "从 Authorization Header 提取 Token",
+        "Token 无效或过期返回 401 错误",
+        "从 Token 解析 user_id 并注入请求上下文",
+        "配置 CORS 允许 http://localhost:5173 跨域访问",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "实现创建任务接口",
+      "description": "作为后端开发者, 我想要实现创建任务接口, 以便用户可以新增待办事项。",
+      "acceptanceCriteria": [
+        "创建 /tasks/ POST 接口，需认证",
+        "校验标题必填且最大50字符",
+        "校验描述选填且最大50字符",
+        "截止日期为可选日期字段",
+        "优先级默认值为2",
+        "新任务 is_completed 默认为 false",
+        "任务关联当前登录用户",
+        "校验单用户任务数量不超过1000条",
+        "统一响应格式",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "实现获取任务列表接口",
+      "description": "作为后端开发者, 我想要实现获取任务列表接口, 以便用户可以查看所有任务。",
+      "acceptanceCriteria": [
+        "创建 /tasks/ GET 接口，需认证",
+        "返回当前用户的所有任务，不分页",
+        "按创建时间倒序排列",
+        "统一响应格式",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "实现更新任务接口",
+      "description": "作为后端开发者, 我想要实现更新任务接口, 以便用户可以修改任务内容和状态。",
+      "acceptanceCriteria": [
+        "创建 /tasks/{id} PUT 接口，需认证",
+        "支持修改标题、描述、截止日期、优先级、完成状态",
+        "校验标题和描述最大50字符",
+        "校验任务归属当前用户",
+        "更新 updated_at 时间戳",
+        "统一响应格式",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "实现删除任务接口",
+      "description": "作为后端开发者, 我想要实现删除任务接口, 以便用户可以移除不需要的任务。",
+      "acceptanceCriteria": [
+        "创建 /tasks/{id} DELETE 接口，需认证",
+        "物理删除任务记录",
+        "校验任务归属当前用户",
+        "统一响应格式",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "实现健康检查接口",
+      "description": "作为后端开发者, 我想要实现健康检查接口, 以便 Docker 容器可以探测服务状态。",
+      "acceptanceCriteria": [
+        "创建 /health GET 接口",
+        "返回 {\"tatus\" \"k\"",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "创建前端登录注册页面",
+      "description": "作为前端开发者, 我想要创建登录和注册页面, 以便用户可以进行身份认证。",
+      "acceptanceCriteria": [
+        "创建登录页面，包含邮箱和密码输入框",
+        "创建注册页面，包含邮箱、密码、确认密码输入框",
+        "前端校验密码复杂度：最小8位，必须包含字母和数字",
+        "登录成功后存储 Token 到 LocalStorage 并跳转任务列表",
+        "注册成功后自动登录（后端返回Token）并跳转任务列表",
+        "错误提示显示在表单下方",
+        "类型检查通过",
+        "使用 dev-browser 技能在浏览器中验证"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "实现前端 Axios 请求封装",
+      "description": "作为前端开发者, 我想要封装 Axios 请求工具, 以便统一处理请求和响应。",
+      "acceptanceCriteria": [
+        "创建 Axios 实例，baseURL 指向后端 API",
+        "请求拦截器自动添加 Authorization Header",
+        "响应拦截器统一处理错误响应",
+        "401 错误自动跳转登录页并清除 Token",
+        "类型检查通过"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "创建任务列表页面框架",
+      "description": "作为前端开发者, 我想要创建任务列表页面基础框架, 以便展示任务管理界面。",
+      "acceptanceCriteria": [
+        "创建任务列表页面路由",
+        "顶部操作栏：新增任务按钮、筛选标签页（全部/已完成/未完成）",
+        "任务列表容器区域",
+        "未登录用户自动重定向至登录页",
+        "类型检查通过",
+        "使用 dev-browser 技能在浏览器中验证"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "实现任务卡片组件",
+      "description": "作为前端开发者, 我想要创建任务卡片组件, 以便展示单个任务信息。",
+      "acceptanceCriteria": [
+        "显示任务标题、描述、截止日期",
+        "显示优先级标签（高=红色，中=黄色，低=蓝色）",
+        "复选框切换完成状态，已完成任务显示删除线",
+        "逾期未完成任务标题或日期标红显示",
+        "编辑和删除按钮",
+        "类型检查通过"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "实现任务列表加载和筛选",
+      "description": "作为前端开发者, 我想要实现任务列表数据加载和筛选功能, 以便用户查看任务。",
+      "acceptanceCriteria": [
+        "页面加载时调用 GET /tasks/ 获取所有任务",
+        "渲染任务卡片列表",
+        "按筛选标签切换显示：全部、已完成、未完成",
+        "列表为空时显示引导文案“暂无任务，点击新增按钮创建”",
+        "类型检查通过",
+        "使用 dev-browser 技能在浏览器中验证"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "实现新增任务功能",
+      "description": "作为前端开发者, 我想要实现新增任务功能, 以便用户可以创建待办事项。",
+      "acceptanceCriteria": [
+        "点击新增按钮弹出创建任务表单",
+        "表单包含标题（必填）、描述（选填）、截止日期（选填）、优先级（选填，默认中）",
+        "提交调用 POST /tasks/ 接口",
+        "创建成功后刷新列表并关闭表单",
+        "类型检查通过",
+        "使用 dev-browser 技能在浏览器中验证"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "实现编辑任务功能",
+      "description": "作为前端开发者, 我想要实现编辑任务功能, 以便用户可以修改任务信息。",
+      "acceptanceCriteria": [
+        "点击任务弹出编辑弹窗",
+        "弹窗预填充当前任务信息",
+        "支持修改标题、描述、截止日期、优先级",
+        "提交调用 PUT /tasks/{id} 接口",
+        "编辑成功后更新列表显示并关闭弹窗",
+        "类型检查通过",
+        "使用 dev-browser 技能在浏览器中验证"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "实现切换任务完成状态",
+      "description": "作为前端开发者, 我想要实现切换任务完成状态功能, 以便用户追踪进度。",
+      "acceptanceCriteria": [
+        "点击任务卡片复选框切换完成状态",
+        "调用 PUT /tasks/{id} 更新 is_completed 字段",
+        "已完成任务显示删除线或置灰效果",
+        "类型检查通过",
+        "使用 dev-browser 技能在浏览器中验证"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "实现删除任务功能",
+      "description": "作为前端开发者, 我想要实现删除任务功能, 以便用户清理不需要的任务。",
+      "acceptanceCriteria": [
+        "点击删除按钮弹出确认对话框",
+        "确认后调用 DELETE /tasks/{id} 接口",
+        "删除成功后从列表移除该任务",
+        "类型检查通过",
+        "使用 dev-browser 技能在浏览器中验证"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "实现用户登出功能",
+      "description": "作为前端开发者, 我想要实现登出功能, 以便用户可以安全退出系统。",
+      "acceptanceCriteria": [
+        "在任务列表页添加登出按钮",
+        "点击登出清除 LocalStorage 中的 Token",
+        "页面重定向至登录页",
+        "类型检查通过",
+        "使用 dev-browser 技能在浏览器中验证"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "配置 Docker 和 Docker Compose",
+      "description": "作为开发者, 我想要配置 Docker 容器化部署, 以便一键启动完整环境。",
+      "acceptanceCriteria": [
+        "创建后端 Dockerfile",
+        "创建前端 Dockerfile（Nginx 托管）",
+        "创建 docker-compose.yml 编排服务",
+        "配置 Nginx 反向代理",
+        "docker-compose up 可一键启动完整系统",
+        "类型检查通过"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Design Agent - 架构设计生成工具</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Architecture Design</h1>
+            <p class="subtitle">全自动架构设计生成 Agent</p>
+        </header>
+
+        <main>
+            <section class="form-section">
+                <form id="generator-form">
+                    <div class="form-group">
+                        <label for="prd_file">PRD JSON 文件 <span class="required">*</span></label>
+                        <input type="file" id="prd_file" name="prd_file" accept=".json" required>
+                        <p class="hint">选择由 Requirements Analysis Agent 生成的 prd.json 文件</p>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tool">AI工具</label>
+                            <select id="tool" name="tool">
+                                <option value="openai" selected>OpenAI / 兼容格式</option>
+                                <option value="claude">Claude (CLI)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="output_name">输出目录名称 <span class="required">*</span></label>
+                            <input type="text" id="output_name" name="output_name" pattern="[a-zA-Z0-9\-]+" placeholder="例如：todo-system" required>
+                            <p class="hint">仅允许英文、数字和短横线(-)</p>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="retries">最大重试次数</label>
+                            <input type="number" id="retries" name="retries" value="2" min="0" max="10">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="max_validation_attempts">验证尝试次数</label>
+                            <input type="number" id="max_validation_attempts" name="max_validation_attempts" value="1" min="0" max="5">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="dry_run" name="dry_run">
+                            <span>干跑模式（不实际调用 AI，仅用于测试流程）</span>
+                        </label>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" id="start-btn" class="btn btn-primary">开始生成</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="log-section">
+                <h2>运行日志 <span id="elapsed-time" class="elapsed-time" style="display: none;">已运行: <span id="elapsed-value">00:00</span></span></h2>
+                <div id="log-container" class="log-container"></div>
+            </section>
+
+            <section class="result-section" id="result-section" style="display: none;">
+                <h2>生成结果</h2>
+                <div id="result-files" class="result-files"></div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Architecture Design Agent</p>
+        </footer>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
