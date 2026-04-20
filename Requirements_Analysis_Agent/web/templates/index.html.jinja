@@ -54,9 +54,9 @@
 
                     <div class="form-row">
                         <div class="form-group" style="flex: 1;">
-                            <label for="output_name">输出目录名称 <span class="optional">(可选)</span></label>
-                            <input type="text" id="output_name" name="output_name" placeholder="留空自动生成，例如：ticket-system">
-                            <p class="hint">自定义目录名称，方便识别查找生成的文件</p>
+                            <label for="output_name">输出目录名称 <span class="required">*</span></label>
+                            <input type="text" id="output_name" name="output_name" pattern="[a-zA-Z0-9\-]+" placeholder="例如：todo-system" required>
+                            <p class="hint">仅允许英文、数字和短横线(-)，prd.json 文件名将自动命名为 {output_name}.prd.json</p>
                         </div>
                     </div>
 

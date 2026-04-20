@@ -56,6 +56,7 @@ def call_openai(prompt: str) -> str:
         temperature=0.7,
         timeout=timeout,
         max_retries=max_retries,
+        max_tokens=262144,
     )
 
     try:
@@ -487,8 +488,8 @@ def run_prd_generation(
         f.write(f'Tool: {tool}\n')
         f.write('\n')
 
-    prd_file = output_dir / 'prd.md'
-    history_file = output_dir / 'iteration_history.md'
+    prd_file = output_dir / f'{output_dir.name}.prd.md'
+    history_file = output_dir / f'{output_dir.name}.iteration_history.md'
     current_iteration = 1
 
     # Resume from existing PRD if it exists
@@ -750,20 +751,21 @@ def run_prd_generation(
     # This fixes issues where AI doesn't properly escape double quotes in content
     try:
         parsed = json.loads(clean_json)
-        # Save prd.json with proper JSON formatting and escaping
-        json_file = output_dir / 'prd.json'
+        # Use output directory name as prd.json file name
+        # output_dir is already kebab-case and only contains valid characters
+        json_filename = f'{output_dir.name}.prd.json'
+        json_file = output_dir / json_filename
         with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(parsed, f, ensure_ascii=False, indent=2)
-        print(f'✅ prd.json 已保存到 {json_file}')
+        print(f'✅ {json_filename} 已保存到 {json_file}')
     except json.JSONDecodeError as e:
         print(f'⚠️ AI输出JSON格式不正确，尝试修复后仍然无法解析，保存原始输出: {e}')
         print('⚠️ 请手动修复JSON格式后使用')
         # Fallback: save original output
-        json_file = output_dir / 'prd.json'
+        json_filename = f'{output_dir.name}.prd.json'
+        json_file = output_dir / json_filename
         with open(json_file, 'w', encoding='utf-8') as f:
             f.write(clean_json)
-
-    print(f'prd.json 已保存到 {json_file}')
     print()
 
     with open(log_file, 'a', encoding='utf-8') as f:
@@ -807,7 +809,8 @@ def main():
     )
     parser.add_argument(
         '--output-dir',
-        help='输出目录 (默认: 从需求自动生成)'
+        required=True,
+        help='输出目录 (必填，仅允许英文、数字、短横线，prd.json 将自动命名为 {output-dir}.prd.json)'
     )
     parser.add_argument(
         '--tool',
@@ -846,12 +849,7 @@ def main():
         sys.exit(1)
 
     # 生成输出目录
-    script_dir = Path(__file__).parent
-    if not args.output_dir:
-        feature_name = to_kebab_case(args.requirement)
-        output_dir = script_dir / 'output' / feature_name
-    else:
-        output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir)
 
     # 初始化RAG（如果指定了背景资料）
     vectorstore = None
