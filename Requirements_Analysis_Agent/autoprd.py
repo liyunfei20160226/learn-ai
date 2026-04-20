@@ -648,16 +648,16 @@ def run_prd_generation(
 
     print()
     print('================================================')
-    print('迭代完成，开始转换为Code_Auto_Generation_Agent使用的 prd.json格式...')
+    print('迭代完成，开始转换为Architectural_Design_Agent使用的 prd.json格式...')
     print('================================================')
     print()
 
     with open(log_file, 'a', encoding='utf-8') as f:
         f.write('\n================================================\n')
-        f.write('Iteration complete, converting to Code_Auto_Generation_Agent prd.json...\n')
+        f.write('Iteration complete, converting to Architectural_Design_Agent prd.json...\n')
         f.write('================================================\n\n')
 
-    # Convert to Code_Auto_Generation_Agent prd.json
+    # Convert to Architectural_Design_Agent prd.json
     with open(prd_file, 'r', encoding='utf-8') as f:
         final_prd = f.read()
 
@@ -781,7 +781,7 @@ def run_prd_generation(
     print(f'  PRD: {prd_file}')
     print(f'  prd.json: {json_file}')
     print()
-    print('接下来可以将prd.json复制到Code_Auto_Generation_Agent项目目录进行自动化开发：')
+    print(f'接下来可以将{json_file}复制到Architectural_Design_Agent项目目录进行架构设计')
     print()
 
 
