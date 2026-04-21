@@ -1,0 +1,947 @@
+{
+  "project": {
+    "name": "待办事项管理系统",
+    "description": "轻量级待办事项管理系统 - 前后端分离架构，前端Next.js+TypeScript+Tailwind CSS，后端FastAPI，CSV文件存储",
+    "type": "fullstack",
+    "platform": [
+      "web"
+    ]
+  },
+  "architecture": {
+    "overview": "这是一个前后端分离的待办事项管理系统。后端采用 FastAPI 框架提供 RESTful API 接口，使用 CSV 文件进行数据持久化；前端使用 Next.js 框架结合 TypeScript 和 Tailwind CSS 构建用户界面。系统通过 Docker 容器化部署，便于快速启动和运行。",
+    "architecturePattern": "分层架构 (Layered Architecture)",
+    "techStack": {
+      "backend": {
+        "language": "Python 3.12+",
+        "framework": [
+          "FastAPI"
+        ],
+        "database": "CSV File",
+        "orm": "Pydantic",
+        "authentication": "None"
+      },
+      "frontend": {
+        "language": "TypeScript",
+        "framework": [
+          "Next.js (App Router)"
+        ],
+        "buildTool": "Next.js",
+        "cssFramework": "Tailwind CSS"
+      },
+      "deployment": [
+        "Docker",
+        "docker-compose"
+      ]
+    }
+  },
+  "backend": {
+    "directoryStructure": "backend/\n├── app/\n│   ├── __init__.py\n│   ├── main.py\n│   ├── models/\n│   │   ├── __init__.py\n│   │   └── task.py\n│   ├── services/\n│   │   ├── __init__.py\n│   │   └── csv_storage.py\n│   ├── api/\n│   │   ├── __init__.py\n│   │   ├── routes/\n│   │   │   ├── __init__.py\n│   │   │   └── tasks.py\n│   │   └── deps.py\n│   └── core/\n│       ├── __init__.py\n│       ├── config.py\n│       └── logger.py\n├── tests/\n│   ├── __init__.py\n│   ├── test_main.py\n│   ├── test_models/\n│   │   └── test_task.py\n│   ├── test_services/\n│   │   └── test_csv_storage.py\n│   └── test_api/\n│       └── test_tasks.py\n├── data/\n│   └── tasks.csv\n├── pyproject.toml\n└── uv.lock",
+    "modules": [
+      {
+        "id": "B-MOD-001",
+        "name": "核心配置模块",
+        "description": "包含应用的基础配置、日志和主入口点",
+        "directory": "app/core",
+        "userStoryIds": [
+          "US-001",
+          "US-002",
+          "US-007"
+        ],
+        "files": [
+          {
+            "path": "app/core/config.py",
+            "description": "定义应用配置类，如数据目录路径、CSV文件名等",
+            "dependencies": [
+              "pydantic"
+            ]
+          },
+          {
+            "path": "app/core/logger.py",
+            "description": "配置日志系统，用于记录错误和操作日志",
+            "dependencies": [
+              "logging"
+            ]
+          },
+          {
+            "path": "app/main.py",
+            "description": "FastAPI应用实例创建和基础路由注册",
+            "dependencies": [
+              "fastapi",
+              "app.api.routes.tasks",
+              "app.core.config"
+            ]
+          }
+        ],
+        "dependencies": []
+      },
+      {
+        "id": "B-MOD-002",
+        "name": "数据模型模块",
+        "description": "定义Task数据模型和相关验证逻辑",
+        "directory": "app/models",
+        "userStoryIds": [
+          "US-001"
+        ],
+        "files": [
+          {
+            "path": "app/models/task.py",
+            "description": "定义Task Pydantic模型，包含id、title、status、created_at、updated_at字段",
+            "dependencies": [
+              "pydantic",
+              "uuid",
+              "datetime"
+            ]
+          }
+        ],
+        "dependencies": []
+      },
+      {
+        "id": "B-MOD-003",
+        "name": "存储服务模块",
+        "description": "实现基于CSV文件的数据读写服务",
+        "directory": "app/services",
+        "userStoryIds": [
+          "US-002"
+        ],
+        "files": [
+          {
+            "path": "app/services/csv_storage.py",
+            "description": "实现CSV文件的原子读写、初始化、备份和错误处理逻辑",
+            "dependencies": [
+              "csv",
+              "os",
+              "threading",
+              "uuid",
+              "app.models.task",
+              "app.core.logger"
+            ]
+          }
+        ],
+        "dependencies": [
+          "B-MOD-002"
+        ]
+      },
+      {
+        "id": "B-MOD-004",
+        "name": "API路由模块",
+        "description": "定义所有RESTful API端点及其处理逻辑",
+        "directory": "app/api/routes",
+        "userStoryIds": [
+          "US-003",
+          "US-004",
+          "US-005",
+          "US-006",
+          "US-007"
+        ],
+        "files": [
+          {
+            "path": "app/api/routes/tasks.py",
+            "description": "实现任务相关的所有API端点：GET /api/tasks, POST /api/tasks, PUT /api/tasks/{task_id}, DELETE /api/tasks/{task_id}",
+            "dependencies": [
+              "fastapi",
+              "app.models.task",
+              "app.services.csv_storage"
+            ]
+          }
+        ],
+        "dependencies": [
+          "B-MOD-002",
+          "B-MOD-003"
+        ]
+      }
+    ],
+    "dataModels": [
+      {
+        "name": "Task",
+        "description": "代表一个待办事项任务",
+        "tableName": "tasks.csv",
+        "fields": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "constraints": [
+              "primary_key",
+              "not_null"
+            ],
+            "default": "uuid.uuid4()",
+            "description": "任务唯一标识符"
+          },
+          {
+            "name": "title",
+            "type": "String",
+            "constraints": [
+              "not_null",
+              "max_length:200"
+            ],
+            "default": null,
+            "description": "任务标题"
+          },
+          {
+            "name": "status",
+            "type": "Enum(pending, completed)",
+            "constraints": [
+              "not_null"
+            ],
+            "default": "pending",
+            "description": "任务状态"
+          },
+          {
+            "name": "created_at",
+            "type": "DateTime",
+            "constraints": [
+              "not_null"
+            ],
+            "default": "datetime.utcnow()",
+            "description": "任务创建时间（UTC ISO 8601格式）"
+          },
+          {
+            "name": "updated_at",
+            "type": "DateTime",
+            "constraints": [
+              "not_null"
+            ],
+            "default": "datetime.utcnow()",
+            "description": "任务最后更新时间（UTC ISO 8601格式）"
+          }
+        ],
+        "relationships": []
+      }
+    ],
+    "apiEndpoints": [
+      {
+        "id": "API-001",
+        "method": "GET",
+        "path": "/api/tasks",
+        "description": "获取所有任务列表，按创建时间倒序排列",
+        "authentication": false,
+        "requestBody": null,
+        "responseFormat": "application/json",
+        "errorResponses": [
+          "400 Bad Request",
+          "500 Internal Server Error"
+        ]
+      },
+      {
+        "id": "API-002",
+        "method": "POST",
+        "path": "/api/tasks",
+        "description": "创建新任务",
+        "authentication": false,
+        "requestBody": "application/json {\"title\": \"string\"}",
+        "responseFormat": "application/json",
+        "errorResponses": [
+          "400 Bad Request",
+          "500 Internal Server Error"
+        ]
+      },
+      {
+        "id": "API-003",
+        "method": "PUT",
+        "path": "/api/tasks/{task_id}",
+        "description": "更新指定任务的标题或状态",
+        "authentication": false,
+        "requestBody": "application/json {\"title\": \"string\", \"status\": \"pending|completed\"}",
+        "responseFormat": "application/json",
+        "errorResponses": [
+          "400 Bad Request",
+          "404 Not Found",
+          "500 Internal Server Error"
+        ]
+      },
+      {
+        "id": "API-004",
+        "method": "DELETE",
+        "path": "/api/tasks/{task_id}",
+        "description": "删除指定任务",
+        "authentication": false,
+        "requestBody": null,
+        "responseFormat": "application/json",
+        "errorResponses": [
+          "404 Not Found",
+          "500 Internal Server Error"
+        ]
+      },
+      {
+        "id": "API-005",
+        "method": "GET",
+        "path": "/health",
+        "description": "健康检查接口",
+        "authentication": false,
+        "requestBody": null,
+        "responseFormat": "application/json",
+        "errorResponses": []
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "fastapi",
+        "version": "^0.104.0",
+        "description": "用于构建API的现代、快速（高性能）的web框架"
+      },
+      {
+        "name": "uvicorn",
+        "version": "^0.23.0",
+        "description": "用于运行FastAPI应用的ASGI服务器"
+      },
+      {
+        "name": "pydantic",
+        "version": "^2.0.0",
+        "description": "用于数据解析和验证的库"
+      },
+      {
+        "name": "python-multipart",
+        "version": "^0.0.9",
+        "description": "支持表单数据解析，FastAPI文件上传依赖"
+      },
+      {
+        "name": "httpx",
+        "version": "^0.25.0",
+        "description": "用于异步HTTP请求，主要用于测试"
+      },
+      {
+        "name": "pytest",
+        "version": "^7.4.0",
+        "description": "测试框架"
+      },
+      {
+        "name": "pytest-cov",
+        "version": "^4.1.0",
+        "description": "测试覆盖率插件"
+      },
+      {
+        "name": "black",
+        "version": "^23.7.0",
+        "description": "代码格式化工具"
+      },
+      {
+        "name": "isort",
+        "version": "^5.12.0",
+        "description": "导入语句排序工具"
+      },
+      {
+        "name": "mypy",
+        "version": "^1.5.0",
+        "description": "静态类型检查工具"
+      }
+    ],
+    "development": {
+      "setupSteps": [
+        "安装 uv 包管理器：`pip install uv`",
+        "克隆项目代码",
+        "进入 backend 目录",
+        "运行 `uv sync` 安装所有依赖"
+      ],
+      "buildCommand": "uv build",
+      "devCommand": "uv run uvicorn app.main:app --reload",
+      "testCommand": "uv run pytest tests/ -v --cov=app/",
+      "lintCommand": "uv run black . && uv run isort . && uv run mypy ."
+    }
+  },
+  "frontend": {
+    "directoryStructure": "frontend/\n├── app/\n│   ├── layout.tsx\n│   ├── page.tsx\n│   ├── components/\n│   │   ├── TaskInput.tsx\n│   │   ├── TaskFilter.tsx\n│   │   ├── TaskItem.tsx\n│   │   ├── TaskList.tsx\n│   │   └── ui/\n│   │       ├── button.tsx\n│   │       ├── input.tsx\n│   │       ├── checkbox.tsx\n│   │       └── toast.tsx\n│   ├── lib/\n│   │   ├── api.ts\n│   │   ├── utils.ts\n│   │   └── hooks/\n│   │       └── useToast.ts\n│   └── styles/\n│       └── globals.css\n├── public/\n├── next.config.js\n├── tailwind.config.js\n├── tsconfig.json\n└── package.json",
+    "modules": [
+      {
+        "id": "F-MOD-001",
+        "name": "主页面模块",
+        "description": "包含应用的主页面布局和根组件",
+        "directory": "app",
+        "userStoryIds": [
+          "US-017"
+        ],
+        "files": [
+          {
+            "path": "app/layout.tsx",
+            "description": "定义应用的全局布局，包括HTML结构和全局样式引入",
+            "dependencies": [
+              "next/font",
+              "app/styles/globals.css"
+            ]
+          },
+          {
+            "path": "app/page.tsx",
+            "description": "应用的主页，整合所有子组件",
+            "dependencies": [
+              "app/components/TaskInput",
+              "app/components/TaskFilter",
+              "app/components/TaskList"
+            ]
+          }
+        ],
+        "dependencies": [
+          "F-MOD-002",
+          "F-MOD-003",
+          "F-MOD-004"
+        ]
+      },
+      {
+        "id": "F-MOD-002",
+        "name": "任务输入模块",
+        "description": "提供用户输入任务标题并创建新任务的功能",
+        "directory": "app/components",
+        "userStoryIds": [
+          "US-010"
+        ],
+        "files": [
+          {
+            "path": "app/components/TaskInput.tsx",
+            "description": "任务输入组件，包含输入框和添加按钮",
+            "dependencies": [
+              "react",
+              "app/lib/api",
+              "app/lib/hooks/useToast"
+            ]
+          }
+        ],
+        "dependencies": []
+      },
+      {
+        "id": "F-MOD-003",
+        "name": "任务筛选模块",
+        "description": "提供按状态筛选任务列表的功能",
+        "directory": "app/components",
+        "userStoryIds": [
+          "US-011"
+        ],
+        "files": [
+          {
+            "path": "app/components/TaskFilter.tsx",
+            "description": "任务筛选组件，显示筛选标签并处理用户交互",
+            "dependencies": [
+              "react"
+            ]
+          }
+        ],
+        "dependencies": []
+      },
+      {
+        "id": "F-MOD-004",
+        "name": "任务列表模块",
+        "description": "展示任务列表，整合任务项、空状态和筛选逻辑",
+        "directory": "app/components",
+        "userStoryIds": [
+          "US-012",
+          "US-013",
+          "US-014",
+          "US-015"
+        ],
+        "files": [
+          {
+            "path": "app/components/TaskItem.tsx",
+            "description": "单个任务项组件，展示任务详情并提供编辑、删除和状态切换功能",
+            "dependencies": [
+              "react",
+              "app/lib/api",
+              "app/lib/utils"
+            ]
+          },
+          {
+            "path": "app/components/TaskList.tsx",
+            "description": "任务列表容器组件，负责获取数据、排序和根据筛选条件渲染任务项",
+            "dependencies": [
+              "react",
+              "app/lib/api",
+              "app/components/TaskItem",
+              "app/components/TaskFilter"
+            ]
+          }
+        ],
+        "dependencies": [
+          "F-MOD-003"
+        ]
+      },
+      {
+        "id": "F-MOD-005",
+        "name": "API客户端模块",
+        "description": "封装所有与后端通信的API调用",
+        "directory": "app/lib",
+        "userStoryIds": [
+          "US-009"
+        ],
+        "files": [
+          {
+            "path": "app/lib/api.ts",
+            "description": "封装GET /api/tasks, POST /api/tasks, PUT /api/tasks/{task_id}, DELETE /api/tasks/{task_id}等API调用",
+            "dependencies": [
+              "axios"
+            ]
+          }
+        ],
+        "dependencies": []
+      },
+      {
+        "id": "F-MOD-006",
+        "name": "全局状态和工具模块",
+        "description": "提供全局状态管理和通用工具函数",
+        "directory": "app/lib",
+        "userStoryIds": [
+          "US-016"
+        ],
+        "files": [
+          {
+            "path": "app/lib/hooks/useToast.ts",
+            "description": "自定义Hook，用于管理Toast提示的状态",
+            "dependencies": [
+              "react"
+            ]
+          },
+          {
+            "path": "app/lib/utils.ts",
+            "description": "通用工具函数，如HTML转义、日期格式化等",
+            "dependencies": []
+          }
+        ],
+        "dependencies": []
+      }
+    ],
+    "apiClient": {
+      "baseURL": "/api",
+      "endpoints": [
+        {
+          "name": "getAllTasks",
+          "method": "GET",
+          "path": "/tasks",
+          "description": "获取所有任务"
+        },
+        {
+          "name": "createTask",
+          "method": "POST",
+          "path": "/tasks",
+          "description": "创建新任务"
+        },
+        {
+          "name": "updateTask",
+          "method": "PUT",
+          "path": "/tasks/{id}",
+          "description": "更新任务"
+        },
+        {
+          "name": "deleteTask",
+          "method": "DELETE",
+          "path": "/tasks/{id}",
+          "description": "删除任务"
+        }
+      ]
+    },
+    "routes": [
+      {
+        "path": "/",
+        "component": "app/page.tsx",
+        "description": "应用主页，展示完整的待办事项管理界面"
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "next",
+        "version": "^14.0.0",
+        "description": "React框架，用于生产环境的服务器端渲染和静态网站生成"
+      },
+      {
+        "name": "react",
+        "version": "^18.2.0",
+        "description": "用于构建用户界面的JavaScript库"
+      },
+      {
+        "name": "react-dom",
+        "version": "^18.2.0",
+        "description": "React的DOM渲染接口"
+      },
+      {
+        "name": "typescript",
+        "version": "^5.2.0",
+        "description": "JavaScript的超集，添加了静态类型定义"
+      },
+      {
+        "name": "tailwindcss",
+        "version": "^3.3.0",
+        "description": "用于快速构建自定义用户界面的工具优先CSS框架"
+      },
+      {
+        "name": "autoprefixer",
+        "version": "^10.4.0",
+        "description": "为CSS规则添加供应商前缀的PostCSS插件"
+      },
+      {
+        "name": "postcss",
+        "version": "^8.4.0",
+        "description": "使用JavaScript转换CSS的工具"
+      },
+      {
+        "name": "axios",
+        "version": "^1.5.0",
+        "description": "基于Promise的HTTP客户端，用于浏览器和node.js"
+      },
+      {
+        "name": "@types/node",
+        "version": "^20.6.0",
+        "description": "Node.js的TypeScript类型定义"
+      },
+      {
+        "name": "@types/react",
+        "version": "^18.2.0",
+        "description": "React的TypeScript类型定义"
+      },
+      {
+        "name": "@types/react-dom",
+        "version": "^18.2.0",
+        "description": "React DOM的TypeScript类型定义"
+      },
+      {
+        "name": "eslint",
+        "version": "^8.49.0",
+        "description": "可插拔的JavaScript linting工具"
+      },
+      {
+        "name": "eslint-config-next",
+        "version": "^14.0.0",
+        "description": "Next.js官方ESLint配置"
+      }
+    ],
+    "development": {
+      "setupSteps": [
+        "确保已安装Node.js (>=18.17.0)",
+        "克隆项目代码",
+        "进入 frontend 目录",
+        "运行 `npm install` 或 `yarn install` 安装依赖"
+      ],
+      "buildCommand": "next build",
+      "devCommand": "next dev",
+      "testCommand": "Not specified in PRD",
+      "lintCommand": "next lint"
+    }
+  },
+  "shared": {
+    "dependencies": {
+      "python": [
+        {
+          "name": "fastapi",
+          "version": "^0.104.0",
+          "description": "用于构建API的现代、快速（高性能）的web框架"
+        },
+        {
+          "name": "uvicorn",
+          "version": "^0.23.0",
+          "description": "用于运行FastAPI应用的ASGI服务器"
+        },
+        {
+          "name": "pydantic",
+          "version": "^2.0.0",
+          "description": "用于数据解析和验证的库"
+        },
+        {
+          "name": "python-multipart",
+          "version": "^0.0.9",
+          "description": "支持表单数据解析，FastAPI文件上传依赖"
+        },
+        {
+          "name": "httpx",
+          "version": "^0.25.0",
+          "description": "用于异步HTTP请求，主要用于测试"
+        },
+        {
+          "name": "pytest",
+          "version": "^7.4.0",
+          "description": "测试框架"
+        },
+        {
+          "name": "pytest-cov",
+          "version": "^4.1.0",
+          "description": "测试覆盖率插件"
+        },
+        {
+          "name": "black",
+          "version": "^23.7.0",
+          "description": "代码格式化工具"
+        },
+        {
+          "name": "isort",
+          "version": "^5.12.0",
+          "description": "导入语句排序工具"
+        },
+        {
+          "name": "mypy",
+          "version": "^1.5.0",
+          "description": "静态类型检查工具"
+        }
+      ],
+      "node": [
+        {
+          "name": "next",
+          "version": "^14.0.0",
+          "description": "React框架，用于生产环境的服务器端渲染和静态网站生成"
+        },
+        {
+          "name": "react",
+          "version": "^18.2.0",
+          "description": "用于构建用户界面的JavaScript库"
+        },
+        {
+          "name": "react-dom",
+          "version": "^18.2.0",
+          "description": "React的DOM渲染接口"
+        },
+        {
+          "name": "typescript",
+          "version": "^5.2.0",
+          "description": "JavaScript的超集，添加了静态类型定义"
+        },
+        {
+          "name": "tailwindcss",
+          "version": "^3.3.0",
+          "description": "用于快速构建自定义用户界面的工具优先CSS框架"
+        },
+        {
+          "name": "autoprefixer",
+          "version": "^10.4.0",
+          "description": "为CSS规则添加供应商前缀的PostCSS插件"
+        },
+        {
+          "name": "postcss",
+          "version": "^8.4.0",
+          "description": "使用JavaScript转换CSS的工具"
+        },
+        {
+          "name": "axios",
+          "version": "^1.5.0",
+          "description": "基于Promise的HTTP客户端，用于浏览器和node.js"
+        },
+        {
+          "name": "@types/node",
+          "version": "^20.6.0",
+          "description": "Node.js的TypeScript类型定义"
+        },
+        {
+          "name": "@types/react",
+          "version": "^18.2.0",
+          "description": "React的TypeScript类型定义"
+        },
+        {
+          "name": "@types/react-dom",
+          "version": "^18.2.0",
+          "description": "React DOM的TypeScript类型定义"
+        },
+        {
+          "name": "eslint",
+          "version": "^8.49.0",
+          "description": "可插拔的JavaScript linting工具"
+        },
+        {
+          "name": "eslint-config-next",
+          "version": "^14.0.0",
+          "description": "Next.js官方ESLint配置"
+        }
+      ]
+    }
+  },
+  "implementationOrder": [
+    {
+      "step": 1,
+      "target": "backend",
+      "moduleId": "B-MOD-001",
+      "description": "搭建后端项目基础结构，配置FastAPI应用实例和核心配置",
+      "userStoryIds": [
+        "US-001",
+        "US-007"
+      ],
+      "estimatedStories": 2
+    },
+    {
+      "step": 2,
+      "target": "backend",
+      "moduleId": "B-MOD-002",
+      "description": "定义Task数据模型和类型",
+      "userStoryIds": [
+        "US-001"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 3,
+      "target": "backend",
+      "moduleId": "B-MOD-003",
+      "description": "实现CSV存储服务",
+      "userStoryIds": [
+        "US-002"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 4,
+      "target": "backend",
+      "moduleId": "B-MOD-004",
+      "description": "实现获取所有任务API接口",
+      "userStoryIds": [
+        "US-003"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 5,
+      "target": "backend",
+      "moduleId": "B-MOD-004",
+      "description": "实现创建任务API接口",
+      "userStoryIds": [
+        "US-004"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 6,
+      "target": "backend",
+      "moduleId": "B-MOD-004",
+      "description": "实现更新任务API接口",
+      "userStoryIds": [
+        "US-005"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 7,
+      "target": "backend",
+      "moduleId": "B-MOD-004",
+      "description": "实现删除任务API接口",
+      "userStoryIds": [
+        "US-006"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 8,
+      "target": "frontend",
+      "moduleId": "F-MOD-001",
+      "description": "初始化前端项目结构和配置",
+      "userStoryIds": [
+        "US-008"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 9,
+      "target": "frontend",
+      "moduleId": "F-MOD-005",
+      "description": "配置前端API客户端",
+      "userStoryIds": [
+        "US-009"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 10,
+      "target": "frontend",
+      "moduleId": "F-MOD-002",
+      "description": "实现任务输入组件（任务创建UI）",
+      "userStoryIds": [
+        "US-010"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 11,
+      "target": "frontend",
+      "moduleId": "F-MOD-003",
+      "description": "实现任务筛选组件",
+      "userStoryIds": [
+        "US-011"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 12,
+      "target": "frontend",
+      "moduleId": "F-MOD-004",
+      "description": "实现任务项组件基础展示和状态切换",
+      "userStoryIds": [
+        "US-012"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 13,
+      "target": "frontend",
+      "moduleId": "F-MOD-004",
+      "description": "实现任务删除功能",
+      "userStoryIds": [
+        "US-013"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 14,
+      "target": "frontend",
+      "moduleId": "F-MOD-004",
+      "description": "实现任务编辑功能",
+      "userStoryIds": [
+        "US-014"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 15,
+      "target": "frontend",
+      "moduleId": "F-MOD-004",
+      "description": "实现任务列表组件",
+      "userStoryIds": [
+        "US-015"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 16,
+      "target": "frontend",
+      "moduleId": "F-MOD-006",
+      "description": "实现全局错误处理和Toast提示",
+      "userStoryIds": [
+        "US-016"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 17,
+      "target": "frontend",
+      "moduleId": "F-MOD-001",
+      "description": "实现主页面布局",
+      "userStoryIds": [
+        "US-017"
+      ],
+      "estimatedStories": 1
+    },
+    {
+      "step": 18,
+      "target": "shared",
+      "moduleId": null,
+      "description": "配置Docker容器化部署",
+      "userStoryIds": [
+        "US-018"
+      ],
+      "estimatedStories": 1
+    }
+  ],
+  "considerations": {
+    "security": [
+      "对所有用户输入进行HTML转义以防止XSS攻击",
+      "在API层对请求体进行严格验证",
+      "使用HTTPS进行生产环境部署",
+      "限制API请求频率以防止滥用"
+    ],
+    "performance": [
+      "使用原子文件写入和文件锁来提高并发写入安全性",
+      "在前端对API响应进行缓存以减少重复请求",
+      "优化前端组件渲染，避免不必要的重渲染"
+    ],
+    "scalability": [
+      "当前架构基于单体设计，适合小型应用",
+      "未来可将存储层替换为数据库以支持更大规模数据",
+      "可通过水平扩展后端服务实例来提高并发处理能力"
+    ],
+    "maintainability": [
+      "采用分层架构，职责清晰，易于维护和扩展",
+      "使用类型检查（TypeScript/Pydantic）减少运行时错误",
+      "模块化设计，每个模块关注单一功能",
+      "完善的测试覆盖确保代码质量"
+    ]
+  },
+  "metadata": {
+    "generatedAt": "2026-04-20T05:34:21.272564Z",
+    "sourcePrd": "待办事项管理系统",
+    "version": "attempt1 (validated)"
+  }
+}

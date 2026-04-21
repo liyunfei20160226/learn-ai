@@ -10,12 +10,15 @@
 {{PROJECT_TREE}}
 ```
 
+{{ENV_INFO}}
+
 ## 任务
 
 项目基础结构和依赖文件已经生成完成。请你根据项目的语言和架构，告诉我：
 
 1. **安装依赖需要运行哪些命令**？（可以是多个命令，按执行顺序列出）
    - 对于Python项目：**推荐使用uv包管理器**，使用 `uv sync` 安装依赖，如果pyproject.toml在子目录需要 `cd`
+   - **重要**: 如果存在 .python-version 文件且版本不兼容，先用 `uv python pin 3.11` 或直接删除该文件
    - 对于Node.js项目：根据锁文件选择包管理器，pnpm优先（更快更好）：
      - 存在 `pnpm-lock.yaml` → `pnpm install`
      - 存在 `yarn.lock` → `yarn install`
@@ -24,30 +27,42 @@
    - 对于其他语言：使用项目对应的标准包管理器
 
 2. **代码质量检查需要运行哪些命令**？（lint、语法检查等）
-   - 对于Python项目：**推荐使用ruff**，命令是 `ruff check . --fix`（--fix 自动修复可修复的代码风格问题）
+   - 对于Python项目（uv 管理）：**推荐使用ruff**，命令是 `uv run ruff check . --fix`（--fix 自动修复可修复的代码风格问题）⚠️ **必须加 `uv run` 前缀**
    - 对于Node.js项目：lint工具（eslint等）是本地安装在项目内，需要通过包管理器执行：
-     - 使用pnpm → `pnpm exec eslint .`
-     - 使用npm → `npx eslint .`
+     - 使用pnpm → `pnpm exec eslint . --ignore-pattern .next/`
+     - 使用npm → `npx eslint . --ignore-pattern .next/`
+     - **必须忽略 `.next` 构建目录**，否则会检查自动生成的文件导致错误
+     - **常见问题**: 如果出现 `ERR_PACKAGE_PATH_NOT_EXPORTED` 错误，说明配置文件格式与ESLint版本不兼容：
+       - ESLint 8.x 期望 `.eslintrc.js`（旧格式）
+       - ESLint 9.x 期望 `eslint.config.js` 或 `eslint.config.mjs`（flat config）
+       - Next.js 脚手架默认创建 `eslint.config.mjs`，需要确保配置文件格式正确
 3. **类型检查需要运行哪些命令**？（如果项目有静态类型检查）
+   - 对于Python项目（uv 管理）：`uv run mypy` ⚠️ **必须加 `uv run` 前缀**
    - 对于TypeScript项目：`pnpm exec tsc --noEmit` 或 `npx tsc --noEmit`
 4. **自动化测试需要运行哪些命令**？
+   - 对于Python项目（uv 管理）：`uv run pytest` ⚠️ **必须加 `uv run` 前缀**
 
-## 输出格式要求
+## 📌 输出格式要求 - 必须严格遵守！
 
-请**严格**按以下JSON格式输出，不要输出其他内容：
+请**直接输出JSON**，**不要使用markdown代码块包裹**！不要添加任何解释文字，只输出JSON。
 
-```json
+✅ 正确示例（直接输出，不要任何包裹）：
 {
   "install": ["command1", "command2"],
   "quality_check": ["command1", "command2"],
   "type_check": ["command1", "command2"],
   "test": ["command1", "command2"]
 }
+
+❌ 错误示例（不要用代码块）：
+```json
+{...}
 ```
 
+规则：
 - 如果某个分类不需要命令，给空数组 `[]`
 - 所有命令都应该是可以直接在shell中运行的完整命令
 - 如果依赖文件或配置文件位于**子目录**中，你需要在命令前加上 `cd 子目录 &&` 切换到正确目录再执行
   - 例如：package.json 在 frontend/ 目录 → `cd ./frontend && npm install`
   - 例如：pyproject.toml 在 backend/ 目录 → `cd ./backend && uv sync`
-- 不要添加任何解释，只输出JSON
+- **只输出JSON，不要其他任何内容**

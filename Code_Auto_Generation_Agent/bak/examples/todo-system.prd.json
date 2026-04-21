@@ -1,0 +1,297 @@
+{
+  "project": "待办事项管理系统",
+  "branchName": "autoprd/todo-management-system",
+  "description": "轻量级待办事项管理系统 - 前后端分离架构，前端Next.js+TypeScript+Tailwind CSS，后端FastAPI，CSV文件存储",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "后端项目结构搭建和Task数据模型定义",
+      "description": "作为开发者，我需要定义Task数据模型和项目基础结构，以便后续开发",
+      "acceptanceCriteria": [
+        "定义Task模型包含id、title、status、created_at、updated_at字段",
+        "status为枚举类型：pending/completed",
+        "id使用UUID v4生成",
+        "created_at和updated_at使用ISO 8601 UTC时间格式",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "实现CSV存储服务",
+      "description": "作为开发者，我需要实现CSV文件读写存储服务，以便持久化任务数据",
+      "acceptanceCriteria": [
+        "应用启动时自动创建缺失的data目录和tasks.csv文件（含表头）",
+        "实现读取CSV文件并解析为Task对象列表",
+        "实现原子写入：先写临时文件再重命名覆盖，结合文件锁防止并发损坏",
+        "对CSV特殊字符（逗号、引号）进行转义处理",
+        "使用UTF-8编码保存，支持中文",
+        "CSV文件损坏时自动备份并初始化新文件，记录错误日志",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "实现获取所有任务API接口",
+      "description": "作为开发者，我需要实现GET /api/tasks接口，以便前端获取任务列表",
+      "acceptanceCriteria": [
+        "实现GET /api/tasks端点",
+        "返回所有任务列表，按创建时间倒序排列",
+        "错误返回统一JSON格式，包含detail字段",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "实现创建任务API接口",
+      "description": "作为开发者，我需要实现POST /api/tasks接口，以便前端创建新任务",
+      "acceptanceCriteria": [
+        "实现POST /api/tasks端点",
+        "校验标题非空，最大长度200字符",
+        "默认状态为pending，生成UUID，设置created_at和updated_at为当前UTC时间",
+        "保存到CSV存储",
+        "返回创建的任务对象",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "实现更新任务API接口",
+      "description": "作为开发者，我需要实现PUT /api/tasks/{task_id}接口，以便更新任务标题或状态",
+      "acceptanceCriteria": [
+        "实现PUT /api/tasks/{task_id}端点",
+        "支持更新标题和状态，更新后更新updated_at时间戳",
+        "编辑标题时校验非空和最大长度200字符",
+        "保存变更到CSV存储",
+        "返回更新后的任务对象",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "实现删除任务API接口",
+      "description": "作为开发者，我需要实现DELETE /api/tasks/{task_id}接口，以便删除任务",
+      "acceptanceCriteria": [
+        "实现DELETE /api/tasks/{task_id}端点",
+        "物理删除任务从CSV存储中移除",
+        "返回成功响应",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "实现健康检查接口和CORS配置",
+      "description": "作为开发者，我需要添加健康检查接口和配置CORS，以便容器监控和跨域访问",
+      "acceptanceCriteria": [
+        "实现GET /health健康检查接口",
+        "配置CORS中间件允许前端域名跨域请求",
+        "FastAPI服务绑定到0.0.0.0",
+        "类型检查通过",
+        "测试通过"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "前端项目初始化和TypeScript类型定义",
+      "description": "作为开发者，我需要创建前端项目基础结构和Task类型定义",
+      "acceptanceCriteria": [
+        "创建Next.js App Router项目结构",
+        "定义Task TypeScript接口匹配后端模型",
+        "配置Tailwind CSS",
+        "类型检查通过"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "配置前端API客户端和环境变量",
+      "description": "作为开发者，我需要配置API客户端，通过环境变量设置API基础路径",
+      "acceptanceCriteria": [
+        "通过环境变量配置API请求基础路径",
+        "封装API请求函数（getAllTasks, createTask, updateTask, deleteTask）",
+        "统一错误处理，错误信息提取detail字段",
+        "类型检查通过"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "实现任务输入组件（任务创建UI）",
+      "description": "作为用户，我想要输入任务标题并保存，以便记录我需要完成的事项",
+      "acceptanceCriteria": [
+        "提供文本输入框，设置maxlength=200",
+        "标题为空时点击添加显示提示，不创建任务",
+        "提交过程中禁用按钮防止重复提交",
+        "支持回车键提交",
+        "对用户输入进行HTML转义防止XSS攻击",
+        "添加成功后清空输入框",
+        "类型检查通过",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "实现任务筛选组件",
+      "description": "作为用户，我想要根据任务状态筛选列表，以便快速查看我关心的任务",
+      "acceptanceCriteria": [
+        "显示三个筛选标签：全部、未完成、已完成",
+        "默认选中全部标签",
+        "当前选中标签有视觉高亮",
+        "点击标签切换筛选，列表即时更新",
+        "类型检查通过",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "实现任务项组件基础展示和状态切换",
+      "description": "作为用户，我想要查看任务并切换完成状态，以便追踪我的进度",
+      "acceptanceCriteria": [
+        "任务前显示复选框",
+        "显示任务标题、创建时间（转换为本地时间，格式YYYY-MM-DD HH:mm）",
+        "已完成任务标题显示删除线",
+        "点击复选框切换任务状态",
+        "状态变更实时保存到后端",
+        "类型检查通过",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "实现任务删除功能",
+      "description": "作为用户，我想要删除不需要的任务，以便保持列表整洁",
+      "acceptanceCriteria": [
+        "每个任务右侧显示删除按钮",
+        "点击删除弹出确认对话框",
+        "确认后调用删除API并从列表移除任务",
+        "类型检查通过",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "实现任务编辑功能",
+      "description": "作为用户，我想要修改已创建任务的标题，以便更正输入错误或更新任务内容",
+      "acceptanceCriteria": [
+        "双击标题或点击编辑按钮进入编辑模式",
+        "编辑模式显示输入框，填充原标题",
+        "保存校验规则与新建一致：非空、最大200字符",
+        "输入进行HTML转义防止XSS",
+        "回车保存，Esc取消",
+        "保存后更新updated_at时间戳",
+        "类型检查通过",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "实现任务列表组件",
+      "description": "作为用户，我想要查看所有待办事项的列表，以便了解我有哪些任务需要处理",
+      "acceptanceCriteria": [
+        "页面加载自动获取并展示所有任务",
+        "按创建时间倒序排列",
+        "根据当前筛选条件过滤显示任务",
+        "无任务时显示空状态提示：暂无待办事项，快去添加吧！",
+        "整合任务输入、筛选、任务项组件",
+        "显示标题进行HTML转义防止XSS",
+        "类型检查通过",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "实现全局错误处理和Toast提示",
+      "description": "作为用户，我想要在操作失败时得到明确的提示，以便我知道系统状态并决定是否重试",
+      "acceptanceCriteria": [
+        "全局捕获API错误",
+        "网络请求失败时在界面顶部显示红色Toast提示：操作失败，请稍后重试",
+        "错误时保留当前输入和操作状态，不丢失数据",
+        "界面不崩溃",
+        "类型检查通过",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "实现主页面布局",
+      "description": "作为用户，我想要看到完整整洁的页面布局，以便使用所有功能",
+      "acceptanceCriteria": [
+        "包含头部标题、任务输入区域、筛选标签区域、任务列表区域",
+        "使用Tailwind CSS实现极简风格，响应式适配移动端和桌面端",
+        "集成所有组件到主页面",
+        "类型检查通过",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "配置Docker容器化部署",
+      "description": "作为开发者，我需要配置Docker和docker-compose实现一键部署",
+      "acceptanceCriteria": [
+        "为前端编写Dockerfile，使用多阶段构建，使用Next.js standalone输出",
+        "为后端编写Dockerfile，使用多阶段构建",
+        "编写docker-compose.yml，包含frontend和backend两个服务",
+        "配置健康检查",
+        "暴露前端3000端口和后端8000端口到宿主机",
+        "类型检查通过"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

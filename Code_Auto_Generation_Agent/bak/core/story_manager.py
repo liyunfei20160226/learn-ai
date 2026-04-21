@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import List, Optional
 
+from config import Config
 from core.prd_loader import PRD
 from utils.logger import get_logger
 
@@ -33,8 +34,9 @@ class StoryState:
 class StoryManager:
     """用户故事管理器"""
 
-    def __init__(self, prd: PRD):
+    def __init__(self, prd: PRD, config: Config = None):
         self.prd = prd
+        self.config = config
         self.states: List[StoryState] = []
         self._init_states()
 
@@ -107,7 +109,8 @@ class StoryManager:
 
     def retry_story(self, story: StoryState) -> bool:
         """是否可以重试"""
-        return story.retries < getattr(self, 'max_retries', 3)
+        max_retries = self.config.max_retries if self.config else 3
+        return story.retries < max_retries
 
     def get_all_stories(self) -> List[StoryState]:
         """获取所有故事"""

@@ -1,25 +1,27 @@
 [project]
-name = "auto-coding-agent"
+name = "code-auto-generation-agent"
 version = "0.1.0"
-description = "Automatic Code Generation Agent - generate full project from PRD json using AI"
+description = "AI-powered code generation agent with ReAct pattern"
 requires-python = ">=3.10"
 dependencies = [
-  "python-dotenv>=1.0.0",
-  "fastapi>=0.124.4",
-  "uvicorn>=0.33.0",
-  "python-multipart>=0.0.20",
-  "jinja2>=3.1.0",
-  "pydantic>=2.0.0",
-  "openai>=1.0.0",
+    "langgraph >= 0.2",
+    "langchain-openai >= 0.1",
+    "langchain-core >= 0.2",
+    "openai >= 1.0",
+    "pydantic >= 2.0",
+    "pydantic-settings >= 2.0",
+    "python-dotenv >= 1.0",
 ]
 
-[project.scripts]
-auto-coding = "auto_coding:main"
-
 [tool.ruff]
-line-length = 100
-select = ["E", "W", "F", "I"]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
 
 [dependency-groups]
 dev = [

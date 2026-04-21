@@ -17,10 +17,11 @@ class AIBackend(ABC):
         pass
 
     @abstractmethod
-    def fix_errors(self, original_prompt: str, errors: List[str]) -> str:
+    def fix_errors(self, original_prompt: str, errors: List[str], target_dir: str = None) -> str:
         """
         根据错误信息修复代码
         返回AI输出内容
+        target_dir: 项目根目录，用于检测实际的配置文件和版本
         """
         pass
 
