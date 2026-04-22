@@ -1,8 +1,78 @@
 from typing import Any, Dict, List
 
-from langchain_core.tools import tool
+from langchain_core.tools import StructuredTool, tool
 
 from .base_agent import BaseAgent
+
+# === 模块级工具工厂：避免每次实例化都重新定义嵌套函数 ===
+
+
+def _create_add_task(task_graph_validator: Dict[str, Any]) -> StructuredTool:
+    """创建 add_task 工具"""
+    @tool
+    def add_task(task_id: str, title: str, description: str,
+                 task_type: str = "general", dependencies: List[str] = None) -> str:
+        """添加一个任务到任务图
+
+        Args:
+            task_id: 任务唯一标识，如 T001, T002
+            title: 任务简短标题
+            description: 任务详细描述，包含验收标准
+            task_type: 任务类型：backend, frontend, shared, infrastructure
+            dependencies: 依赖的任务 ID 列表
+        """
+        task_graph_validator["tasks"].append({
+            "id": task_id,
+            "title": title,
+            "description": description,
+            "type": task_type,
+            "dependencies": dependencies or [],
+        })
+        return f"✓ 已添加任务: {task_id} - {title}"
+    return add_task
+
+
+def _create_validate_task_graph(task_graph_validator: Dict[str, Any]) -> StructuredTool:
+    """创建 validate_task_graph 工具"""
+    @tool
+    def validate_task_graph() -> str:
+        """验证当前任务图的有效性
+
+        检查：
+        1. 依赖的任务是否存在
+        2. 是否有循环依赖
+        3. 任务 ID 是否唯一
+        """
+        tasks = task_graph_validator["tasks"]
+        task_ids = {t["id"] for t in tasks}
+        errors = []
+
+        for task in tasks:
+            for dep in task["dependencies"]:
+                if dep not in task_ids:
+                    errors.append(f"任务 {task['id']} 依赖不存在的任务 {dep}")
+
+        if not errors:
+            errors.append("✓ 任务图验证通过")
+            task_graph_validator["validated"] = True
+
+        return "\n".join(errors)
+    return validate_task_graph
+
+
+def _create_finish(task_graph_validator: Dict[str, Any]) -> StructuredTool:
+    """创建 finish 工具"""
+    @tool
+    def finish(summary: str) -> str:
+        """标记任务规划完成
+
+        Args:
+            summary: 任务规划总结
+        """
+        if not task_graph_validator.get("validated", False):
+            return "⚠️ 错误：在完成之前必须先调用 validate_task_graph 验证任务图！"
+        return f"✅ 任务规划完成\n{summary}"
+    return finish
 
 
 class PlanningAgent(BaseAgent):
@@ -15,67 +85,15 @@ class PlanningAgent(BaseAgent):
         return "planning_agent"
 
     def _init_tools(self) -> List:
-        """定义规划工具"""
+        """定义规划工具（使用模块级工厂函数创建）"""
         task_graph_validator = {"tasks": []}
-
-        @tool
-        def add_task(task_id: str, title: str, description: str,
-                     task_type: str = "general", dependencies: List[str] = None) -> str:
-            """添加一个任务到任务图
-
-            Args:
-                task_id: 任务唯一标识，如 T001, T002
-                title: 任务简短标题
-                description: 任务详细描述，包含验收标准
-                task_type: 任务类型：backend, frontend, shared, infrastructure
-                dependencies: 依赖的任务 ID 列表
-            """
-            task_graph_validator["tasks"].append({
-                "id": task_id,
-                "title": title,
-                "description": description,
-                "type": task_type,
-                "dependencies": dependencies or [],
-            })
-            return f"✓ 已添加任务: {task_id} - {title}"
-
-        @tool
-        def validate_task_graph() -> str:
-            """验证当前任务图的有效性
-
-            检查：
-            1. 依赖的任务是否存在
-            2. 是否有循环依赖
-            3. 任务 ID 是否唯一
-            """
-            tasks = task_graph_validator["tasks"]
-            task_ids = {t["id"] for t in tasks}
-            errors = []
-
-            for task in tasks:
-                for dep in task["dependencies"]:
-                    if dep not in task_ids:
-                        errors.append(f"任务 {task['id']} 依赖不存在的任务 {dep}")
-
-            if not errors:
-                errors.append("✓ 任务图验证通过")
-                task_graph_validator["validated"] = True
-
-            return "\n".join(errors)
-
-        @tool
-        def finish(summary: str) -> str:
-            """标记任务规划完成
-
-            Args:
-                summary: 任务规划总结
-            """
-            if not task_graph_validator.get("validated", False):
-                return "⚠️ 错误：在完成之前必须先调用 validate_task_graph 验证任务图！"
-            return f"✅ 任务规划完成\n{summary}"
-
         self._task_graph_ref = task_graph_validator
-        return [add_task, validate_task_graph, finish]
+
+        return [
+            _create_add_task(task_graph_validator),
+            _create_validate_task_graph(task_graph_validator),
+            _create_finish(task_graph_validator),
+        ]
 
     def get_task_graph(self) -> List[Dict[str, Any]]:
         """获取最终的任务图"""
