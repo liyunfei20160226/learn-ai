@@ -1,3 +1,4 @@
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
 
@@ -14,6 +15,16 @@ from .config import AgentConfig, get_config
 class BaseAgentState(Dict):
     """Agent 状态基类"""
     messages: List[BaseMessage]
+
+    # 安全控制
+    iteration: int = 0              # 当前迭代次数（防死循环）
+    start_time: float = 0           # 开始时间戳（超时控制）
+    max_iterations: int = 50        # 最大迭代次数
+    timeout_seconds: int = 300      # 超时时间（秒）
+
+    # 基础统计
+    tools_called: List[str] = []    # 已调用的工具列表
+    tool_call_count: Dict[str, int] = {}  # 各工具调用次数
 
 
 ToolLogCallback = Callable[[str, str, Optional[str]], None]
@@ -64,19 +75,34 @@ class BaseAgent(ABC):
 
     def _build_graph(self) -> Any:
         """构建 LangGraph ReAct 循环"""
-        def should_continue(state: Dict[str, Any]) -> str:
-            """判断是否需要继续：最后一条是工具调用则继续"""
+        def should_continue(state: BaseAgentState) -> str:
+            """判断是否需要继续：检查超时、迭代限制，然后看是否有工具调用"""
+            # 1. 检查迭代次数
+            if state["iteration"] >= state["max_iterations"]:
+                print(f"⚠️ 超过最大迭代次数 ({state['max_iterations']})，强制结束")
+                return END
+
+            # 2. 检查超时
+            elapsed = time.time() - state["start_time"]
+            if elapsed >= state["timeout_seconds"]:
+                print(f"⏰ 运行超时 ({elapsed:.1f}s >= {state['timeout_seconds']}s)，强制结束")
+                return END
+
+            # 3. 正常判断是否有工具调用
             messages = state["messages"]
             last_message = messages[-1]
             if hasattr(last_message, "tool_calls") and last_message.tool_calls:
                 return "tools"
             return END
 
-        def call_model(state: Dict[str, Any]) -> Dict[str, Any]:
+        def call_model(state: BaseAgentState) -> Dict[str, Any]:
             """调用 LLM，可能选择调用工具或直接回答"""
             messages = state["messages"]
             response = self.llm_with_tools.invoke(messages)
-            return {"messages": [response]}
+            return {
+                "messages": [response],
+                "iteration": state["iteration"] + 1,
+            }
 
         workflow = StateGraph(BaseAgentState)
         workflow.add_node("agent", call_model)
@@ -101,25 +127,42 @@ class BaseAgent(ABC):
             包含完整 messages 历史的结果字典
         """
         limit = recursion_limit or self.config.max_iterations
-        initial_state = {
+        initial_state: BaseAgentState = {
             "messages": [
                 SystemMessage(content=self._get_system_prompt(**prompt_kwargs)),
                 HumanMessage(content=user_input),
-            ]
+            ],
+            "iteration": 0,
+            "start_time": time.time(),
+            "max_iterations": limit,
+            "timeout_seconds": self.config.openai_timeout or 300,
+            "tools_called": [],
+            "tool_call_count": {},
         }
 
         full_state = initial_state.copy()
-        for output in self.graph.stream(initial_state, {"recursion_limit": limit}):
+        for output in self.graph.stream(initial_state, {"recursion_limit": limit + 10}):
             for node_name, node_output in output.items():
-                # 累积消息历史
-                if "messages" in node_output:
-                    full_state.setdefault("messages", []).extend(node_output["messages"])
+                # 累积所有状态字段
+                for key, value in node_output.items():
+                    if key == "messages":
+                        full_state.setdefault("messages", []).extend(value)
+                    else:
+                        full_state[key] = value
 
-                # 调用日志回调
-                if node_name == "tools" and tool_callback:
+                # 工具节点：更新统计信息
+                if node_name == "tools":
                     messages = node_output.get("messages", [])
                     for msg in messages:
-                        tool_callback(node_name, msg.name, msg.content)
+                        tool_name = msg.name
+                        # 统计调用次数
+                        full_state["tool_call_count"][tool_name] = \
+                            full_state["tool_call_count"].get(tool_name, 0) + 1
+                        # 记录调用历史
+                        full_state["tools_called"].append(tool_name)
+                        # 调用日志回调
+                        if tool_callback:
+                            tool_callback(node_name, msg.name, msg.content)
 
         return full_state
 
