@@ -6,6 +6,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
 
+from prompts import PromptTemplate, get_prompt_loader
+
 from .codegen_agent import CodegenAgent
 from .config import AgentConfig, get_config
 from .fix_agent import FixAgent
@@ -56,6 +58,7 @@ class CodegenCoordinator:
         self.llm = ChatOpenAI(**llm_kwargs)
 
         self.manifest: Optional[Manifest] = None
+        self.prompt_loader = get_prompt_loader(self.config.prompts_dir)
         self.generated_code_cache: Dict[str, List[Dict[str, str]]] = {}
 
     def _topological_sort(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -309,29 +312,15 @@ class CodegenCoordinator:
                 dep_code = self._collect_dependency_code(task.get("dependencies", []))
                 filtered_arch = self._filter_architecture_docs(task_type, arch)
 
-                prompt = f"""## 任务信息
-
-任务ID: {task_id}
-任务名称: {task_name}
-任务描述: {task.get('description', '')}
-任务类型: {task_type}
-
-## 技术架构要求
-
-{filtered_arch}
-
-## 依赖代码
-
-{dep_code if dep_code else '无前置依赖'}
-
-## 要求
-
-请根据上述信息生成完整的代码文件。确保：
-1. 遵循技术栈要求
-2. 与依赖代码的接口、类型、命名完全一致
-3. 遵循项目的目录结构规范
-4. 代码完整可运行
-"""
+                template: PromptTemplate = self.prompt_loader.load("codegen_task")
+                prompt = template.render(
+                    task_id=task_id,
+                    task_name=task_name,
+                    task_description=task.get("description", ""),
+                    task_type=task_type,
+                    filtered_arch=filtered_arch,
+                    dep_code=dep_code or "无前置依赖",
+                )
 
                 codegen_agent = CodegenAgent(self.llm, str(self.working_dir), self.config)
                 generated_files = codegen_agent.run_with_log(prompt, verbose=True)
@@ -408,15 +397,11 @@ class CodegenCoordinator:
 
             print("\n🔧 开始自动修复...")
             fix_agent = FixAgent(self.llm, str(self.working_dir), self.config)
-            fix_prompt = f"""## 质量检查失败
-
-失败步骤: {result.step_name}
-
-错误信息:
-{chr(10).join(result.errors)}
-
-请修复这些错误。可以先读取相关文件，然后覆盖修复。
-"""
+            template: PromptTemplate = self.prompt_loader.load("fix_quality_check")
+            fix_prompt = template.render(
+                step_name=result.step_name,
+                errors="\n".join(result.errors),
+            )
             fix_agent.run_with_log(fix_prompt, verbose=True)
             print("✅ 修复完成")
         else:

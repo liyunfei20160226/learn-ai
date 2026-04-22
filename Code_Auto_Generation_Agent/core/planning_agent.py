@@ -144,16 +144,8 @@ class PlanningAgent(BaseAgent):
             arch_content: 架构文档内容
             verbose: 是否输出详细日志
         """
-        prompt = f"""## PRD 需求文档
-
-{prd_content}
-
-## Architecture 架构文档
-
-{arch_content}
-
-请根据上述文档，规划完整的代码生成任务列表。
-"""
+        template = self.prompt_loader.load("plan_tasks")
+        prompt = template.render(prd_content=prd_content, arch_content=arch_content)
 
         callback = self.default_tool_callback if verbose else None
         self.run(prompt, tool_callback=callback)
