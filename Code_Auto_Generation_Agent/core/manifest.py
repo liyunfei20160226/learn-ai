@@ -106,10 +106,16 @@ class Manifest:
         self.total_tasks = len(self.tasks)
 
     def start_task(self, task_id: str) -> None:
-        """标记任务开始"""
+        """标记任务开始（幂等）
+        已完成/已失败的任务状态不会被修改
+        """
         if task_id in self.tasks:
-            self.tasks[task_id].status = "running"
-            self.tasks[task_id].started_at = datetime.now().isoformat()
+            task = self.tasks[task_id]
+            # 终态任务不修改状态
+            if task.status in ("success", "failed"):
+                return
+            task.status = "running"
+            task.started_at = datetime.now().isoformat()
 
     def complete_task(self, task_id: str, generated_files: List[TaskFile] = None) -> None:
         """标记任务完成（幂等）"""
