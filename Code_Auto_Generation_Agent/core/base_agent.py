@@ -24,8 +24,7 @@ class BaseAgentState(TypedDict, total=False):
     timeout_seconds: int            # 超时时间（秒）
 
     # 基础统计
-    tools_called: List[str]         # 已调用的工具列表
-    tool_call_count: Dict[str, int] # 各工具调用次数
+    tools_called: List[str]         # 已调用的工具列表（调用次数可从列表推导）
 
     # 长任务上下文管理
     working_summary: str            # 工作记忆摘要（防 token 爆炸）
@@ -35,6 +34,134 @@ class BaseAgentState(TypedDict, total=False):
 
 
 ToolLogCallback = Callable[[str, str, Optional[str]], None]
+
+# 状态报告标记 - 用于防重复注入
+_STATUS_REPORT_MARKER = "## 📋 当前任务状态"
+
+
+# === 模块级工具定义：避免每次 Agent 实例化都重新定义 ===
+
+@tool
+def update_working_summary(summary: str) -> Dict[str, str]:
+    """更新当前任务的工作摘要，浓缩重要进展，防止上下文过长
+
+    Args:
+        summary: 完整的工作摘要内容（全量覆盖，不是追加）
+    """
+    return {"working_summary": summary}
+
+
+@tool
+def record_key_decision(decision: str) -> Dict[str, List[str]]:
+    """记录重要技术决策，保证后续实现保持一致
+
+    Args:
+        decision: 决策内容，如 "使用 SQLAlchemy 2.0 作为 ORM"
+    """
+    return {"key_decisions": [decision]}
+
+
+@tool
+def mark_subtask_complete(subtask: str) -> Dict[str, List[str]]:
+    """标记子任务已完成，避免重复劳动
+
+    Args:
+        subtask: 子任务描述，如 "完成数据库模型设计"
+    """
+    return {"completed_subtasks": [subtask]}
+
+
+@tool
+def add_context_warning(warning: str) -> Dict[str, List[str]]:
+    """添加上下文告警（如检测到 token 接近上限）
+
+    Args:
+        warning: 告警内容，如 "上下文已用 80%，建议精简"
+    """
+    return {"context_warnings": [warning]}
+
+
+_BASE_TOOLS = [
+    update_working_summary,
+    record_key_decision,
+    mark_subtask_complete,
+    add_context_warning,
+]
+
+# 状态合并策略定义：列出每个 list/dict 类型的字段
+_LIST_FIELDS = {
+    "key_decisions",
+    "completed_subtasks",
+    "context_warnings",
+    "tools_called",
+}
+_DICT_FIELDS = set()  # 目前已移除 tool_call_count，暂无字典字段
+
+
+def _merge_state_value(full_state: dict, key: str, value: Any) -> None:
+    """合并单个状态字段到 full_state，根据字段类型选择合并策略。
+
+    对 list/dict 类型进行校验，避免工具返回错误格式导致的隐蔽 bug。
+
+    Args:
+        full_state: 完整状态字典
+        key: 字段名
+        value: 要合并的值
+
+    Raises:
+        AssertionError: 如果值的类型与字段类型不匹配（开发环境）
+    """
+    if key == "messages":
+        full_state.setdefault(key, []).extend(value)
+    elif key in _LIST_FIELDS:
+        assert isinstance(value, list), f"字段 {key} 必须返回 list，实际是 {type(value).__name__}"
+        full_state.setdefault(key, []).extend(value)
+    elif key in _DICT_FIELDS:
+        assert isinstance(value, dict), f"字段 {key} 必须返回 dict，实际是 {type(value).__name__}"
+        full_state.setdefault(key, {}).update(value)
+    else:
+        # 其他类型：直接覆盖（iteration, working_summary, start_time...）
+        full_state[key] = value
+
+
+def _build_status_report(state: BaseAgentState) -> Optional[str]:
+    """构建当前任务状态报告文本。
+
+    从状态中提取工作摘要、关键决策、已完成任务、上下文告警，
+    格式化为 Markdown 报告，供 LLM 了解当前进度。
+
+    Returns:
+        状态报告字符串，如果没有任何状态信息则返回 None
+    """
+    has_summary = state.get("working_summary")
+    has_decisions = state.get("key_decisions")
+    has_subtasks = state.get("completed_subtasks")
+    has_warnings = state.get("context_warnings")
+
+    if not (has_summary or has_decisions or has_subtasks or has_warnings):
+        return None
+
+    status_report = f"\n\n{_STATUS_REPORT_MARKER}\n\n"
+
+    if has_summary:
+        status_report += f"### 工作摘要\n{state['working_summary']}\n\n"
+    if has_decisions:
+        status_report += "### 已确认的关键决策\n"
+        for d in state["key_decisions"]:
+            status_report += f"- {d}\n"
+        status_report += "\n"
+    if has_subtasks:
+        status_report += "### 已完成子任务\n"
+        for t in state["completed_subtasks"]:
+            status_report += f"- {t}\n"
+        status_report += "\n"
+    if has_warnings:
+        status_report += "### ⚠️ 上下文告警\n"
+        for w in state["context_warnings"]:
+            status_report += f"- {w}\n"
+        status_report += "\n"
+
+    return status_report
 
 
 class BaseAgent(ABC):
@@ -61,44 +188,11 @@ class BaseAgent(ABC):
         self.graph = self._build_graph()
 
     def _init_base_tools(self) -> List:
-        """基类通用工具：长任务上下文管理"""
-        @tool
-        def update_working_summary(summary: str) -> Dict[str, str]:
-            """更新当前任务的工作摘要，浓缩重要进展，防止上下文过长
+        """基类通用工具：长任务上下文管理
 
-            Args:
-                summary: 完整的工作摘要内容（全量覆盖，不是追加）
-            """
-            return {"working_summary": summary}
-
-        @tool
-        def record_key_decision(decision: str) -> Dict[str, List[str]]:
-            """记录重要技术决策，保证后续实现保持一致
-
-            Args:
-                decision: 决策内容，如 "使用 SQLAlchemy 2.0 作为 ORM"
-            """
-            return {"key_decisions": [decision]}
-
-        @tool
-        def mark_subtask_complete(subtask: str) -> Dict[str, List[str]]:
-            """标记子任务已完成，避免重复劳动
-
-            Args:
-                subtask: 子任务描述，如 "完成数据库模型设计"
-            """
-            return {"completed_subtasks": [subtask]}
-
-        @tool
-        def add_context_warning(warning: str) -> Dict[str, List[str]]:
-            """添加上下文告警（如检测到 token 接近上限）
-
-            Args:
-                warning: 告警内容，如 "上下文已用 80%，建议精简"
-            """
-            return {"context_warnings": [warning]}
-
-        return [update_working_summary, record_key_decision, mark_subtask_complete, add_context_warning]
+        工具在模块级定义，避免每次实例化都重新定义。
+        """
+        return _BASE_TOOLS
 
     @abstractmethod
     def _init_tools(self) -> List:
@@ -150,34 +244,12 @@ class BaseAgent(ABC):
             messages = list(state["messages"])
 
             # 注入长任务状态摘要（让 LLM 知道当前进度）
-            has_summary = state.get("working_summary")
-            has_decisions = state.get("key_decisions")
-            has_subtasks = state.get("completed_subtasks")
-            has_warnings = state.get("context_warnings")
-            if has_summary or has_decisions or has_subtasks or has_warnings:
+            status_report = _build_status_report(state)
+            if status_report:
                 last_msg = messages[-1]
 
                 # 防重复：检查是否已经注入过状态报告
-                if hasattr(last_msg, "content") and "## 📋 当前任务状态" not in last_msg.content:
-                    status_report = "\n\n## 📋 当前任务状态\n\n"
-                    if has_summary:
-                        status_report += f"### 工作摘要\n{state['working_summary']}\n\n"
-                    if has_decisions:
-                        status_report += "### 已确认的关键决策\n"
-                        for d in state["key_decisions"]:
-                            status_report += f"- {d}\n"
-                        status_report += "\n"
-                    if has_subtasks:
-                        status_report += "### 已完成子任务\n"
-                        for t in state["completed_subtasks"]:
-                            status_report += f"- {t}\n"
-                        status_report += "\n"
-                    if has_warnings:
-                        status_report += "### ⚠️ 上下文告警\n"
-                        for w in state["context_warnings"]:
-                            status_report += f"- {w}\n"
-                        status_report += "\n"
-
+                if hasattr(last_msg, "content") and _STATUS_REPORT_MARKER not in last_msg.content:
                     new_content = last_msg.content + status_report
                     messages[-1] = type(last_msg)(content=new_content)
 
@@ -220,7 +292,6 @@ class BaseAgent(ABC):
             "max_iterations": limit,
             "timeout_seconds": self.config.openai_timeout or 300,
             "tools_called": [],
-            "tool_call_count": {},
             # 长任务上下文字段
             "working_summary": "",
             "key_decisions": [],
@@ -233,29 +304,14 @@ class BaseAgent(ABC):
             for node_name, node_output in output.items():
                 # 累积所有状态字段
                 for key, value in node_output.items():
-                    if key == "messages":
-                        full_state.setdefault("messages", []).extend(value)
-                    elif isinstance(value, list):
-                        # 列表类型字段：追加（如 key_decisions, completed_subtasks）
-                        full_state.setdefault(key, []).extend(value)
-                    elif isinstance(value, dict):
-                        # 字典类型字段：合并
-                        full_state.setdefault(key, {}).update(value)
-                    else:
-                        # 其他类型：覆盖（如 iteration, working_summary）
-                        full_state[key] = value
+                    _merge_state_value(full_state, key, value)
 
-                # 工具节点：更新统计信息
+                # 工具节点：记录调用历史
                 if node_name == "tools":
                     messages = node_output.get("messages", [])
                     for msg in messages:
                         tool_name = msg.name
-                        # 统计调用次数
-                        full_state["tool_call_count"][tool_name] = \
-                            full_state["tool_call_count"].get(tool_name, 0) + 1
-                        # 记录调用历史
                         full_state["tools_called"].append(tool_name)
-                        # 调用日志回调
                         if tool_callback:
                             tool_callback(node_name, msg.name, msg.content)
 
@@ -267,3 +323,18 @@ class BaseAgent(ABC):
         if messages:
             return messages[-1].content
         return ""
+
+    @staticmethod
+    def get_tool_call_counts(result: Dict[str, Any]) -> Dict[str, int]:
+        """从结果中推导各工具调用次数。
+
+        从 tools_called 列表统计，避免重复存储。
+
+        Args:
+            result: run() 返回的完整状态
+
+        Returns:
+            {工具名: 调用次数} 字典
+        """
+        tools = result.get("tools_called", [])
+        return {t: tools.count(t) for t in set(tools)}
