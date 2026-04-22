@@ -1,9 +1,10 @@
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TypedDict
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.tools import tool
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
 
@@ -12,25 +13,25 @@ from prompts import PromptTemplate, get_prompt_loader
 from .config import AgentConfig, get_config
 
 
-class BaseAgentState(Dict):
-    """Agent 状态基类"""
+class BaseAgentState(TypedDict, total=False):
+    """Agent 状态基类 - 类型安全的状态定义"""
     messages: List[BaseMessage]
 
     # 安全控制
-    iteration: int = 0              # 当前迭代次数（防死循环）
-    start_time: float = 0           # 开始时间戳（超时控制）
-    max_iterations: int = 50        # 最大迭代次数
-    timeout_seconds: int = 300      # 超时时间（秒）
+    iteration: int                  # 当前迭代次数（防死循环）
+    start_time: float               # 开始时间戳（超时控制）
+    max_iterations: int             # 最大迭代次数
+    timeout_seconds: int            # 超时时间（秒）
 
     # 基础统计
-    tools_called: List[str] = []    # 已调用的工具列表
-    tool_call_count: Dict[str, int] = {}  # 各工具调用次数
+    tools_called: List[str]         # 已调用的工具列表
+    tool_call_count: Dict[str, int] # 各工具调用次数
 
     # 长任务上下文管理
-    working_summary: str = ""       # 工作记忆摘要（防 token 爆炸）
-    key_decisions: List[str] = []   # 重要决策记录（保证前后一致）
-    completed_subtasks: List[str] = []  # 已完成的子任务（避免重复劳动）
-    context_warnings: List[str] = []  # 上下文告警（如 token 接近上限）
+    working_summary: str            # 工作记忆摘要（防 token 爆炸）
+    key_decisions: List[str]        # 重要决策记录（保证前后一致）
+    completed_subtasks: List[str]   # 已完成的子任务（避免重复劳动）
+    context_warnings: List[str]     # 上下文告警（如 token 接近上限）
 
 
 ToolLogCallback = Callable[[str, str, Optional[str]], None]
@@ -61,8 +62,6 @@ class BaseAgent(ABC):
 
     def _init_base_tools(self) -> List:
         """基类通用工具：长任务上下文管理"""
-        from langchain_core.tools import tool
-
         @tool
         def update_working_summary(summary: str) -> Dict[str, str]:
             """更新当前任务的工作摘要，浓缩重要进展，防止上下文过长
@@ -156,28 +155,29 @@ class BaseAgent(ABC):
             has_subtasks = state.get("completed_subtasks")
             has_warnings = state.get("context_warnings")
             if has_summary or has_decisions or has_subtasks or has_warnings:
-                status_report = "\n\n## 📋 当前任务状态\n\n"
-                if has_summary:
-                    status_report += f"### 工作摘要\n{state['working_summary']}\n\n"
-                if has_decisions:
-                    status_report += "### 已确认的关键决策\n"
-                    for d in state["key_decisions"]:
-                        status_report += f"- {d}\n"
-                    status_report += "\n"
-                if has_subtasks:
-                    status_report += "### 已完成子任务\n"
-                    for t in state["completed_subtasks"]:
-                        status_report += f"- {t}\n"
-                    status_report += "\n"
-                if has_warnings:
-                    status_report += "### ⚠️ 上下文告警\n"
-                    for w in state["context_warnings"]:
-                        status_report += f"- {w}\n"
-                    status_report += "\n"
-
-                # 追加到最后一条消息
                 last_msg = messages[-1]
-                if hasattr(last_msg, "content"):
+
+                # 防重复：检查是否已经注入过状态报告
+                if hasattr(last_msg, "content") and "## 📋 当前任务状态" not in last_msg.content:
+                    status_report = "\n\n## 📋 当前任务状态\n\n"
+                    if has_summary:
+                        status_report += f"### 工作摘要\n{state['working_summary']}\n\n"
+                    if has_decisions:
+                        status_report += "### 已确认的关键决策\n"
+                        for d in state["key_decisions"]:
+                            status_report += f"- {d}\n"
+                        status_report += "\n"
+                    if has_subtasks:
+                        status_report += "### 已完成子任务\n"
+                        for t in state["completed_subtasks"]:
+                            status_report += f"- {t}\n"
+                        status_report += "\n"
+                    if has_warnings:
+                        status_report += "### ⚠️ 上下文告警\n"
+                        for w in state["context_warnings"]:
+                            status_report += f"- {w}\n"
+                        status_report += "\n"
+
                     new_content = last_msg.content + status_report
                     messages[-1] = type(last_msg)(content=new_content)
 
