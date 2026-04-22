@@ -78,7 +78,7 @@ class BaseAgent(ABC):
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
 
-        workflow = StateGraph(Dict[str, Any])
+        workflow = StateGraph(BaseAgentState)
         workflow.add_node("agent", call_model)
         workflow.add_node("tools", self.tool_node)
         workflow.set_entry_point("agent")
