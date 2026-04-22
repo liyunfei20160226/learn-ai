@@ -1,3 +1,4 @@
+import logging
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, TypedDict
@@ -11,6 +12,15 @@ from langgraph.prebuilt import ToolNode
 from prompts import PromptTemplate, get_prompt_loader
 
 from .config import AgentConfig, get_config
+
+# 配置日志：默认输出到控制台，命令行用户可见
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", "%H:%M:%S")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 
 class BaseAgentState(TypedDict, total=False):
@@ -223,13 +233,13 @@ class BaseAgent(ABC):
             """判断是否需要继续：检查超时、迭代限制，然后看是否有工具调用"""
             # 1. 检查迭代次数
             if state["iteration"] >= state["max_iterations"]:
-                print(f"⚠️ 超过最大迭代次数 ({state['max_iterations']})，强制结束")
+                logger.warning("超过最大迭代次数 (%d)，强制结束", state["max_iterations"])
                 return END
 
             # 2. 检查超时
             elapsed = time.time() - state["start_time"]
             if elapsed >= state["timeout_seconds"]:
-                print(f"⏰ 运行超时 ({elapsed:.1f}s >= {state['timeout_seconds']}s)，强制结束")
+                logger.warning("运行超时 (%.1fs >= %ds)，强制结束", elapsed, state["timeout_seconds"])
                 return END
 
             # 3. 正常判断是否有工具调用
