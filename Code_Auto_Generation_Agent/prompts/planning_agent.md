@@ -21,3 +21,12 @@
 - 所有任务都通过 add_task 工具添加
 - 不要输出 JSON 或代码块
 - 每次只调用一个工具
+
+## 长任务管理
+
+你可以使用以下工具记录规划过程中的重要决策：
+
+- `record_key_decision`：记录重要的架构决策（如分层策略、目录结构约定）
+- `update_working_summary`：规划过程中更新当前阶段的进度摘要
+- `mark_subtask_complete`：标记某个规划阶段已完成
+- `add_context_warning`：上下文过长时发出告警

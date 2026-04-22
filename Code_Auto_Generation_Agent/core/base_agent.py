@@ -26,6 +26,12 @@ class BaseAgentState(Dict):
     tools_called: List[str] = []    # 已调用的工具列表
     tool_call_count: Dict[str, int] = {}  # 各工具调用次数
 
+    # 长任务上下文管理
+    working_summary: str = ""       # 工作记忆摘要（防 token 爆炸）
+    key_decisions: List[str] = []   # 重要决策记录（保证前后一致）
+    completed_subtasks: List[str] = []  # 已完成的子任务（避免重复劳动）
+    context_warnings: List[str] = []  # 上下文告警（如 token 接近上限）
+
 
 ToolLogCallback = Callable[[str, str, Optional[str]], None]
 
@@ -45,14 +51,59 @@ class BaseAgent(ABC):
         # Initialize prompt loader
         self.prompt_loader = get_prompt_loader(self.config.prompts_dir)
 
-        self.tools = self._init_tools()
+        # 合并基类通用工具 + 子类专属工具
+        base_tools = self._init_base_tools()
+        subclass_tools = self._init_tools()
+        self.tools = base_tools + subclass_tools
         self.tool_node = ToolNode(self.tools)
         self.llm_with_tools = self.llm.bind_tools(self.tools)
         self.graph = self._build_graph()
 
+    def _init_base_tools(self) -> List:
+        """基类通用工具：长任务上下文管理"""
+        from langchain_core.tools import tool
+
+        @tool
+        def update_working_summary(summary: str) -> Dict[str, str]:
+            """更新当前任务的工作摘要，浓缩重要进展，防止上下文过长
+
+            Args:
+                summary: 完整的工作摘要内容（全量覆盖，不是追加）
+            """
+            return {"working_summary": summary}
+
+        @tool
+        def record_key_decision(decision: str) -> Dict[str, List[str]]:
+            """记录重要技术决策，保证后续实现保持一致
+
+            Args:
+                decision: 决策内容，如 "使用 SQLAlchemy 2.0 作为 ORM"
+            """
+            return {"key_decisions": [decision]}
+
+        @tool
+        def mark_subtask_complete(subtask: str) -> Dict[str, List[str]]:
+            """标记子任务已完成，避免重复劳动
+
+            Args:
+                subtask: 子任务描述，如 "完成数据库模型设计"
+            """
+            return {"completed_subtasks": [subtask]}
+
+        @tool
+        def add_context_warning(warning: str) -> Dict[str, List[str]]:
+            """添加上下文告警（如检测到 token 接近上限）
+
+            Args:
+                warning: 告警内容，如 "上下文已用 80%，建议精简"
+            """
+            return {"context_warnings": [warning]}
+
+        return [update_working_summary, record_key_decision, mark_subtask_complete, add_context_warning]
+
     @abstractmethod
     def _init_tools(self) -> List:
-        """定义并返回可用工具列表"""
+        """定义并返回可用工具列表（子类实现，自动包含基类工具）"""
         pass
 
     @abstractmethod
@@ -97,7 +148,39 @@ class BaseAgent(ABC):
 
         def call_model(state: BaseAgentState) -> Dict[str, Any]:
             """调用 LLM，可能选择调用工具或直接回答"""
-            messages = state["messages"]
+            messages = list(state["messages"])
+
+            # 注入长任务状态摘要（让 LLM 知道当前进度）
+            has_summary = state.get("working_summary")
+            has_decisions = state.get("key_decisions")
+            has_subtasks = state.get("completed_subtasks")
+            has_warnings = state.get("context_warnings")
+            if has_summary or has_decisions or has_subtasks or has_warnings:
+                status_report = "\n\n## 📋 当前任务状态\n\n"
+                if has_summary:
+                    status_report += f"### 工作摘要\n{state['working_summary']}\n\n"
+                if has_decisions:
+                    status_report += "### 已确认的关键决策\n"
+                    for d in state["key_decisions"]:
+                        status_report += f"- {d}\n"
+                    status_report += "\n"
+                if has_subtasks:
+                    status_report += "### 已完成子任务\n"
+                    for t in state["completed_subtasks"]:
+                        status_report += f"- {t}\n"
+                    status_report += "\n"
+                if has_warnings:
+                    status_report += "### ⚠️ 上下文告警\n"
+                    for w in state["context_warnings"]:
+                        status_report += f"- {w}\n"
+                    status_report += "\n"
+
+                # 追加到最后一条消息
+                last_msg = messages[-1]
+                if hasattr(last_msg, "content"):
+                    new_content = last_msg.content + status_report
+                    messages[-1] = type(last_msg)(content=new_content)
+
             response = self.llm_with_tools.invoke(messages)
             return {
                 "messages": [response],
@@ -138,6 +221,11 @@ class BaseAgent(ABC):
             "timeout_seconds": self.config.openai_timeout or 300,
             "tools_called": [],
             "tool_call_count": {},
+            # 长任务上下文字段
+            "working_summary": "",
+            "key_decisions": [],
+            "completed_subtasks": [],
+            "context_warnings": [],
         }
 
         full_state = initial_state.copy()
@@ -147,7 +235,14 @@ class BaseAgent(ABC):
                 for key, value in node_output.items():
                     if key == "messages":
                         full_state.setdefault("messages", []).extend(value)
+                    elif isinstance(value, list):
+                        # 列表类型字段：追加（如 key_decisions, completed_subtasks）
+                        full_state.setdefault(key, []).extend(value)
+                    elif isinstance(value, dict):
+                        # 字典类型字段：合并
+                        full_state.setdefault(key, {}).update(value)
                     else:
+                        # 其他类型：覆盖（如 iteration, working_summary）
                         full_state[key] = value
 
                 # 工具节点：更新统计信息
