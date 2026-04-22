@@ -87,30 +87,9 @@ class BaseAgent(ABC):
 
         return workflow.compile()
 
-    def run(self, user_input: str, recursion_limit: int = None, **prompt_kwargs: Any) -> Dict[str, Any]:
-        """统一的运行入口（无日志输出）
-
-        Args:
-            user_input: 用户输入内容
-            recursion_limit: 最大循环次数，默认使用配置中的 max_iterations
-            **prompt_kwargs: 提示词模板变量
-
-        Returns:
-            包含 messages 的结果字典
-        """
-        limit = recursion_limit or self.config.max_iterations
-        initial_state = {
-            "messages": [
-                SystemMessage(content=self._get_system_prompt(**prompt_kwargs)),
-                HumanMessage(content=user_input),
-            ]
-        }
-
-        return self.graph.invoke(initial_state, {"recursion_limit": limit})
-
-    def run_stream(self, user_input: str, recursion_limit: int = None,
-                   tool_callback: ToolLogCallback = None, **prompt_kwargs: Any) -> Dict[str, Any]:
-        """流式运行入口（支持实时日志输出）
+    def run(self, user_input: str, recursion_limit: int = None,
+            tool_callback: ToolLogCallback = None, **prompt_kwargs: Any) -> Dict[str, Any]:
+        """统一的运行入口，支持实时日志输出回调。
 
         Args:
             user_input: 用户输入内容
@@ -119,7 +98,7 @@ class BaseAgent(ABC):
             **prompt_kwargs: 提示词模板变量
 
         Returns:
-            包含 messages 的结果字典
+            包含完整 messages 历史的结果字典
         """
         limit = recursion_limit or self.config.max_iterations
         initial_state = {
@@ -129,18 +108,20 @@ class BaseAgent(ABC):
             ]
         }
 
-        final_state = None
+        full_state = initial_state.copy()
         for output in self.graph.stream(initial_state, {"recursion_limit": limit}):
             for node_name, node_output in output.items():
+                # 累积消息历史
+                if "messages" in node_output:
+                    full_state.setdefault("messages", []).extend(node_output["messages"])
+
+                # 调用日志回调
                 if node_name == "tools" and tool_callback:
                     messages = node_output.get("messages", [])
                     for msg in messages:
-                        tool_name = msg.name
-                        result = msg.content
-                        tool_callback(node_name, tool_name, result)
-            final_state = output
+                        tool_callback(node_name, msg.name, msg.content)
 
-        return final_state if final_state else initial_state
+        return full_state
 
     def get_last_message(self, result: Dict[str, Any]) -> str:
         """获取最后一条消息内容"""

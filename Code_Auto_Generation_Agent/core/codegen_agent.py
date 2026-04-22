@@ -164,5 +164,5 @@ class CodegenAgent(BaseAgent):
                 elif tool_name == "finish":
                     print(f"  🏁  {result}")
 
-        self.run_stream(user_input, tool_callback=tool_callback)
+        self.run(user_input, tool_callback=tool_callback)
         return self.get_generated_files()

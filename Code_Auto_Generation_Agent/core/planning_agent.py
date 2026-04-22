@@ -111,5 +111,5 @@ class PlanningAgent(BaseAgent):
                 elif tool_name == "finish":
                     print(f"  🏁  {result}")
 
-        self.run_stream(prompt, tool_callback=tool_callback)
+        self.run(prompt, tool_callback=tool_callback)
         return self.get_task_graph()
