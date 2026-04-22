@@ -18,9 +18,14 @@ def _create_add_task(task_graph_validator: Dict[str, Any]) -> StructuredTool:
             task_id: 任务唯一标识，如 T001, T002
             title: 任务简短标题
             description: 任务详细描述，包含验收标准
-            task_type: 任务类型：backend, frontend, shared, infrastructure
+            task_type: 任务类型：backend, frontend, database, shared, infrastructure
             dependencies: 依赖的任务 ID 列表
         """
+        # 立即检查重复 ID，提前发现问题
+        existing_ids = {t["id"] for t in task_graph_validator["tasks"]}
+        if task_id in existing_ids:
+            return f"⚠️ 错误: 任务 ID 已存在: {task_id}"
+
         task_graph_validator["tasks"].append({
             "id": task_id,
             "title": title,
@@ -39,18 +44,50 @@ def _create_validate_task_graph(task_graph_validator: Dict[str, Any]) -> Structu
         """验证当前任务图的有效性
 
         检查：
-        1. 依赖的任务是否存在
-        2. 是否有循环依赖
-        3. 任务 ID 是否唯一
+        1. 任务 ID 是否唯一
+        2. 依赖的任务是否存在
+        3. 是否有循环依赖（Kahn 算法检测）
         """
         tasks = task_graph_validator["tasks"]
-        task_ids = {t["id"] for t in tasks}
         errors = []
 
+        # 检查 1: 任务 ID 唯一性
+        seen_ids = set()
+        for task in tasks:
+            if task["id"] in seen_ids:
+                errors.append(f"任务 ID 重复: {task['id']}")
+            seen_ids.add(task["id"])
+
+        # 检查 2: 依赖的任务是否存在
+        task_ids = seen_ids
         for task in tasks:
             for dep in task["dependencies"]:
                 if dep not in task_ids:
                     errors.append(f"任务 {task['id']} 依赖不存在的任务 {dep}")
+
+        # 检查 3: 是否有循环依赖（Kahn 算法）
+        if not errors and tasks:
+            in_degree = {t["id"]: len(t.get("dependencies", [])) for t in tasks}
+            adj_list = {t["id"]: [] for t in tasks}
+
+            for task in tasks:
+                for dep in task.get("dependencies", []):
+                    adj_list[dep].append(task["id"])
+
+            queue = [tid for tid, deg in in_degree.items() if deg == 0]
+            processed = 0
+
+            while queue:
+                task_id = queue.pop(0)
+                processed += 1
+                for next_id in adj_list[task_id]:
+                    in_degree[next_id] -= 1
+                    if in_degree[next_id] == 0:
+                        queue.append(next_id)
+
+            if processed != len(tasks):
+                unresolved = task_ids - set(t["id"] for t in tasks if in_degree[t["id"]] == 0)
+                errors.append(f"任务图存在循环依赖，无法解析以下任务: {sorted(unresolved)}")
 
         if not errors:
             errors.append("✓ 任务图验证通过")
@@ -118,16 +155,6 @@ class PlanningAgent(BaseAgent):
 请根据上述文档，规划完整的代码生成任务列表。
 """
 
-        def tool_callback(node_name: str, tool_name: str, result: str):
-            if verbose:
-                if tool_name == "add_task":
-                    print(f"  🛠️  {result}")
-                elif tool_name == "validate_task_graph":
-                    print("  🔍  验证任务图...")
-                    for line in result.split("\n"):
-                        print(f"     {line}")
-                elif tool_name == "finish":
-                    print(f"  🏁  {result}")
-
-        self.run(prompt, tool_callback=tool_callback)
+        callback = self.default_tool_callback if verbose else None
+        self.run(prompt, tool_callback=callback)
         return self.get_task_graph()

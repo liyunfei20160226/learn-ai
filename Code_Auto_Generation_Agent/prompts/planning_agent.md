@@ -12,7 +12,13 @@
 任务规划原则：
 - 任务粒度适中：每个任务应该在 1-3 个文件范围内完成
 - 按层划分：数据模型 → 数据库配置 → API 接口 → 前端组件
-- 类型标注：backend / frontend / shared / infrastructure
+- 类型标注（严格按照以下定义）：
+  - backend: 任何服务端代码（Python/Node/Go 等）、API、业务逻辑
+  - frontend: 任何浏览器端代码（React/Vue/纯 HTML+CSS+JS 都算）
+  - database: 数据库 schema SQL、迁移脚本文件、种子数据（纯数据库文件，不包含业务逻辑）
+  - shared: 项目根目录通用文件（README.md, .gitignore, Makefile）、
+             真正跨前后端共享的契约定义（如 protobuf，前后端都从同一份文件生成代码）
+  - infrastructure: 部署相关（Dockerfile、docker-compose、CI 配置）
 - 依赖清晰：确保被依赖的任务先执行
 - 接口优先：定义接口的任务必须在实现任务之前
 

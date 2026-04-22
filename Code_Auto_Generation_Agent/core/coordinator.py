@@ -1,4 +1,5 @@
 import json
+import traceback
 from collections import deque
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -11,6 +12,7 @@ from .fix_agent import FixAgent
 from .manifest import Manifest, TaskFile
 from .planning_agent import PlanningAgent
 from .quality_checker import QualityChecker
+from .utils import safe_resolve_path
 
 
 class CodegenCoordinator:
@@ -57,15 +59,25 @@ class CodegenCoordinator:
         self.generated_code_cache: Dict[str, List[Dict[str, str]]] = {}
 
     def _topological_sort(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Kahn 算法：拓扑排序"""
+        """Kahn 算法：拓扑排序
+
+        检测两种异常：
+        1. 依赖不存在的任务 ID → 直接报错
+        2. 循环依赖 → 任务数量不一致时报错
+        """
         task_map = {t["id"]: t for t in tasks}
+        task_ids = set(task_map.keys())
         in_degree = {t["id"]: len(t.get("dependencies", [])) for t in tasks}
         adj_list = {t["id"]: [] for t in tasks}
 
         for task in tasks:
             for dep in task.get("dependencies", []):
-                if dep in adj_list:
-                    adj_list[dep].append(task["id"])
+                if dep not in task_ids:
+                    raise ValueError(
+                        f"任务 {task['id']} 依赖不存在的任务 {dep}。\n"
+                        f"有效任务 ID: {sorted(task_ids)}"
+                    )
+                adj_list[dep].append(task["id"])
 
         queue = deque([tid for tid, deg in in_degree.items() if deg == 0])
         sorted_tasks = []
@@ -80,7 +92,10 @@ class CodegenCoordinator:
                     queue.append(next_id)
 
         if len(sorted_tasks) != len(tasks):
-            raise ValueError("任务图存在循环依赖")
+            unresolved = task_ids - {t["id"] for t in sorted_tasks}
+            raise ValueError(
+                f"任务图存在循环依赖，无法解析以下任务: {sorted(unresolved)}"
+            )
 
         return sorted_tasks
 
@@ -95,42 +110,110 @@ class CodegenCoordinator:
                 files = self.generated_code_cache[dep_id]
                 sections.append(f"=== 依赖任务 {dep_id} 已生成代码 ===")
                 for f in files:
-                    file_path = self.working_dir / f["file_path"]
+                    # 安全检查：确保文件路径在工作目录内
+                    file_path = safe_resolve_path(self.working_dir, f["file_path"])
                     if file_path.exists():
                         with open(file_path, "r", encoding="utf-8") as fp:
                             content = fp.read()
                         sections.append(f"--- {f['file_path']} ---")
                         sections.append(content)
                         sections.append("")
+            else:
+                # 依赖任务不在缓存中，说明没有成功完成
+                # 记录警告但继续（上层会跳过此任务）
+                sections.append(f"⚠️  依赖任务 {dep_id} 未完成，代码不可用")
 
         return "\n".join(sections)
 
+    @staticmethod
+    def _require_field(data: Dict, field: str, context: str) -> str:
+        """要求字段必须存在，无默认值，缺失直接报错。
+
+        这是 Coordinator 与 Architecture Agent 之间的显式契约。
+        """
+        if data is None or field not in data:
+            raise ValueError(
+                f"架构文档缺少必填字段: {context}.{field}。\n"
+                f"请更新架构设计 JSON，明确定义所有技术栈字段，不允许默认值兜底。"
+            )
+        return data[field]
+
     def _filter_architecture_docs(self, task_type: str, arch_doc: Dict) -> str:
-        """智能过滤架构文档，只注入最相关的内容"""
+        """智能过滤架构文档，只注入最相关的内容。
+
+        所有字段必须在架构文档中明确定义，无默认值兜底。
+        缺失任何必填字段都会直接报错，避免生成错误的技术栈代码。
+        """
         sections = []
+        backend = arch_doc.get("backend")
+        frontend = arch_doc.get("frontend")
+
+        _require = self._require_field
 
         if task_type == "backend":
-            backend = arch_doc.get("backend", {})
             sections.append("=== 后端技术栈 ===")
-            sections.append(f"- 框架: {backend.get('framework', 'FastAPI')}")
-            sections.append(f"- 数据库: {backend.get('database', 'SQLite')}")
-            sections.append(f"- ORM: {backend.get('orm', 'SQLAlchemy')}")
-            sections.append(f"- 目录结构:\n{backend.get('directory_structure', '')}")
+            sections.append(f"- 框架: {_require(backend, 'framework', 'backend')}")
+            sections.append(f"- 数据库: {_require(backend, 'database', 'backend')}")
+            sections.append(f"- ORM: {_require(backend, 'orm', 'backend')}")
+            sections.append(f"- 目录结构:\n{_require(backend, 'directory_structure', 'backend')}")
 
         elif task_type == "frontend":
-            frontend = arch_doc.get("frontend", {})
             sections.append("=== 前端技术栈 ===")
-            sections.append(f"- 框架: {frontend.get('framework', 'React')}")
-            sections.append(f"- 状态管理: {frontend.get('state_management', 'Zustand')}")
-            sections.append(f"- UI 库: {frontend.get('ui_library', 'Tailwind CSS')}")
-            sections.append(f"- 目录结构:\n{frontend.get('directory_structure', '')}")
+            sections.append(f"- 框架: {_require(frontend, 'framework', 'frontend')}")
+            sections.append(f"- 状态管理: {_require(frontend, 'state_management', 'frontend')}")
+            sections.append(f"- UI 库: {_require(frontend, 'ui_library', 'frontend')}")
+            sections.append(f"- 目录结构:\n{_require(frontend, 'directory_structure', 'frontend')}")
+
+        elif task_type == "database":
+            sections.append("=== 数据库技术栈 ===")
+            sections.append(f"- 数据库: {_require(backend, 'database', 'backend')}")
+            sections.append(f"- 迁移工具: {_require(backend, 'migration', 'backend')}")
+
+        elif task_type == "shared":
+            # 共享代码：同时注入前后端关键信息
+            sections.append("=== 后端技术栈 ===")
+            sections.append(f"- 框架: {_require(backend, 'framework', 'backend')}")
+            sections.append(f"- 数据库: {_require(backend, 'database', 'backend')}")
+            sections.append("=== 前端技术栈 ===")
+            sections.append(f"- 框架: {_require(frontend, 'framework', 'frontend')}")
+
+        elif task_type == "infrastructure":
+            architecture = arch_doc.get("architecture", {})
+            tech_stack = architecture.get("techStack", {})
+            deployment = tech_stack.get("deployment")
+            if not deployment:
+                raise ValueError(
+                    "架构文档缺少必填字段: architecture.techStack.deployment。\n"
+                    "请更新架构设计 JSON，明确定义部署方式。"
+                )
+            if not isinstance(deployment, list):
+                raise ValueError(
+                    "architecture.techStack.deployment 必须是列表类型。\n"
+                    f"当前类型: {type(deployment).__name__}"
+                )
+            sections.append("=== 基础设施 ===")
+            sections.append(f"- 部署方式: {', '.join(deployment)}")
+
+        else:
+            # 未知类型直接报错，不要静默失败
+            raise ValueError(
+                f"未知任务类型: '{task_type}'。有效类型: backend, frontend, database, shared, infrastructure。"
+                f"请检查 PlanningAgent 的任务类型定义。"
+            )
 
         return "\n".join(sections)
 
     def _load_json_file(self, path: str) -> Dict:
-        """加载 JSON 文件"""
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        """加载 JSON 文件，包含完整异常处理"""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            raise ValueError(f"文件不存在: {path}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"JSON 解析失败: {path}, 错误: {e}")
+        except UnicodeDecodeError as e:
+            raise ValueError(f"文件编码错误 (必须是 UTF-8): {path}, 错误: {e}")
 
     def _save_manifest(self):
         """保存 Manifest"""
@@ -153,6 +236,14 @@ class CodegenCoordinator:
         if manifest_path.exists():
             self.manifest = Manifest.load(manifest_path)
             print(f"⏯️  找到已有会话，断点恢复: {self.manifest.session_id}")
+
+            # 恢复已生成代码缓存（断点续传时需要）
+            for task_id, task in self.manifest.tasks.items():
+                if task.status == "success" and task.generated_files:
+                    self.generated_code_cache[task_id] = [
+                        {"file_path": f.file_path, "content_sha": f.content_sha}
+                        for f in task.generated_files
+                    ]
         else:
             self.manifest = Manifest.create(project_name=prd.get("name", "Untitled"))
 
@@ -200,13 +291,25 @@ class CodegenCoordinator:
             print(f"[{idx+1}/{len(pending_sorted)}] 🔨 {task_id}: {task_name}")
             print(f"{'='*60}")
 
+            # 检查所有依赖是否都成功完成
+            dependencies = task.get("dependencies", [])
+            failed_deps = []
+            for dep_id in dependencies:
+                if not self.manifest.is_task_completed(dep_id):
+                    failed_deps.append(dep_id)
+
+            if failed_deps:
+                print(f"⏭️  跳过任务: 依赖任务未成功完成: {', '.join(failed_deps)}")
+                continue
+
             self.manifest.start_task(task_id)
             self._save_manifest()
 
-            dep_code = self._collect_dependency_code(task.get("dependencies", []))
-            filtered_arch = self._filter_architecture_docs(task_type, arch)
+            try:
+                dep_code = self._collect_dependency_code(task.get("dependencies", []))
+                filtered_arch = self._filter_architecture_docs(task_type, arch)
 
-            prompt = f"""## 任务信息
+                prompt = f"""## 任务信息
 
 任务ID: {task_id}
 任务名称: {task_name}
@@ -230,34 +333,70 @@ class CodegenCoordinator:
 4. 代码完整可运行
 """
 
-            codegen_agent = CodegenAgent(self.llm, str(self.working_dir), self.config)
-            generated_files = codegen_agent.run_with_log(prompt, verbose=True)
+                codegen_agent = CodegenAgent(self.llm, str(self.working_dir), self.config)
+                generated_files = codegen_agent.run_with_log(prompt, verbose=True)
 
-            task_files = [TaskFile(**f) for f in generated_files]
+                task_files = [TaskFile(**f) for f in generated_files]
 
-            self.manifest.complete_task(task_id, task_files)
-            self.generated_code_cache[task_id] = generated_files
-            self._save_manifest()
+                self.manifest.complete_task(task_id, task_files)
+                self.generated_code_cache[task_id] = generated_files
+                self._save_manifest()
 
-            print(f"✅ 生成完成，共 {len(generated_files)} 个文件")
-            for f in generated_files:
-                print(f"   - {f['file_path']}")
-            print()
+                print(f"✅ 生成完成，共 {len(generated_files)} 个文件")
+                for f in generated_files:
+                    print(f"   - {f['file_path']}")
+                print()
+
+            except Exception as e:
+                tb_str = traceback.format_exc()
+                error_msg = f"{type(e).__name__}: {e}\n{tb_str}"
+                self.manifest.fail_task(task_id, error_msg)
+                self._save_manifest()
+                print(f"❌ 任务 {task_id} 失败: {type(e).__name__}: {e}")
+                # 继续执行下一个任务，不中断整体流程
+                continue
 
         print("🔍 开始质量检查...")
         checker = QualityChecker(self.llm, str(self.working_dir), self.config.prompts_dir)
 
-        tech_stack_desc = f"""Backend: {arch.get('backend', {}).get('framework', '')}
-Frontend: {arch.get('frontend', {}).get('framework', '')}"""
+        # 根据实际存在的字段动态生成技术栈描述
+        # 支持纯前端、纯后端、全栈项目
+        tech_stack_parts = []
+        if "backend" in arch:
+            tech_stack_parts.append(f"Backend: {self._require_field(arch['backend'], 'framework', 'backend')}")
+        if "frontend" in arch:
+            tech_stack_parts.append(f"Frontend: {self._require_field(arch['frontend'], 'framework', 'frontend')}")
 
-        project_tree = "\n".join([
+        if not tech_stack_parts:
+            raise ValueError(
+                "架构文档必须包含 backend 或 frontend 字段。\n"
+                "纯后端项目只需要 backend，纯前端项目只需要 frontend。"
+            )
+
+        tech_stack_desc = "\n".join(tech_stack_parts)
+
+        project_files = [
             str(p.relative_to(self.working_dir))
             for p in self.working_dir.rglob("*")
             if p.is_file() and "__pycache__" not in str(p)
-        ])
+        ]
+        project_tree = "\n".join(project_files) if project_files else "(空项目目录)"
 
         commands = checker.generate_check_commands(tech_stack_desc, project_tree)
         print("📋 检查命令:")
+
+        # 检查是否有实际的命令生成
+        has_commands = any(cmds for cmds in commands.values())
+        if not has_commands:
+            print("   ⚠️  未能生成检查命令，跳过质量检查")
+            return {
+                "session_id": self.manifest.session_id,
+                "total_tasks": self.manifest.total_tasks,
+                "completed_tasks": self.manifest.completed_tasks,
+                "warning": "未生成质量检查命令",
+                "success": True,
+            }
+
         for step, cmds in commands.items():
             if cmds:
                 print(f"   {step}: {cmds}")

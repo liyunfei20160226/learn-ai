@@ -1,3 +1,4 @@
+import copy
 import logging
 import time
 from abc import ABC, abstractmethod
@@ -119,15 +120,19 @@ def _merge_state_value(full_state: dict, key: str, value: Any) -> None:
         value: 要合并的值
 
     Raises:
-        AssertionError: 如果值的类型与字段类型不匹配（开发环境）
+        TypeError: 如果值的类型与字段类型不匹配
     """
     if key == "messages":
+        if not isinstance(value, list):
+            raise TypeError(f"字段 {key} 必须返回 list，实际是 {type(value).__name__}")
         full_state.setdefault(key, []).extend(value)
     elif key in _LIST_FIELDS:
-        assert isinstance(value, list), f"字段 {key} 必须返回 list，实际是 {type(value).__name__}"
+        if not isinstance(value, list):
+            raise TypeError(f"字段 {key} 必须返回 list，实际是 {type(value).__name__}")
         full_state.setdefault(key, []).extend(value)
     elif key in _DICT_FIELDS:
-        assert isinstance(value, dict), f"字段 {key} 必须返回 dict，实际是 {type(value).__name__}"
+        if not isinstance(value, dict):
+            raise TypeError(f"字段 {key} 必须返回 dict，实际是 {type(value).__name__}")
         full_state.setdefault(key, {}).update(value)
     else:
         # 其他类型：直接覆盖（iteration, working_summary, start_time...）
@@ -309,8 +314,9 @@ class BaseAgent(ABC):
             "context_warnings": [],
         }
 
-        full_state = initial_state.copy()
-        for output in self.graph.stream(initial_state, {"recursion_limit": limit + 10}):
+        full_state = copy.deepcopy(initial_state)
+        graph_input = copy.deepcopy(initial_state)
+        for output in self.graph.stream(graph_input, {"recursion_limit": limit + 10}):
             for node_name, node_output in output.items():
                 # 累积所有状态字段
                 for key, value in node_output.items():
@@ -348,3 +354,35 @@ class BaseAgent(ABC):
         """
         tools = result.get("tools_called", [])
         return {t: tools.count(t) for t in set(tools)}
+
+    @staticmethod
+    def default_tool_callback(node_name: str, tool_name: str, result: str) -> None:
+        """默认的工具调用回调：打印实时进度。
+
+        所有 Agent 子类共享同一份打印逻辑，避免代码重复。
+        """
+        if tool_name in ("write_file", "overwrite_file"):
+            print(f"  📝 {result}")
+        elif tool_name == "append_file":
+            print(f"  ➕ {result}")
+        elif tool_name == "read_file":
+            print(f"  📄 {result}")
+        elif tool_name == "add_task":
+            print(f"  🛠️ {result}")
+        elif tool_name == "validate_task_graph":
+            print("  🔍  验证任务图...")
+            for line in result.split("\n"):
+                print(f"     {line}")
+        elif tool_name == "list_generated_files":
+            for line in result.split("\n"):
+                print(f"     {line}")
+        elif tool_name in (
+            "finish", "mark_subtask_complete", "record_key_decision", "update_working_summary"
+        ):
+            print(f"  🏁 {result}")
+        elif tool_name == "list_project_files":
+            print("  📂 项目文件:")
+            for line in result.split("\n"):
+                print(f"     - {line}")
+        elif tool_name == "add_context_warning":
+            print(f"  ⚠️  {result}")

@@ -1,11 +1,23 @@
 import json
 import subprocess
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
 
 from prompts import PromptTemplate, get_prompt_loader
+
+
+def _ensure_list(value: Any, default: List[str] = None) -> List[str]:
+    """确保值是列表类型，用于容错处理。
+
+    字符串转为单元素列表，None 或其他类型转为默认空列表。
+    """
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return default or []
 
 
 @dataclass
@@ -59,12 +71,14 @@ class QualityChecker:
         try:
             data = json.loads(content)
             self.check_commands = {
-                "install": data.get("install", []),
-                "lint": data.get("lint", []),
-                "type_check": data.get("type_check", []),
-                "test": data.get("test", []),
+                "install": _ensure_list(data.get("install", [])),
+                "lint": _ensure_list(data.get("lint", [])),
+                "type_check": _ensure_list(data.get("type_check", [])),
+                "test": _ensure_list(data.get("test", [])),
             }
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"⚠️ 质量检查命令解析失败: {e}")
+            print(f"   LLM 返回内容前200字符: {content[:200]}...")
             self.check_commands = {"install": [], "lint": [], "type_check": [], "test": []}
 
         return self.check_commands
@@ -83,7 +97,12 @@ class QualityChecker:
             success = result.returncode == 0
             output = result.stdout + result.stderr
             return success, output
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
+            # 超时后主动终止子进程，防止进程泄漏
+            if e.stdout or e.stderr:
+                partial_output = (e.stdout or b"").decode(errors="replace") + \
+                                 (e.stderr or b"").decode(errors="replace")
+                return False, f"命令执行超时（超过 5 分钟）\n部分输出:\n{partial_output}"
             return False, "命令执行超时（超过 5 分钟）"
         except Exception as e:
             return False, str(e)

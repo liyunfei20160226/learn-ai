@@ -1,4 +1,6 @@
 import json
+import os
+import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -63,6 +65,8 @@ class Manifest:
         tasks = {}
         for task_id, task_data in data.get("tasks", {}).items():
             files_data = task_data.pop("generated_files", [])
+            if not isinstance(files_data, list):
+                files_data = []
             files = [TaskFile(**f) for f in files_data]
             tasks[task_id] = TaskState(generated_files=files, **task_data)
 
@@ -70,12 +74,25 @@ class Manifest:
         return cls(**data)
 
     def save(self, path: Path) -> None:
-        """保存到磁盘"""
+        """原子化保存到磁盘，防止崩溃损坏文件
+
+        先写入临时文件（带随机UUID），成功后再 rename，保证原子性和多进程安全。
+        """
         path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
 
         data = asdict(self)
-        with open(path, "w", encoding="utf-8") as f:
+        with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+
+        try:
+            os.replace(temp_path, path)
+        except Exception:
+            # 发生异常时清理临时文件
+            temp_path.unlink(missing_ok=True)
+            raise
 
     def add_task(self, task_id: str, name: str, task_type: str = "unknown",
                  dependencies: List[str] = None) -> None:
@@ -95,26 +112,35 @@ class Manifest:
             self.tasks[task_id].started_at = datetime.now().isoformat()
 
     def complete_task(self, task_id: str, generated_files: List[TaskFile] = None) -> None:
-        """标记任务完成"""
+        """标记任务完成（幂等）"""
         if task_id in self.tasks:
             task = self.tasks[task_id]
+            if task.status == "success":
+                # 已完成任务不做任何修改，保持幂等性
+                return
+            self.completed_tasks += 1
             task.status = "success"
             task.completed_at = datetime.now().isoformat()
             if generated_files:
                 task.generated_files = generated_files
-            self.completed_tasks += 1
 
     def fail_task(self, task_id: str, error: str) -> None:
-        """标记任务失败"""
+        """标记任务失败（幂等）"""
         if task_id in self.tasks:
-            self.tasks[task_id].status = "failed"
-            self.tasks[task_id].error = error
-            self.tasks[task_id].completed_at = datetime.now().isoformat()
+            task = self.tasks[task_id]
+            if task.status == "failed":
+                # 已失败任务不做任何修改，保持幂等性
+                return
             self.failed_tasks += 1
+            task.status = "failed"
+            task.error = error
+            task.completed_at = datetime.now().isoformat()
 
     def get_pending_tasks(self) -> List[str]:
-        """获取所有待执行的任务ID"""
-        return [tid for tid, task in self.tasks.items() if task.status == "pending"]
+        """获取所有待执行的任务ID（包括崩溃恢复的 running 状态任务）"""
+        # running 状态视为需要重试（崩溃恢复）
+        return [tid for tid, task in self.tasks.items()
+                if task.status in ("pending", "running")]
 
     def is_task_completed(self, task_id: str) -> bool:
         """检查任务是否已完成"""

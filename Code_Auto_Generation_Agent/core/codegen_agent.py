@@ -5,6 +5,7 @@ from typing import Callable, Dict, List
 from langchain_core.tools import StructuredTool, tool
 
 from .base_agent import BaseAgent
+from .utils import safe_resolve_path
 
 # === 模块级工具定义：避免每次 Agent 实例化都重新定义 ===
 # 注意：需要绑定 self.working_dir 和 self._generated_files_ref 的工具使用闭包工厂创建
@@ -149,32 +150,21 @@ class CodegenAgent(BaseAgent):
         ]
 
     def _normalize_file_path(self, file_path: str) -> str:
-        """规范化 LLM 输出的 file_path，防止重复写路径前缀
+        """规范化 LLM 输出的 file_path，防止重复写路径前缀。
+
+        使用 Path 对象进行安全的路径操作，避免字符串处理导致的问题。
 
         例：工作目录 = output/todo/backend/
         LLM 写: backend/app/models.py → 规范化为: app/models.py
         LLM 写: app/models.py → 不变
         """
-        norm = file_path.lstrip("./")
-        if not norm:
-            return norm
+        # 第一步安全检查，同时获取解析后的绝对路径
+        resolved = safe_resolve_path(self.working_dir, file_path)
+        working_dir = Path(self.working_dir).resolve()
 
-        fp_parts = norm.replace("\\", "/").split("/")
-        working_dir_parts = [
-            p for p in str(self.working_dir).replace("\\", "/").split("/") if p
-        ]
-
-        for start in range(len(working_dir_parts)):
-            match_len = min(len(working_dir_parts) - start, len(fp_parts))
-            if all(
-                working_dir_parts[start + i] == fp_parts[i]
-                for i in range(match_len)
-            ):
-                remaining = fp_parts[match_len:]
-                if remaining:
-                    return "/".join(remaining)
-
-        return norm
+        # 直接使用 Path.relative_to 获得相对路径，使用 as_posix() 统一为 Unix 风格
+        relative = resolved.relative_to(working_dir)
+        return relative.as_posix()
 
     def get_generated_files(self) -> List[Dict[str, str]]:
         """获取本次生成的所有文件"""
@@ -187,21 +177,6 @@ class CodegenAgent(BaseAgent):
             user_input: 任务描述
             verbose: 是否输出详细日志
         """
-        def tool_callback(node_name: str, tool_name: str, result: str):
-            if verbose:
-                if tool_name == "write_file":
-                    print(f"  📝 {result}")
-                elif tool_name == "append_file":
-                    print(f"  ➕ {result}")
-                elif tool_name == "overwrite_file":
-                    print(f"  ✏️  {result}")
-                elif tool_name == "read_file":
-                    print(f"  📄 {result}")
-                elif tool_name == "list_generated_files":
-                    for line in result.split("\n"):
-                        print(f"     {line}")
-                elif tool_name == "finish":
-                    print(f"  🏁  {result}")
-
-        self.run(user_input, tool_callback=tool_callback)
+        callback = self.default_tool_callback if verbose else None
+        self.run(user_input, tool_callback=callback)
         return self.get_generated_files()

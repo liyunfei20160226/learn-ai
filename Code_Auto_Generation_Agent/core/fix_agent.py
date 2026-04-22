@@ -4,12 +4,13 @@ from typing import List
 from langchain_core.tools import StructuredTool, tool
 
 from .base_agent import BaseAgent
+from .utils import safe_resolve_path
 
 # === 模块级工具工厂：避免每次实例化都重新定义嵌套函数 ===
 
 
 def _create_read_file(working_dir: str) -> StructuredTool:
-    """创建 read_file 工具"""
+    """创建 read_file 工具（带路径安全检查）"""
     @tool
     def read_file(file_path: str) -> str:
         """读取已存在文件的完整内容
@@ -17,7 +18,10 @@ def _create_read_file(working_dir: str) -> StructuredTool:
         Args:
             file_path: 相对项目根目录的路径
         """
-        full_path = Path(working_dir) / file_path
+        try:
+            full_path = safe_resolve_path(working_dir, file_path)
+        except ValueError as e:
+            return f"✗ {e}"
 
         if full_path.exists():
             with open(full_path, "r", encoding="utf-8") as f:
@@ -27,7 +31,7 @@ def _create_read_file(working_dir: str) -> StructuredTool:
 
 
 def _create_overwrite_file(working_dir: str) -> StructuredTool:
-    """创建 overwrite_file 工具"""
+    """创建 overwrite_file 工具（带路径安全检查）"""
     @tool
     def overwrite_file(file_path: str, content: str) -> str:
         """完全覆盖已有文件以修复错误
@@ -36,7 +40,11 @@ def _create_overwrite_file(working_dir: str) -> StructuredTool:
             file_path: 相对项目根目录的路径
             content: 修复后的完整文件内容
         """
-        full_path = Path(working_dir) / file_path
+        try:
+            full_path = safe_resolve_path(working_dir, file_path)
+        except ValueError as e:
+            return f"✗ {e}"
+
         full_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(full_path, "w", encoding="utf-8") as f:
@@ -51,7 +59,7 @@ def _create_list_project_files(working_dir: str) -> StructuredTool:
     @tool
     def list_project_files() -> str:
         """列出项目中所有文件，帮助定位问题文件"""
-        project_path = Path(working_dir)
+        project_path = Path(working_dir).resolve()
         files = []
         for f in project_path.rglob("*"):
             if f.is_file() and "__pycache__" not in str(f) and ".git" not in str(f):
@@ -102,17 +110,5 @@ class FixAgent(BaseAgent):
             user_input: 错误信息
             verbose: 是否输出详细日志
         """
-        def tool_callback(node_name: str, tool_name: str, result: str):
-            if verbose:
-                if tool_name == "read_file":
-                    print(f"  📄 {result}")
-                elif tool_name == "overwrite_file":
-                    print(f"  ✏️  {result}")
-                elif tool_name == "list_project_files":
-                    print("  📂 项目文件:")
-                    for line in result.split("\n"):
-                        print(f"     - {line}")
-                elif tool_name == "finish":
-                    print(f"  🏁  {result}")
-
-        self.run(user_input, tool_callback=tool_callback)
+        callback = self.default_tool_callback if verbose else None
+        self.run(user_input, tool_callback=callback)
