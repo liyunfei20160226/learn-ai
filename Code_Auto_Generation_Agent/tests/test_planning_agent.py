@@ -271,8 +271,8 @@ class TestPlanningAgentIntegration:
         # 初始状态为空
         assert agent.get_task_graph() == []
 
-    def test_planning_agent_run_and_parse(self):
-        """测试 run_and_parse 方法"""
+    def test_planning_agent_run_with_log(self):
+        """测试 run_with_log 方法（Coordinator 实际调用的接口）"""
         from core.agents.planning_agent import PlanningAgent
 
         mock_llm = MagicMock()
@@ -295,9 +295,39 @@ class TestPlanningAgentIntegration:
                     {"id": "T002", "title": "Task 2"},
                 ]
 
-                result = agent.run_and_parse("PRD content", "Arch content", verbose=False)
+                # 调用 Coordinator 实际使用的签名：prd_desc, architecture_desc
+                result = agent.run_with_log("PRD content", "Arch content", verbose=False)
 
         assert len(result) == 2
         assert result[0]["id"] == "T001"
         assert result[1]["id"] == "T002"
+        mock_run.assert_called_once()
+
+    def test_planning_agent_run_and_parse(self):
+        """测试 run_and_parse 方法（兼容旧接口）"""
+        from core.agents.planning_agent import PlanningAgent
+
+        mock_llm = MagicMock()
+        mock_config = MagicMock()
+        mock_config.prompts_dir = None
+        mock_config.max_iterations = 10
+
+        agent = PlanningAgent(mock_llm, "/tmp/test", mock_config)
+
+        # Mock prompt_loader 和 run
+        with patch.object(agent.prompt_loader, "load") as mock_load:
+            mock_template = MagicMock()
+            mock_template.render.return_value = "plan this"
+            mock_load.return_value = mock_template
+
+            with patch.object(agent, "run") as mock_run:
+                # 模拟任务被添加
+                agent._task_graph_ref["tasks"] = [
+                    {"id": "T001", "title": "Task 1"},
+                ]
+
+                result = agent.run_and_parse("PRD content", "Arch content", verbose=False)
+
+        assert len(result) == 1
+        assert result[0]["id"] == "T001"
         mock_run.assert_called_once()

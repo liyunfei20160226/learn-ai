@@ -4,9 +4,16 @@
 import argparse
 import atexit
 import logging
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# 修复 Windows 控制台编码问题（支持 emoji 和 UTF-8 输出）
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 from core import CodegenCoordinator
 from core.config import get_config

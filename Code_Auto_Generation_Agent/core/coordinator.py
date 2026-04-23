@@ -277,9 +277,9 @@ class CodegenCoordinator:
                 prd_desc=json.dumps(prd, ensure_ascii=False, indent=2),
                 architecture_desc=json.dumps(arch, ensure_ascii=False, indent=2),
             )
-            # 将 PlanningAgent 返回的字典转换为 TaskState 对象，保持类型一致
+            # 将 PlanningAgent 返回的任务列表转换为 TaskState 对象
             self.manifest.tasks = {
-                task_id: TaskState(
+                task_data["id"]: TaskState(
                     id=task_data["id"],
                     name=task_data["title"],  # PlanningAgent 返回的是 "title" 不是 "name"
                     type=task_data.get("type", "unknown"),
@@ -288,7 +288,7 @@ class CodegenCoordinator:
                     description=task_data.get("description", ""),
                     generated_files=[],
                 )
-                for task_id, task_data in tasks_result["tasks"].items()
+                for task_data in tasks_result
             }
             self._save_manifest()
             print(f"✅ 规划完成，共 {len(self.manifest.tasks)} 个任务")

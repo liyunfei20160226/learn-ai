@@ -137,17 +137,31 @@ class PlanningAgent(BaseAgent):
         """获取最终的任务图"""
         return self._task_graph_ref["tasks"]
 
+    def run_with_log(self, prd_desc: str, architecture_desc: str,
+                     verbose: bool = True) -> List[Dict[str, Any]]:
+        """运行任务规划并输出实时日志
+
+        Args:
+            prd_desc: PRD 文档内容（JSON 格式）
+            architecture_desc: 架构文档内容（JSON 格式）
+            verbose: 是否输出详细日志
+
+        Returns:
+            解析后的任务列表
+        """
+        template = self.prompt_loader.load("plan_tasks")
+        prompt = template.render(prd_content=prd_desc, arch_content=architecture_desc)
+
+        callback = self.default_tool_callback if verbose else None
+        self.run(prompt, tool_callback=callback)
+        return self.get_task_graph()
+
     def run_and_parse(self, prd_content: str, arch_content: str, verbose: bool = True) -> List[Dict[str, Any]]:
-        """运行规划并返回解析后的任务列表
+        """运行规划并返回解析后的任务列表（兼容旧接口）
 
         Args:
             prd_content: PRD 文档内容
             arch_content: 架构文档内容
             verbose: 是否输出详细日志
         """
-        template = self.prompt_loader.load("plan_tasks")
-        prompt = template.render(prd_content=prd_content, arch_content=arch_content)
-
-        callback = self.default_tool_callback if verbose else None
-        self.run(prompt, tool_callback=callback)
-        return self.get_task_graph()
+        return self.run_with_log(prd_content, arch_content, verbose)
