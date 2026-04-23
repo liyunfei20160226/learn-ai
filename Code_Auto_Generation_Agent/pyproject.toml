@@ -11,6 +11,7 @@ dependencies = [
     "pydantic >= 2.0",
     "pydantic-settings >= 2.0",
     "python-dotenv >= 1.0",
+    "mypy>=1.20.2",
 ]
 
 [tool.ruff]
@@ -22,6 +23,35 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+follow_imports = "silent"
+strict_optional = true
+warn_return_any = false
+warn_unused_configs = true
+disable_error_code = ["attr-defined", "arg-type", "assignment", "call-arg", "return-value", "union-attr", "truthy-function", "operator", "var-annotated", "name-defined", "str-bytes-safe"]
+
+[[tool.mypy.overrides]]
+module = "langchain.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "langchain_core.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "langchain_openai.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "pydantic.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "pydantic_settings.*"
+ignore_errors = true
 
 [dependency-groups]
 dev = [

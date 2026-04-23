@@ -1,14 +1,18 @@
 import json
-import subprocess
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
 
 from prompts import PromptTemplate, get_prompt_loader
 
+from .utils import run_shell_command
 
-def _ensure_list(value: Any, default: List[str] = None) -> List[str]:
+logger = logging.getLogger(__name__)
+
+
+def _ensure_list(value: Any, default: Optional[List[str]] = None) -> List[str]:
     """确保值是列表类型，用于容错处理。
 
     字符串转为单元素列表，None 或其他类型转为默认空列表。
@@ -25,8 +29,9 @@ class CheckResult:
     """检查结果"""
     passed: bool
     failed_step: Optional[int] = None
-    errors: List[str] = None
+    errors: List[str] = field(default_factory=list)
     step_name: Optional[str] = None
+    error_count: int = 0  # 错误总数（用于判断修复是否有效）
 
 
 class QualityChecker:
@@ -44,7 +49,7 @@ class QualityChecker:
         "test": "测试执行",
     }
 
-    def __init__(self, llm: ChatOpenAI, working_dir: str, prompts_dir: str = None):
+    def __init__(self, llm: ChatOpenAI, working_dir: str, prompts_dir: Optional[str] = None):
         self.llm = llm
         self.working_dir = working_dir
         self.check_commands: Dict[str, List[str]] = {}
@@ -84,42 +89,37 @@ class QualityChecker:
         return self.check_commands
 
     def _run_command(self, cmd: str) -> tuple[bool, str]:
-        """执行单个 shell 命令"""
-        try:
-            result = subprocess.run(
-                cmd,
-                cwd=self.working_dir,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=300,
-            )
-            success = result.returncode == 0
-            output = result.stdout + result.stderr
-            return success, output
-        except subprocess.TimeoutExpired as e:
-            # 超时后主动终止子进程，防止进程泄漏
-            if e.stdout or e.stderr:
-                partial_output = (e.stdout or b"").decode(errors="replace") + \
-                                 (e.stderr or b"").decode(errors="replace")
-                return False, f"命令执行超时（超过 5 分钟）\n部分输出:\n{partial_output}"
-            return False, "命令执行超时（超过 5 分钟）"
-        except Exception as e:
-            return False, str(e)
+        """执行单个 shell 命令（委托给通用工具函数）"""
+        return run_shell_command(cmd, self.working_dir, timeout=300)
 
-    def run_step(self, step_name: str) -> tuple[bool, List[str]]:
-        """执行单个检查步骤"""
+    def run_step(self, step_name: str) -> tuple[bool, List[str], int]:
+        """执行单个检查步骤
+
+        Returns:
+            (是否成功, 错误列表, 真实错误数)
+            真实错误数：统计错误输出中的非空行数（近似错误数量）
+        """
         commands = self.check_commands.get(step_name, [])
         if not commands:
-            return True, []
+            return True, [], 0
 
         all_errors = []
+        total_error_lines = 0
         for cmd in commands:
             success, output = self._run_command(cmd)
             if not success:
-                all_errors.append(f"命令失败: {cmd}\n{output}")
+                error_msg = f"命令失败: {cmd}\n{output}"
+                all_errors.append(error_msg)
+                # 统计输出中的非空行数（近似真实错误数量）
+                # 避免把 10 个 lint 错误只算成 1 个
+                error_lines = [line for line in output.splitlines() if line.strip()]
+                total_error_lines += len(error_lines)
 
-        return len(all_errors) == 0, all_errors
+        # 如果没有错误行但有错误（比如命令异常退出），至少算 1 个错误
+        if all_errors and total_error_lines == 0:
+            total_error_lines = len(all_errors)
+
+        return len(all_errors) == 0, all_errors, total_error_lines
 
     def run_all(self, start_from: int = 0) -> CheckResult:
         """串行执行所有检查
@@ -135,16 +135,17 @@ class QualityChecker:
             if not self.check_commands.get(step_name):
                 continue
 
-            success, errors = self.run_step(step_name)
+            success, errors, error_count = self.run_step(step_name)
             if not success:
                 return CheckResult(
                     passed=False,
                     failed_step=step_idx,
                     errors=errors,
                     step_name=step_name,
+                    error_count=error_count,  # 用真实错误行数，不是命令数
                 )
 
-        return CheckResult(passed=True)
+        return CheckResult(passed=True, error_count=0)
 
     def get_step_name(self, step_idx: int) -> str:
         """获取步骤名称"""

@@ -29,6 +29,46 @@ class TaskState:
 
 
 @dataclass
+class FixAttempt:
+    """单次修复尝试记录"""
+    attempt: int                  # 第 N 轮
+    failed_step: str              # 失败的步骤
+    errors_before: int            # 修复前错误数量
+    errors_after: int             # 修复后错误数量
+    error_samples: List[str]      # 错误样例（前5条）
+    timestamp: str                # 时间戳
+    accepted: bool = False        # 是否接受这次修复（错误减少了）
+
+
+@dataclass
+class FixState:
+    """自动修复状态"""
+    enabled: bool = False
+    current_attempt: int = 0
+    max_attempts: int = 20
+
+    # 最佳状态追踪
+    best_attempt: int = 0         # 错误最少的那次
+    best_error_count: int = 0     # 最少错误数量
+    initial_error_count: int = 0  # 初始错误数量（基准线）
+
+    # 当前状态
+    last_failed_step: Optional[str] = None
+    last_errors: List[str] = field(default_factory=list)
+
+    # 质量检查命令（只生成一次，复用）
+    check_commands: Dict[str, List[str]] = field(default_factory=dict)
+
+    # 历史记录
+    history: List[FixAttempt] = field(default_factory=list)
+
+    # 最终状态
+    status: str = "pending"       # pending, running, success, partial_success, failed
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+@dataclass
 class Manifest:
     """项目生成状态持久化
 
@@ -37,10 +77,24 @@ class Manifest:
     session_id: str
     project_name: str
     created_at: str
-    total_tasks: int = 0
-    completed_tasks: int = 0
-    failed_tasks: int = 0
     tasks: Dict[str, TaskState] = field(default_factory=dict)
+    fix_state: Optional[FixState] = None  # 自动修复状态
+
+    # 使用属性实时计算，避免字段不一致
+    @property
+    def total_tasks(self) -> int:
+        """总任务数"""
+        return len(self.tasks)
+
+    @property
+    def completed_tasks(self) -> int:
+        """已完成任务数"""
+        return sum(1 for t in self.tasks.values() if t.status == "success")
+
+    @property
+    def failed_tasks(self) -> int:
+        """失败任务数"""
+        return sum(1 for t in self.tasks.values() if t.status == "failed")
 
     @classmethod
     def create(cls, project_name: str = "Untitled") -> "Manifest":
@@ -55,13 +109,23 @@ class Manifest:
 
     @classmethod
     def load(cls, path: Path) -> Optional["Manifest"]:
-        """从磁盘加载 Manifest"""
+        """从磁盘加载 Manifest（复用 from_json 逻辑，避免代码重复）"""
         if not path.exists():
             return None
 
         with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            return cls.from_json(f.read())
 
+    def to_json(self) -> str:
+        """序列化为 JSON 字符串"""
+        return json.dumps(asdict(self), indent=2, ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "Manifest":
+        """从 JSON 字符串反序列化（包装 load 方法）"""
+        data = json.loads(json_str)
+
+        # 处理 tasks
         tasks = {}
         for task_id, task_data in data.get("tasks", {}).items():
             files_data = task_data.pop("generated_files", [])
@@ -71,6 +135,18 @@ class Manifest:
             tasks[task_id] = TaskState(generated_files=files, **task_data)
 
         data["tasks"] = tasks
+
+        # 处理 fix_state（嵌套 dataclass）
+        fix_state_data = data.pop("fix_state", None)
+        if fix_state_data:
+            history_data = fix_state_data.pop("history", [])
+            if isinstance(history_data, list):
+                history = [FixAttempt(**item) for item in history_data]
+            else:
+                history = []
+            fix_state_data["history"] = history
+            data["fix_state"] = FixState(**fix_state_data)
+
         return cls(**data)
 
     def save(self, path: Path) -> None:
@@ -81,9 +157,8 @@ class Manifest:
         path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
 
-        data = asdict(self)
         with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write(self.to_json())
             f.flush()
             os.fsync(f.fileno())
 
@@ -95,7 +170,7 @@ class Manifest:
             raise
 
     def add_task(self, task_id: str, name: str, task_type: str = "unknown",
-                 dependencies: List[str] = None) -> None:
+                 dependencies: Optional[List[str]] = None) -> None:
         """添加任务"""
         self.tasks[task_id] = TaskState(
             id=task_id,
@@ -103,7 +178,7 @@ class Manifest:
             type=task_type,
             dependencies=dependencies or [],
         )
-        self.total_tasks = len(self.tasks)
+        # total_tasks 现在由属性自动计算，无需手动设置
 
     def start_task(self, task_id: str) -> None:
         """标记任务开始（幂等）
@@ -117,18 +192,18 @@ class Manifest:
             task.status = "running"
             task.started_at = datetime.now().isoformat()
 
-    def complete_task(self, task_id: str, generated_files: List[TaskFile] = None) -> None:
+    def complete_task(self, task_id: str, generated_files: Optional[List[TaskFile]] = None) -> None:
         """标记任务完成（幂等）"""
         if task_id in self.tasks:
             task = self.tasks[task_id]
             if task.status == "success":
                 # 已完成任务不做任何修改，保持幂等性
                 return
-            self.completed_tasks += 1
             task.status = "success"
             task.completed_at = datetime.now().isoformat()
             if generated_files:
                 task.generated_files = generated_files
+            # 使用属性实时计算，避免累加错误
 
     def fail_task(self, task_id: str, error: str) -> None:
         """标记任务失败（幂等）"""
@@ -137,10 +212,10 @@ class Manifest:
             if task.status == "failed":
                 # 已失败任务不做任何修改，保持幂等性
                 return
-            self.failed_tasks += 1
             task.status = "failed"
             task.error = error
             task.completed_at = datetime.now().isoformat()
+            # 使用属性实时计算，避免累加错误
 
     def get_pending_tasks(self) -> List[str]:
         """获取所有待执行的任务ID（包括崩溃恢复的 running 状态任务）"""

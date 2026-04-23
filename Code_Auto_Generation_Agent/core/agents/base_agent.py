@@ -2,6 +2,7 @@ import copy
 import logging
 import time
 from abc import ABC, abstractmethod
+from collections import Counter
 from typing import Any, Callable, Dict, List, Optional, TypedDict
 
 from langchain_core.language_models import BaseChatModel
@@ -12,7 +13,7 @@ from langgraph.prebuilt import ToolNode
 
 from prompts import PromptTemplate, get_prompt_loader
 
-from .config import AgentConfig, get_config
+from ..config import AgentConfig, get_config
 
 # 配置日志：默认输出到控制台，命令行用户可见
 logger = logging.getLogger(__name__)
@@ -125,6 +126,12 @@ def _merge_state_value(full_state: dict, key: str, value: Any) -> None:
     if key == "messages":
         if not isinstance(value, list):
             raise TypeError(f"字段 {key} 必须返回 list，实际是 {type(value).__name__}")
+        # 验证每个元素都是 BaseMessage 类型
+        for msg in value:
+            if not isinstance(msg, BaseMessage):
+                raise TypeError(
+                    f"messages 元素必须是 BaseMessage，实际是 {type(msg).__name__}"
+                )
         full_state.setdefault(key, []).extend(value)
     elif key in _LIST_FIELDS:
         if not isinstance(value, list):
@@ -236,19 +243,25 @@ class BaseAgent(ABC):
         """构建 LangGraph ReAct 循环"""
         def should_continue(state: BaseAgentState) -> str:
             """判断是否需要继续：检查超时、迭代限制，然后看是否有工具调用"""
-            # 1. 检查迭代次数
-            if state["iteration"] >= state["max_iterations"]:
-                logger.warning("超过最大迭代次数 (%d)，强制结束", state["max_iterations"])
+            # 1. 检查迭代次数 - 使用 .get() 安全访问
+            iteration = state.get("iteration", 0)
+            max_iterations = state.get("max_iterations", 50)
+            if iteration >= max_iterations:
+                logger.warning("超过最大迭代次数 (%d)，强制结束", max_iterations)
                 return END
 
             # 2. 检查超时
-            elapsed = time.time() - state["start_time"]
-            if elapsed >= state["timeout_seconds"]:
-                logger.warning("运行超时 (%.1fs >= %ds)，强制结束", elapsed, state["timeout_seconds"])
+            start_time = state.get("start_time", time.time())
+            timeout_seconds = state.get("timeout_seconds", 300)
+            elapsed = time.time() - start_time
+            if elapsed >= timeout_seconds:
+                logger.warning("运行超时 (%.1fs >= %ds)，强制结束", elapsed, timeout_seconds)
                 return END
 
             # 3. 正常判断是否有工具调用
-            messages = state["messages"]
+            messages = state.get("messages", [])
+            if not messages:
+                return END
             last_message = messages[-1]
             if hasattr(last_message, "tool_calls") and last_message.tool_calls:
                 return "tools"
@@ -264,9 +277,11 @@ class BaseAgent(ABC):
                 last_msg = messages[-1]
 
                 # 防重复：检查是否已经注入过状态报告
-                if hasattr(last_msg, "content") and _STATUS_REPORT_MARKER not in last_msg.content:
-                    new_content = last_msg.content + status_report
-                    messages[-1] = type(last_msg)(content=new_content)
+                # content 可能是 str（纯文本）或 List[Dict]（多模态），只对 str 类型检查
+                if hasattr(last_msg, "content"):
+                    if isinstance(last_msg.content, str) and _STATUS_REPORT_MARKER not in last_msg.content:
+                        new_content = last_msg.content + status_report
+                        messages[-1] = type(last_msg)(content=new_content)
 
             response = self.llm_with_tools.invoke(messages)
             return {
@@ -316,20 +331,27 @@ class BaseAgent(ABC):
 
         full_state = copy.deepcopy(initial_state)
         graph_input = copy.deepcopy(initial_state)
-        for output in self.graph.stream(graph_input, {"recursion_limit": limit + 10}):
-            for node_name, node_output in output.items():
-                # 累积所有状态字段
-                for key, value in node_output.items():
-                    _merge_state_value(full_state, key, value)
+        try:
+            for output in self.graph.stream(graph_input, {"recursion_limit": limit + 10}):
+                for node_name, node_output in output.items():
+                    # 累积所有状态字段
+                    for key, value in node_output.items():
+                        _merge_state_value(full_state, key, value)
 
-                # 工具节点：记录调用历史
-                if node_name == "tools":
-                    messages = node_output.get("messages", [])
-                    for msg in messages:
-                        tool_name = msg.name
-                        full_state["tools_called"].append(tool_name)
-                        if tool_callback:
-                            tool_callback(node_name, msg.name, msg.content)
+                    # 工具节点：记录调用历史
+                    if node_name == "tools":
+                        messages = node_output.get("messages", [])
+                        for msg in messages:
+                            tool_name = msg.name
+                            full_state["tools_called"].append(tool_name)
+                            if tool_callback:
+                                tool_callback(node_name, msg.name, msg.content)
+        except Exception as e:
+            logger.error("Graph execution failed: %s", str(e), exc_info=True)
+            # 即使失败也返回已收集的状态，便于调试
+            full_state.setdefault("context_warnings", []).append(
+                f"执行异常: {type(e).__name__}: {str(e)}"
+            )
 
         return full_state
 
@@ -353,7 +375,7 @@ class BaseAgent(ABC):
             {工具名: 调用次数} 字典
         """
         tools = result.get("tools_called", [])
-        return {t: tools.count(t) for t in set(tools)}
+        return dict(Counter(tools))
 
     @staticmethod
     def default_tool_callback(node_name: str, tool_name: str, result: str) -> None:
@@ -386,3 +408,8 @@ class BaseAgent(ABC):
                 print(f"     - {line}")
         elif tool_name == "add_context_warning":
             print(f"  ⚠️  {result}")
+        elif tool_name in ("quick_lint_check", "quick_type_check"):
+            print(f"  🔍 {tool_name}:")
+            for line in result.split("\n"):
+                if line.strip():  # 过滤空行，避免刷屏
+                    print(f"     {line}")

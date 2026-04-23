@@ -86,7 +86,8 @@ def _create_validate_task_graph(task_graph_validator: Dict[str, Any]) -> Structu
                         queue.append(next_id)
 
             if processed != len(tasks):
-                unresolved = task_ids - set(t["id"] for t in tasks if in_degree[t["id"]] == 0)
+                # 收集所有仍有入度的任务（即循环依赖中的任务）
+                unresolved = [t["id"] for t in tasks if in_degree[t["id"]] > 0]
                 errors.append(f"任务图存在循环依赖，无法解析以下任务: {sorted(unresolved)}")
 
         if not errors:

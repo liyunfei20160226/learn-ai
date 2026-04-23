@@ -4,8 +4,8 @@ from typing import Callable, Dict, List
 
 from langchain_core.tools import StructuredTool, tool
 
+from ..utils import safe_resolve_path
 from .base_agent import BaseAgent
-from .utils import safe_resolve_path
 
 # === 模块级工具定义：避免每次 Agent 实例化都重新定义 ===
 # 注意：需要绑定 self.working_dir 和 self._generated_files_ref 的工具使用闭包工厂创建
@@ -167,8 +167,11 @@ class CodegenAgent(BaseAgent):
         return relative.as_posix()
 
     def get_generated_files(self) -> List[Dict[str, str]]:
-        """获取本次生成的所有文件"""
-        return self._generated_files_ref
+        """获取本次生成的所有文件
+
+        返回列表的副本，防止外部修改内部状态
+        """
+        return list(self._generated_files_ref)
 
     def run_with_log(self, user_input: str, verbose: bool = True) -> List[Dict[str, str]]:
         """运行代码生成并输出实时日志
