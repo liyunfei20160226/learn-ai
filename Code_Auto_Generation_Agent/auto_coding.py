@@ -18,15 +18,23 @@ if sys.platform == "win32":
 from core import CodegenCoordinator
 from core.config import get_config
 
-# 配置日志
+# 日志文件放在 log 目录（自动创建）
+PROJECT_ROOT = Path(__file__).parent
+LOG_DIR = PROJECT_ROOT / "log"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "codegen_agent.log"
+
+# 配置日志：同时输出到文件和控制台
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("codegen_agent.log", encoding="utf-8"),
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),  # 同时输出到控制台
     ],
 )
 logger = logging.getLogger(__name__)
+logger.info(f"日志文件位置: {LOG_FILE}")
 
 
 def _cleanup_temp_files() -> None:
