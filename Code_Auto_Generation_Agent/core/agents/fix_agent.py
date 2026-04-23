@@ -3,7 +3,8 @@ from typing import List
 
 from langchain_core.tools import StructuredTool, tool
 
-from ..utils import run_shell_command, safe_resolve_path
+from ..utils.shell import run_shell_command
+from ..utils.common import safe_resolve_path
 from .base_agent import BaseAgent
 
 # === 模块级工具工厂：避免每次实例化都重新定义嵌套函数 ===
@@ -110,7 +111,7 @@ def _create_list_project_files(working_dir: str) -> StructuredTool:
         for f in project_path.rglob("*"):
             if f.is_file() and "__pycache__" not in str(f) and ".git" not in str(f):
                 rel_path = f.relative_to(project_path)
-                files.append(str(rel_path))
+                files.append(rel_path.as_posix())
         return "\n".join(sorted(files))
     return list_project_files
 

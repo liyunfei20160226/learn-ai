@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 
 from prompts import PromptTemplate, get_prompt_loader
 
-from .utils import run_shell_command
+from .utils.shell import run_shell_command
 
 logger = logging.getLogger(__name__)
 

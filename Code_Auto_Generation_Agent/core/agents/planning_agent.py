@@ -11,7 +11,7 @@ def _create_add_task(task_graph_validator: Dict[str, Any]) -> StructuredTool:
     """创建 add_task 工具"""
     @tool
     def add_task(task_id: str, title: str, description: str,
-                 task_type: str = "general", dependencies: List[str] = None) -> str:
+                 task_type: str = "general", dependencies: List[str] = []) -> str:
         """添加一个任务到任务图
 
         Args:

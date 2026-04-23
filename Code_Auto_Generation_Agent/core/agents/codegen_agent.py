@@ -4,7 +4,7 @@ from typing import Callable, Dict, List
 
 from langchain_core.tools import StructuredTool, tool
 
-from ..utils import safe_resolve_path
+from ..utils.common import safe_resolve_path
 from .base_agent import BaseAgent
 
 # === 模块级工具定义：避免每次 Agent 实例化都重新定义 ===
@@ -117,7 +117,7 @@ def _create_overwrite_file(write_file_tool: StructuredTool) -> StructuredTool:
             file_path: 相对项目根目录的路径
             content: 文件完整内容
         """
-        return write_file_tool(file_path, content)
+        return write_file_tool.invoke({"file_path": file_path, "content": content})
     return overwrite_file
 
 
@@ -152,17 +152,20 @@ class CodegenAgent(BaseAgent):
     def _normalize_file_path(self, file_path: str) -> str:
         """规范化 LLM 输出的 file_path，防止重复写路径前缀。
 
-        使用 Path 对象进行安全的路径操作，避免字符串处理导致的问题。
-
         例：工作目录 = output/todo/backend/
         LLM 写: backend/app/models.py → 规范化为: app/models.py
         LLM 写: app/models.py → 不变
         """
-        # 第一步安全检查，同时获取解析后的绝对路径
-        resolved = safe_resolve_path(self.working_dir, file_path)
         working_dir = Path(self.working_dir).resolve()
+        working_dir_name = working_dir.name
 
-        # 直接使用 Path.relative_to 获得相对路径，使用 as_posix() 统一为 Unix 风格
+        # 如果路径以工作目录名开头，移除重复前缀
+        file_path_obj = Path(file_path)
+        if file_path_obj.parts and file_path_obj.parts[0] == working_dir_name:
+            file_path = str(Path(*file_path_obj.parts[1:]))
+
+        # 安全检查并获取相对路径
+        resolved = safe_resolve_path(self.working_dir, file_path)
         relative = resolved.relative_to(working_dir)
         return relative.as_posix()
 

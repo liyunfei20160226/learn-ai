@@ -23,6 +23,7 @@ class TaskState:
     status: str = "pending"  # pending, running, success, failed
     dependencies: List[str] = field(default_factory=list)
     generated_files: List[TaskFile] = field(default_factory=list)
+    description: str = ""  # 任务描述，由 PlanningAgent 提供
     error: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
@@ -121,10 +122,11 @@ class Manifest:
         return json.dumps(asdict(self), indent=2, ensure_ascii=False)
 
     @classmethod
-    def from_json(cls, json_str: str) -> "Manifest":
-        """从 JSON 字符串反序列化（包装 load 方法）"""
-        data = json.loads(json_str)
+    def from_dict(cls, data: dict) -> "Manifest":
+        """类型安全地从字典创建 Manifest（避免 **kwargs 导致的静默错误）
 
+        显式列出所有字段，参数名不匹配时 → 立刻静态报错，而不是运行时崩溃。
+        """
         # 处理 tasks
         tasks = {}
         for task_id, task_data in data.get("tasks", {}).items():
@@ -134,10 +136,9 @@ class Manifest:
             files = [TaskFile(**f) for f in files_data]
             tasks[task_id] = TaskState(generated_files=files, **task_data)
 
-        data["tasks"] = tasks
-
         # 处理 fix_state（嵌套 dataclass）
-        fix_state_data = data.pop("fix_state", None)
+        fix_state = None
+        fix_state_data = data.get("fix_state")
         if fix_state_data:
             history_data = fix_state_data.pop("history", [])
             if isinstance(history_data, list):
@@ -145,9 +146,22 @@ class Manifest:
             else:
                 history = []
             fix_state_data["history"] = history
-            data["fix_state"] = FixState(**fix_state_data)
+            fix_state = FixState(**fix_state_data)
 
-        return cls(**data)
+        # ✅ 类型安全：字段名错误 → 静态报错，而不是运行时崩溃
+        return cls(
+            session_id=data["session_id"],
+            project_name=data["project_name"],
+            created_at=data["created_at"],
+            tasks=tasks,
+            fix_state=fix_state,
+        )
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "Manifest":
+        """从 JSON 字符串反序列化"""
+        data = json.loads(json_str)
+        return cls.from_dict(data)
 
     def save(self, path: Path) -> None:
         """原子化保存到磁盘，防止崩溃损坏文件

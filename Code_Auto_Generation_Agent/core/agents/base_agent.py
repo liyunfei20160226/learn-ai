@@ -355,7 +355,8 @@ class BaseAgent(ABC):
 
         return full_state
 
-    def get_last_message(self, result: Dict[str, Any]) -> str:
+    @staticmethod
+    def get_last_message(result: Dict[str, Any]) -> str:
         """获取最后一条消息内容"""
         messages = result.get("messages", [])
         if messages:

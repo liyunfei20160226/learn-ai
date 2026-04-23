@@ -202,6 +202,10 @@ class QualityFixOrchestrator:
                 fix_state.completed_at = datetime.now().isoformat()
                 fix_state.last_failed_step = None
                 fix_state.last_errors = []
+                # 更新最佳状态
+                fix_state.best_attempt = attempt
+                fix_state.best_error_count = 0
+                result = new_result
                 # 记录成功的历史
                 fix_state.history.append(FixAttempt(
                     attempt=attempt,

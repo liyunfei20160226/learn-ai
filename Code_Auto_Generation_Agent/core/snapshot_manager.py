@@ -15,11 +15,15 @@ from pathlib import Path
 from typing import List, Optional
 
 
-def _iter_all_files(path: Path) -> list[Path]:
+def _iter_all_files(path: Path, ignore_check: bool = False) -> list[Path]:
     """迭代遍历所有文件，包括隐藏文件（避免递归栈溢出）
 
     使用 os.scandir 替代 Path.iterdir，性能提升约 2-3 倍。
     使用显式栈替代递归，避免深层目录导致的栈溢出问题。
+
+    Args:
+        path: 要遍历的目录
+        ignore_check: 是否跳过忽略规则检查（用于恢复时遍历备份目录）
     """
     all_files = []
     stack = [str(path)]
@@ -29,12 +33,13 @@ def _iter_all_files(path: Path) -> list[Path]:
         try:
             with os.scandir(current) as entries:
                 for entry in entries:
+                    entry_path = Path(entry.path)
                     if entry.is_dir(follow_symlinks=False):
-                        if not _should_ignore_file(Path(entry.path)):
+                        if ignore_check or not _should_ignore_file(entry_path):
                             stack.append(entry.path)
                     elif entry.is_file(follow_symlinks=False):
-                        if not _should_ignore_file(Path(entry.path)):
-                            all_files.append(Path(entry.path))
+                        if ignore_check or not _should_ignore_file(entry_path):
+                            all_files.append(entry_path)
         except (PermissionError, OSError):
             # 无法访问的目录跳过
             continue
@@ -121,8 +126,8 @@ class SnapshotManager:
             snapshot_files = None
 
         # 恢复快照文件（使用 _iter_all_files，包括隐藏文件！）
-        # 注意：.filelist.txt 在 _should_ignore_file 中已经被排除
-        for src in _iter_all_files(snapshot_dir):
+        # ignore_check=True：备份目录本身是 .backup，不应该被忽略
+        for src in _iter_all_files(snapshot_dir, ignore_check=True):
             rel_path = src.relative_to(snapshot_dir)
             dst = self.working_dir / rel_path
             dst.parent.mkdir(parents=True, exist_ok=True)

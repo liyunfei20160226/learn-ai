@@ -33,6 +33,14 @@ warn_return_any = false
 warn_unused_configs = true
 disable_error_code = ["attr-defined", "arg-type", "assignment", "call-arg", "return-value", "union-attr", "truthy-function", "operator", "var-annotated", "name-defined", "str-bytes-safe"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+
 [[tool.mypy.overrides]]
 module = "langchain.*"
 ignore_errors = true
@@ -55,5 +63,7 @@ ignore_errors = true
 
 [dependency-groups]
 dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
     "ruff>=0.15.11",
 ]

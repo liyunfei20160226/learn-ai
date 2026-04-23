@@ -16,7 +16,7 @@ import logging
 import traceback
 from collections import OrderedDict, deque
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
 
@@ -25,7 +25,7 @@ from prompts import PromptTemplate, get_prompt_loader
 from .agents.codegen_agent import CodegenAgent
 from .agents.planning_agent import PlanningAgent
 from .config import AgentConfig, get_config
-from .manifest import Manifest, TaskFile
+from .manifest import Manifest, TaskFile, TaskState
 from .quality_fix_orchestrator import QualityFixOrchestrator
 from .snapshot_manager import _iter_all_files
 from .utils import safe_resolve_path
@@ -87,26 +87,26 @@ class CodegenCoordinator:
             )
         return data[field]
 
-    def _topological_sort(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _topological_sort(self, tasks: List[TaskState]) -> List[TaskState]:
         """Kahn 算法：拓扑排序
 
         检测两种异常：
         1. 依赖不存在的任务 ID → 直接报错
         2. 循环依赖 → 任务数量不一致时报错
         """
-        task_map = {t["id"]: t for t in tasks}
+        task_map = {t.id: t for t in tasks}
         task_ids = set(task_map.keys())
-        in_degree = {t["id"]: len(t.get("dependencies", [])) for t in tasks}
-        adj_list = {t["id"]: [] for t in tasks}
+        in_degree = {t.id: len(t.dependencies) for t in tasks}
+        adj_list = {t.id: [] for t in tasks}
 
         for task in tasks:
-            for dep in task.get("dependencies", []):
+            for dep in task.dependencies:
                 if dep not in task_ids:
                     raise ValueError(
-                        f"任务 {task['id']} 依赖不存在的任务 {dep}。\n"
+                        f"任务 {task.id} 依赖不存在的任务 {dep}。\n"
                         f"有效任务 ID: {sorted(task_ids)}"
                     )
-                adj_list[dep].append(task["id"])
+                adj_list[dep].append(task.id)
 
         queue = deque([tid for tid, deg in in_degree.items() if deg == 0])
         sorted_tasks = []
@@ -121,7 +121,7 @@ class CodegenCoordinator:
                     queue.append(next_id)
 
         if len(sorted_tasks) != len(tasks):
-            unresolved = task_ids - {t["id"] for t in sorted_tasks}
+            unresolved = task_ids - {t.id for t in sorted_tasks}
             raise ValueError(
                 f"任务图存在循环依赖，无法解析以下任务: {sorted(unresolved)}"
             )
@@ -248,11 +248,25 @@ class CodegenCoordinator:
         # 断点恢复：加载已有 manifest
         self.manifest = self._load_manifest()
         if self.manifest is None:
-            self.manifest = Manifest(
-                prd_name=prd.get("name", "unknown"),
-                working_dir=str(self.working_dir),
+            self.manifest = Manifest.create(
+                project_name=prd.get("name", "unknown"),
             )
             self._save_manifest()
+
+        # ========== Fail Fast：验证 Manifest 完整性 ==========
+        # 在执行业务逻辑前立即暴露数据损坏问题，而不是等深层调用崩溃
+        assert self.manifest is not None, "Manifest 加载失败"
+        assert self.manifest.session_id, "Manifest.session_id 不能为空"
+        assert self.manifest.project_name, "Manifest.project_name 不能为空"
+        assert self.manifest.created_at, "Manifest.created_at 不能为空"
+        assert isinstance(self.manifest.tasks, dict), f"Manifest.tasks 必须是 dict，实际是 {type(self.manifest.tasks)}"
+
+        # 验证每个任务的状态完整性
+        for task_id, task in self.manifest.tasks.items():
+            assert task.id == task_id, f"任务 ID 不匹配：key={task_id}, task.id={task.id}"
+            assert task.name, f"任务 {task_id} 的 name 不能为空"
+            assert task.status in ("pending", "running", "success", "failed"), \
+                f"任务 {task_id} 状态无效: {task.status}"
 
         # ========== 阶段 2: 任务规划 ==========
         if not self.manifest.tasks:
@@ -263,7 +277,19 @@ class CodegenCoordinator:
                 prd_desc=json.dumps(prd, ensure_ascii=False, indent=2),
                 architecture_desc=json.dumps(arch, ensure_ascii=False, indent=2),
             )
-            self.manifest.tasks = tasks_result["tasks"]
+            # 将 PlanningAgent 返回的字典转换为 TaskState 对象，保持类型一致
+            self.manifest.tasks = {
+                task_id: TaskState(
+                    id=task_data["id"],
+                    name=task_data["title"],  # PlanningAgent 返回的是 "title" 不是 "name"
+                    type=task_data.get("type", "unknown"),
+                    status=task_data.get("status", "pending"),
+                    dependencies=task_data.get("dependencies", []),
+                    description=task_data.get("description", ""),
+                    generated_files=[],
+                )
+                for task_id, task_data in tasks_result["tasks"].items()
+            }
             self._save_manifest()
             print(f"✅ 规划完成，共 {len(self.manifest.tasks)} 个任务")
             logger.info(f"任务规划完成，共 {len(self.manifest.tasks)} 个任务")
@@ -285,7 +311,7 @@ class CodegenCoordinator:
         # 过滤已完成的任务
         pending_sorted = [
             t for t in sorted_tasks
-            if t["id"] not in self.manifest.completed_tasks
+            if t.id not in self.manifest.completed_tasks
         ]
 
         if max_stories:
@@ -295,16 +321,16 @@ class CodegenCoordinator:
 
         # ========== 阶段 4: 逐个任务代码生成 ==========
         for idx, task in enumerate(pending_sorted):
-            task_id = task["id"]
-            task_name = task["title"]
-            task_type = task.get("type", "general")
+            task_id = task.id
+            task_name = task.name
+            task_type = task.type
 
             print(f"{'='*60}")
             print(f"[{idx+1}/{len(pending_sorted)}] 🔨 {task_id}: {task_name}")
             print(f"{'='*60}")
 
             # 检查所有依赖是否都成功完成
-            dependencies = task.get("dependencies", [])
+            dependencies = task.dependencies
             failed_deps = []
             for dep_id in dependencies:
                 if not self.manifest.is_task_completed(dep_id):
@@ -318,14 +344,14 @@ class CodegenCoordinator:
             self._save_manifest()
 
             try:
-                dep_code = self._collect_dependency_code(task.get("dependencies", []))
+                dep_code = self._collect_dependency_code(task.dependencies)
                 filtered_arch = self._filter_architecture_docs(task_type, arch)
 
                 template: PromptTemplate = self.prompt_loader.load("codegen_task")
                 prompt = template.render(
                     task_id=task_id,
                     task_name=task_name,
-                    task_description=task.get("description", ""),
+                    task_description=task.description,
                     task_type=task_type,
                     filtered_arch=filtered_arch,
                     dep_code=dep_code or "无前置依赖",
