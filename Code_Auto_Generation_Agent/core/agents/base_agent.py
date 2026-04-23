@@ -378,32 +378,36 @@ class BaseAgent(ABC):
         所有 Agent 子类共享同一份打印逻辑，避免代码重复。
         """
         if tool_name in ("write_file", "overwrite_file"):
-            print(f"  📝 {result}")
+            print(f"  📝 {result}", flush=True)
         elif tool_name == "append_file":
-            print(f"  ➕ {result}")
+            print(f"  ➕ {result}", flush=True)
         elif tool_name == "read_file":
-            print(f"  📄 {result}")
+            print(f"  📄 {result}", flush=True)
         elif tool_name == "add_task":
-            print(f"  🛠️ {result}")
+            print(f"  🛠️ {result}", flush=True)
         elif tool_name == "validate_task_graph":
-            print("  🔍  验证任务图...")
+            print("  🔍  验证任务图...", flush=True)
             for line in result.split("\n"):
-                print(f"     {line}")
+                print(f"     {line}", flush=True)
         elif tool_name == "list_generated_files":
             for line in result.split("\n"):
-                print(f"     {line}")
+                print(f"     {line}", flush=True)
         elif tool_name in (
             "finish", "mark_subtask_complete", "record_key_decision", "update_working_summary"
         ):
-            print(f"  🏁 {result}")
+            # 分行显示，提升可读性（summary 通常包含多行内容）
+            lines = result.split("\n")
+            print(f"  🏁 {lines[0]}", flush=True)
+            for line in lines[1:]:
+                print(f"     {line}", flush=True)
         elif tool_name == "list_project_files":
-            print("  📂 项目文件:")
+            print("  📂 项目文件:", flush=True)
             for line in result.split("\n"):
-                print(f"     - {line}")
+                print(f"     - {line}", flush=True)
         elif tool_name == "add_context_warning":
-            print(f"  ⚠️  {result}")
+            print(f"  ⚠️  {result}", flush=True)
         elif tool_name in ("quick_lint_check", "quick_type_check"):
-            print(f"  🔍 {tool_name}:")
+            print(f"  🔍 {tool_name}:", flush=True)
             for line in result.split("\n"):
                 if line.strip():  # 过滤空行，避免刷屏
-                    print(f"     {line}")
+                    print(f"     {line}", flush=True)

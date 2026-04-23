@@ -15,39 +15,44 @@ from core.agents.planning_agent import (
 
 @pytest.fixture
 def task_graph_validator():
-    return {"tasks": []}
+    # module_id 现在通过字典的 _module_id 字段传递，而不是工厂参数
+    return {"tasks": [], "id_mapping": {}, "_module_id": "B-MOD-001"}
 
 
 class TestAddTaskTool:
-    """测试 add_task 工具"""
+    """测试 add_task 工具（内置 ID 自动转换）"""
 
     def test_add_single_task(self, task_graph_validator):
-        """添加单个任务"""
-        add_task = _create_add_task(task_graph_validator)
+        """添加单个任务 - 验证 ID 被自动转换为 {module_id}_{序号} 格式"""
+        add_task = _create_add_task(task_graph_validator)  # module_id 通过字典的 _module_id 字段传递
         result = add_task.invoke({
-            "task_id": "T001",
+            "task_id": "T001",  # LLM 传什么都无所谓
             "title": "初始化项目",
             "description": "创建项目结构",
             "task_type": "infrastructure",
         })
 
         assert "已添加任务" in result
-        assert "T001" in result
+        assert "B-MOD-001_01" in result  # 验证输出显示真实 ID
         assert "初始化项目" in result
         assert len(task_graph_validator["tasks"]) == 1
-        assert task_graph_validator["tasks"][0]["id"] == "T001"
+        assert task_graph_validator["tasks"][0]["id"] == "B-MOD-001_01"  # 真实 ID
         assert task_graph_validator["tasks"][0]["type"] == "infrastructure"
+        # 验证映射表正确
+        assert task_graph_validator["id_mapping"]["T001"] == "B-MOD-001_01"
 
     def test_add_task_with_dependencies(self, task_graph_validator):
-        """添加带依赖的任务"""
-        # 先添加一个被依赖的任务
-        task_graph_validator["tasks"].append({
-            "id": "T001",
+        """添加带依赖的任务 - 验证 dependencies 中的 ID 也被自动转换"""
+        # 先添加一个被依赖的任务（通过工具正常添加，这样 id_mapping 会被正确填充）
+        add_task = _create_add_task(task_graph_validator)
+        add_task.invoke({
+            "task_id": "T001",
             "title": "Task 1",
+            "description": "Task 1",
             "dependencies": [],
         })
 
-        add_task = _create_add_task(task_graph_validator)
+        # 添加第二个任务，依赖 T001
         result = add_task.invoke({
             "task_id": "T002",
             "title": "Task 2",
@@ -56,19 +61,26 @@ class TestAddTaskTool:
         })
 
         assert "已添加任务" in result
+        assert "B-MOD-001_02" in result
         assert len(task_graph_validator["tasks"]) == 2
-        assert task_graph_validator["tasks"][1]["dependencies"] == ["T001"]
+        # 关键：依赖 ID T001 被自动转换为 B-MOD-001_01
+        assert task_graph_validator["tasks"][1]["dependencies"] == ["B-MOD-001_01"]
 
-    def test_add_task_default_dependencies_omitted(self, task_graph_validator):
-        """省略 dependencies 时默认为空列表"""
-        add_task = _create_add_task(task_graph_validator)
-        add_task.invoke({
-            "task_id": "T001",
-            "title": "Test",
-            "description": "Test",
-        })
+    def test_add_task_cross_module_no_conflict(self, task_graph_validator):
+        """验证不同模块用相同的 LLM ID 不会冲突"""
+        # 模块 1 添加 T001
+        add_task_1 = _create_add_task({"tasks": [], "id_mapping": {}, "_module_id": "B-MOD-001"})
+        add_task_1.invoke({"task_id": "T001", "title": "模块1任务", "description": "模块1任务"})
 
-        assert task_graph_validator["tasks"][0]["dependencies"] == []
+        # 模块 2 添加 T001（同一个 LLM ID，不同模块）
+        task_graph_2 = {"tasks": [], "id_mapping": {}, "_module_id": "B-MOD-002"}
+        add_task_2 = _create_add_task(task_graph_2)
+        result = add_task_2.invoke({"task_id": "T001", "title": "模块2任务", "description": "模块2任务"})
+
+        # 不会报错，ID 被正确转换为各自的模块前缀
+        assert "B-MOD-002_01" in result
+        assert len(task_graph_2["tasks"]) == 1
+        assert task_graph_2["tasks"][0]["id"] == "B-MOD-002_01"
 
     def test_add_task_default_dependencies_omitted(self, task_graph_validator):
         """省略 dependencies 参数时默认为空列表"""
@@ -81,20 +93,98 @@ class TestAddTaskTool:
 
         assert task_graph_validator["tasks"][0]["dependencies"] == []
 
-    def test_add_task_duplicate_id_rejected(self, task_graph_validator):
-        """重复的任务 ID 被拒绝"""
-        # 先添加 T001
-        task_graph_validator["tasks"].append({"id": "T001", "title": "Existing Task"})
-
+    def test_add_task_no_duplicate_error_anymore(self, task_graph_validator):
+        """验证：重复的 LLM ID 不再报错，因为我们会自动重编号"""
+        # 现在即使 LLM 重复调用 add_task(T001)，也不会报错，因为我们按顺序编号
         add_task = _create_add_task(task_graph_validator)
+        result1 = add_task.invoke({
+            "task_id": "T001",  # LLM 第一次用 T001
+            "title": "Task 1",
+            "description": "First",
+        })
+        assert "B-MOD-001_01" in result1
+
+        result2 = add_task.invoke({
+            "task_id": "T001",  # LLM 傻了，又用 T001
+            "title": "Task 2",
+            "description": "Second",
+        })
+        assert "B-MOD-001_02" in result2  # 自动转成 02，不报错
+
+        assert len(task_graph_validator["tasks"]) == 2  # 两个任务都添加成功
+
+    def test_dependency_id_format_normalization(self, task_graph_validator):
+        """验证：依赖 ID 多种格式都能被正确转换（LLM 格式不统一问题）"""
+        add_task = _create_add_task(task_graph_validator)
+
+        # 添加前 6 个任务，LLM 使用 T 前缀格式
+        for i in range(1, 7):
+            add_task.invoke({
+                "task_id": f"T{i:03d}",
+                "title": f"任务 {i}",
+                "description": f"任务 {i} 描述",
+                "dependencies": [],
+            })
+
+        # 添加第 7 个任务，依赖用纯数字格式（如 "06"）- 这是 LLM 实际会生成的
         result = add_task.invoke({
-            "task_id": "T001",
-            "title": "Duplicate Task",
-            "description": "Should be rejected",
+            "task_id": "T007",
+            "title": "任务 7",
+            "description": "依赖任务 6",
+            "dependencies": ["06"],  # LLM 传纯数字，而不是 T006
         })
 
-        assert "任务 ID 已存在" in result
-        assert len(task_graph_validator["tasks"]) == 1  # 没有新增
+        # 验证：纯数字 "06" 被正确转换为 B-MOD-001_06
+        assert task_graph_validator["tasks"][6]["dependencies"] == ["B-MOD-001_06"]
+
+        # 添加第 8 个任务，依赖混合多种格式
+        result = add_task.invoke({
+            "task_id": "T008",
+            "title": "任务 8",
+            "description": "依赖多个任务，格式不统一",
+            "dependencies": [
+                "05",       # 纯数字格式
+                "T006",     # 标准 T 前缀格式
+                "B-MOD-001_07",  # 带模块前缀格式（LLM 可能学到这种格式）
+            ],
+        })
+
+        # 验证：三种格式都被正确转换
+        deps = set(task_graph_validator["tasks"][7]["dependencies"])
+        assert deps == {"B-MOD-001_05", "B-MOD-001_06", "B-MOD-001_07"}
+
+    def test_module_id_switch_in_place(self):
+        """验证：通过原地修改 _module_id 可以切换模块（核心测试！）"""
+        # 创建一个共享字典，模拟 agent 的 self._task_graph_ref
+        shared_state = {"tasks": [], "id_mapping": {}, "_module_id": "B-MOD-001"}
+
+        add_task = _create_add_task(shared_state)
+
+        # 第一个模块添加任务
+        result1 = add_task.invoke({
+            "task_id": "T001",
+            "title": "任务1",
+            "description": "d1",
+        })
+        assert "B-MOD-001_01" in result1
+
+        # 切换模块（原地修改 _module_id，不重新创建工具！）
+        shared_state.clear()
+        shared_state["tasks"] = []
+        shared_state["id_mapping"] = {}
+        shared_state["validated"] = False
+        shared_state["_module_id"] = "B-MOD-002"
+
+        # 第二个模块添加任务，同一个工具，同一个 shared_state 引用
+        result2 = add_task.invoke({
+            "task_id": "T001",  # LLM 还是用 T001，但因为切换了 module_id
+            "title": "任务2",
+            "description": "d2",
+        })
+        assert "B-MOD-002_01" in result2  # ✅ 自动使用新的 module_id！
+
+        # 验证两个任务互不干扰
+        assert shared_state["tasks"][0]["id"] == "B-MOD-002_01"
 
     def test_add_task_default_type(self, task_graph_validator):
         """默认任务类型是 'general'"""
@@ -288,26 +378,24 @@ class TestPlanningAgentIntegration:
             mock_template.render.return_value = "plan this"
             mock_load.return_value = mock_template
 
-            # Mock 阶段1 llm.invoke：提取模块
-            mock_module_resp = MagicMock()
-            mock_module_resp.content = '{"modules": [{"name": "backend", "description": "后端"}]}'
-            mock_llm.invoke.return_value = mock_module_resp
-
             with patch.object(agent, "run") as mock_run:
-                # 模拟阶段2任务被添加 + 阶段3 llm.invoke
+                # 模拟 Agent.run 执行后任务被添加
                 def side_effect(*args, **kwargs):
                     agent._task_graph_ref["tasks"] = [
-                        {"id": "B_001", "title": "Task 1", "type": "backend", "dependencies": []},
+                        {"id": "B-MOD-001_01", "title": "Task 1", "type": "backend", "dependencies": [], "_source_module_id": "B-MOD-001"},
                     ]
+                    agent._task_graph_ref["validated"] = True
                 mock_run.side_effect = side_effect
 
-                # Mock 阶段3 llm.invoke：跨模块依赖整理
-                mock_deps_resp = MagicMock()
-                mock_deps_resp.content = '{"tasks": [{"id": "T001", "title": "Task 1", "type": "backend", "description": "", "dependencies": []}]}'
-                mock_llm.invoke.return_value = mock_deps_resp
+                # 构造最小可用的 PRD 和 架构 JSON
+                prd_json = '{"userStories": [{"id": "US-001", "title": "Test", "acceptanceCriteria": []}]}'
+                arch_json = '''{"backend": {"modules": [
+                    {"id": "B-MOD-001", "name": "测试模块", "description": "测试", "directory": "app/test",
+                     "userStoryIds": ["US-001"], "files": [], "dependencies": []}
+                ]}}'''
 
-                # 调用 Coordinator 实际使用的签名：prd_desc, architecture_desc
-                result = agent.run_with_log("PRD content", "Arch content", verbose=False)
+                # 调用 Coordinator 实际使用的签名
+                result = agent.run_with_log(prd_json, arch_json, verbose=False)
 
         assert len(result) == 1
         assert result[0]["id"] == "T001"
@@ -330,24 +418,21 @@ class TestPlanningAgentIntegration:
             mock_template.render.return_value = "plan this"
             mock_load.return_value = mock_template
 
-            # Mock 阶段1 llm.invoke：提取模块
-            mock_module_resp = MagicMock()
-            mock_module_resp.content = '{"modules": [{"name": "backend", "description": "后端"}]}'
-            mock_llm.invoke.return_value = mock_module_resp
-
             with patch.object(agent, "run") as mock_run:
                 def side_effect(*args, **kwargs):
                     agent._task_graph_ref["tasks"] = [
-                        {"id": "B_001", "title": "Task 1", "type": "backend", "dependencies": []},
+                        {"id": "B-MOD-001_01", "title": "Task 1", "type": "backend", "dependencies": [], "_source_module_id": "B-MOD-001"},
                     ]
+                    agent._task_graph_ref["validated"] = True
                 mock_run.side_effect = side_effect
 
-                # Mock 阶段3 llm.invoke
-                mock_deps_resp = MagicMock()
-                mock_deps_resp.content = '{"tasks": [{"id": "T001", "title": "Task 1", "type": "backend", "description": "", "dependencies": []}]}'
-                mock_llm.invoke.return_value = mock_deps_resp
+                prd_json = '{"userStories": [{"id": "US-001", "title": "Test", "acceptanceCriteria": []}]}'
+                arch_json = '''{"backend": {"modules": [
+                    {"id": "B-MOD-001", "name": "测试模块", "description": "测试", "directory": "app/test",
+                     "userStoryIds": ["US-001"], "files": [], "dependencies": []}
+                ]}}'''
 
-                result = agent.run_and_parse("PRD content", "Arch content", verbose=False)
+                result = agent.run_and_parse(prd_json, arch_json, verbose=False)
 
         assert len(result) == 1
         assert result[0]["id"] == "T001"
@@ -380,185 +465,110 @@ class TestPlanningAgentStagedMethods:
         assert agent._task_graph_ref["tasks"] == []
         assert agent._task_graph_ref["validated"] is False
 
-    def test_extract_modules_success(self):
-        """测试 _extract_modules 成功解析模块列表"""
+    def test_extract_stories_by_ids(self):
+        """测试 _extract_stories_by_ids 根据 ID 提取 user story"""
+        agent = self._create_agent()
+        prd = {
+            "userStories": [
+                {"id": "US-001", "title": "Story 1"},
+                {"id": "US-002", "title": "Story 2"},
+                {"id": "US-003", "title": "Story 3"},
+            ]
+        }
+
+        stories = agent._extract_stories_by_ids(prd, ["US-001", "US-003"])
+
+        assert len(stories) == 2
+        assert {s["id"] for s in stories} == {"US-001", "US-003"}
+
+    def test_extract_arch_modules(self):
+        """测试 _extract_arch_modules 从架构 JSON 直接提取模块"""
         agent = self._create_agent()
 
-        # Mock prompt_loader 和 llm.invoke
-        with patch.object(agent.prompt_loader, "load") as mock_load:
-            mock_template = MagicMock()
-            mock_template.render.return_value = "prompt"
-            mock_load.return_value = mock_template
+        arch_json = '''
+        {
+            "backend": {
+                "modules": [
+                    {"id": "B-MOD-001", "name": "核心配置", "description": "...", "directory": "app/core", "userStoryIds": ["US-001"]},
+                    {"id": "B-MOD-002", "name": "数据模型", "description": "...", "directory": "app/models", "userStoryIds": ["US-001"]}
+                ]
+            },
+            "frontend": {
+                "modules": [
+                    {"id": "F-MOD-001", "name": "主页面", "description": "...", "directory": "app/page", "userStoryIds": ["US-008"]}
+                ]
+            }
+        }
+        '''
 
-            mock_resp = MagicMock()
-            mock_resp.content = '''{"modules": [
-                {"name": "backend", "description": "后端服务"},
-                {"name": "frontend", "description": "前端应用"}
-            ]}'''
-            agent.llm.invoke.return_value = mock_resp
+        modules = agent._extract_arch_modules(arch_json)
 
-            modules = agent._extract_modules("PRD", "ARCH")
+        assert len(modules) == 3
+        b_mods = [m for m in modules if m["type"] == "backend"]
+        f_mods = [m for m in modules if m["type"] == "frontend"]
+        assert len(b_mods) == 2
+        assert len(f_mods) == 1
+        assert b_mods[0]["module_id"] == "B-MOD-001"
+        assert f_mods[0]["module_id"] == "F-MOD-001"
 
-        assert len(modules) == 2
-        assert modules[0]["name"] == "backend"
-        assert modules[0]["prefix"] == "B"
-        assert modules[1]["name"] == "frontend"
-        assert modules[1]["prefix"] == "F"
-
-    def test_extract_modules_with_code_block(self):
-        """测试 _extract_modules 解析带 ```json 包裹的响应"""
+    def test_plan_single_module_tasks(self):
+        """测试 _plan_single_module_tasks 规划单个模块任务"""
         agent = self._create_agent()
-
-        with patch.object(agent.prompt_loader, "load") as mock_load:
-            mock_template = MagicMock()
-            mock_template.render.return_value = "prompt"
-            mock_load.return_value = mock_template
-
-            mock_resp = MagicMock()
-            mock_resp.content = '''```json
-            {"modules": [{"name": "database", "description": "数据库"}]}
-            ```'''
-            agent.llm.invoke.return_value = mock_resp
-
-            modules = agent._extract_modules("PRD", "ARCH")
-
-        assert len(modules) == 1
-        assert modules[0]["name"] == "database"
-        assert modules[0]["prefix"] == "D"
-
-    def test_extract_modules_fallback(self):
-        """测试 _extract_modules LLM 失败时，直接从架构文档解析"""
-        agent = self._create_agent()
-
-        with patch.object(agent.prompt_loader, "load") as mock_load:
-            mock_template = MagicMock()
-            mock_template.render.return_value = "prompt"
-            mock_load.return_value = mock_template
-
-            mock_resp = MagicMock()
-            mock_resp.content = "invalid json"  # LLM 返回无效内容
-            agent.llm.invoke.return_value = mock_resp
-
-            # 但架构文档本身是合法 JSON（Coordinator 已保证）
-            arch_json = '{"backend": {"framework": "FastAPI"}, "frontend": {"framework": "React"}}'
-            modules = agent._extract_modules("PRD", arch_json)
-
-        # 应该能从架构文档直接解析出模块
-        assert len(modules) == 2
-        names = {m["name"] for m in modules}
-        assert "backend" in names
-        assert "frontend" in names
-        assert modules[0]["prefix"] == "B"
-        assert modules[1]["prefix"] == "F"
-
-    def test_extract_modules_architecture_fallback(self):
-        """测试 _extract_modules 直接从架构 JSON 解析"""
-        agent = self._create_agent()
+        module = {
+            "module_id": "B-MOD-001",
+            "name": "核心配置",
+            "description": "核心配置模块",
+            "directory": "app/core",
+            "type": "backend",
+            "files": [{"path": "app/core/config.py", "description": "配置文件"}],
+        }
+        stories = [{"id": "US-001", "title": "测试", "acceptanceCriteria": ["配置必须正确"]}]
 
         with patch.object(agent.prompt_loader, "load") as mock_load:
             mock_template = MagicMock()
-            mock_template.render.return_value = "prompt"
-            mock_load.return_value = mock_template
-
-            mock_resp = MagicMock()
-            mock_resp.content = "invalid json"
-            agent.llm.invoke.return_value = mock_resp
-
-            # 传入包含 backend 的架构 JSON
-            arch_json = '{"backend": {"framework": "FastAPI"}, "frontend": {"framework": "React"}}'
-            modules = agent._extract_modules("PRD", arch_json)
-
-        assert len(modules) == 2
-        names = {m["name"] for m in modules}
-        assert "backend" in names
-        assert "frontend" in names
-
-    def test_plan_module_tasks(self):
-        """测试 _plan_module_tasks 规划单个模块任务"""
-        agent = self._create_agent()
-        module = {"name": "backend", "description": "后端", "prefix": "B"}
-
-        with patch.object(agent.prompt_loader, "load") as mock_load:
-            mock_template = MagicMock()
-            mock_template.render.return_value = "prompt"
+            mock_template.render.return_value = "plan this"
             mock_load.return_value = mock_template
 
             with patch.object(agent, "run") as mock_run:
                 def side_effect(*args, **kwargs):
                     agent._task_graph_ref["tasks"] = [
-                        {"id": "B_001", "title": "数据库模型", "type": "backend", "dependencies": []},
-                        {"id": "B_002", "title": "API 路由", "type": "backend", "dependencies": ["B_001"]},
+                        {"id": "B-MOD-001_01", "title": "创建配置文件", "type": "backend", "dependencies": []},
                     ]
+                    agent._task_graph_ref["validated"] = True
                 mock_run.side_effect = side_effect
 
-                tasks = agent._plan_module_tasks(module, "PRD", "ARCH", verbose=False)
+                tasks = agent._plan_single_module_tasks(module, stories, verbose=False)
 
-        assert len(tasks) == 2
-        assert tasks[0]["id"] == "B_001"
-        assert tasks[1]["dependencies"] == ["B_001"]
+        assert len(tasks) == 1
+        assert tasks[0]["id"] == "B-MOD-001_01"
+        assert tasks[0]["_source_module_id"] == "B-MOD-001"
 
-    def test_resolve_cross_module_deps_success(self):
-        """测试 _resolve_cross_module_deps 成功解析跨模块依赖"""
+    def test_resolve_cross_module_deps(self):
+        """测试 _resolve_cross_module_deps 跨模块依赖整理"""
         agent = self._create_agent()
 
         all_tasks = [
-            {"id": "D_001", "title": "数据库模型", "type": "database", "description": "", "dependencies": []},
-            {"id": "B_001", "title": "后端 API", "type": "backend", "description": "", "dependencies": ["D_001"]},
-            {"id": "F_001", "title": "前端页面", "type": "frontend", "description": "", "dependencies": ["B_001"]},
+            {"id": "B-MOD-001_01", "title": "配置模块", "type": "backend", "dependencies": [], "_source_module_id": "B-MOD-001"},
+            {"id": "B-MOD-002_01", "title": "数据模型", "type": "backend", "dependencies": [], "_source_module_id": "B-MOD-002"},
         ]
+        arch_json = '''
+        {
+            "backend": {
+                "modules": [
+                    {"id": "B-MOD-001", "name": "核心配置", "dependencies": []},
+                    {"id": "B-MOD-002", "name": "数据模型", "dependencies": ["B-MOD-001"]}
+                ]
+            }
+        }
+        '''
 
-        with patch.object(agent.prompt_loader, "load") as mock_load:
-            mock_template = MagicMock()
-            mock_template.render.return_value = "prompt"
-            mock_load.return_value = mock_template
+        result = agent._resolve_cross_module_deps(all_tasks, arch_json)
 
-            mock_resp = MagicMock()
-            mock_resp.content = '''{"tasks": [
-                {"id": "T001", "title": "数据库模型", "type": "database", "description": "", "dependencies": []},
-                {"id": "T002", "title": "后端 API", "type": "backend", "description": "", "dependencies": ["T001"]},
-                {"id": "T003", "title": "前端页面", "type": "frontend", "description": "", "dependencies": ["T002"]}
-            ]}'''
-            agent.llm.invoke.return_value = mock_resp
-
-            result = agent._resolve_cross_module_deps(all_tasks, "PRD", "ARCH")
-
-        assert len(result) == 3
-        assert result[0]["id"] == "T001"
-        assert result[1]["dependencies"] == ["T001"]
-        assert result[2]["dependencies"] == ["T002"]
-
-    def test_resolve_cross_module_deps_fallback(self):
-        """测试 _resolve_cross_module_deps 解析失败走简单编号兜底"""
-        agent = self._create_agent()
-
-        all_tasks = [
-            {"id": "B_001", "title": "任务1", "type": "backend", "description": "", "dependencies": []},
-            {"id": "B_002", "title": "任务2", "type": "backend", "description": "", "dependencies": ["B_001"]},
-        ]
-
-        with patch.object(agent.prompt_loader, "load") as mock_load:
-            mock_template = MagicMock()
-            mock_template.render.return_value = "prompt"
-            mock_load.return_value = mock_template
-
-            mock_resp = MagicMock()
-            mock_resp.content = "invalid json"
-            agent.llm.invoke.return_value = mock_resp
-
-            result = agent._resolve_cross_module_deps(all_tasks, "PRD", "ARCH")
-
-        # 兜底应该能正确重编号和转换依赖
+        # 应该统一重编号
         assert len(result) == 2
         assert result[0]["id"] == "T001"
         assert result[1]["id"] == "T002"
-        assert result[1]["dependencies"] == ["T001"]
+        # B-MOD-002 依赖 B-MOD-001，所以 T002 应该依赖 T001
+        assert "T001" in result[1]["dependencies"]
 
-    def test_module_prefix_map(self):
-        """测试模块前缀映射表"""
-        from core.agents.planning_agent import _MODULE_PREFIX_MAP
-
-        assert _MODULE_PREFIX_MAP["backend"] == "B"
-        assert _MODULE_PREFIX_MAP["frontend"] == "F"
-        assert _MODULE_PREFIX_MAP["database"] == "D"
-        assert _MODULE_PREFIX_MAP["shared"] == "S"
-        assert _MODULE_PREFIX_MAP["infrastructure"] == "I"
+        # 以上为完整测试

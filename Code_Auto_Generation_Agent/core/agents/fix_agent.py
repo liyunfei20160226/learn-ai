@@ -3,8 +3,8 @@ from typing import List
 
 from langchain_core.tools import StructuredTool, tool
 
-from ..utils.shell import run_shell_command
 from ..utils.common import safe_resolve_path
+from ..utils.shell import run_shell_command
 from .base_agent import BaseAgent
 
 # === 模块级工具工厂：避免每次实例化都重新定义嵌套函数 ===
