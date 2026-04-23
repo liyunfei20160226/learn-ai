@@ -282,26 +282,36 @@ class TestPlanningAgentIntegration:
 
         agent = PlanningAgent(mock_llm, "/tmp/test", mock_config)
 
-        # Mock prompt_loader 和 run
+        # Mock prompt_loader
         with patch.object(agent.prompt_loader, "load") as mock_load:
             mock_template = MagicMock()
             mock_template.render.return_value = "plan this"
             mock_load.return_value = mock_template
 
+            # Mock 阶段1 llm.invoke：提取模块
+            mock_module_resp = MagicMock()
+            mock_module_resp.content = '{"modules": [{"name": "backend", "description": "后端"}]}'
+            mock_llm.invoke.return_value = mock_module_resp
+
             with patch.object(agent, "run") as mock_run:
-                # 模拟任务被添加
-                agent._task_graph_ref["tasks"] = [
-                    {"id": "T001", "title": "Task 1"},
-                    {"id": "T002", "title": "Task 2"},
-                ]
+                # 模拟阶段2任务被添加 + 阶段3 llm.invoke
+                def side_effect(*args, **kwargs):
+                    agent._task_graph_ref["tasks"] = [
+                        {"id": "B_001", "title": "Task 1", "type": "backend", "dependencies": []},
+                    ]
+                mock_run.side_effect = side_effect
+
+                # Mock 阶段3 llm.invoke：跨模块依赖整理
+                mock_deps_resp = MagicMock()
+                mock_deps_resp.content = '{"tasks": [{"id": "T001", "title": "Task 1", "type": "backend", "description": "", "dependencies": []}]}'
+                mock_llm.invoke.return_value = mock_deps_resp
 
                 # 调用 Coordinator 实际使用的签名：prd_desc, architecture_desc
                 result = agent.run_with_log("PRD content", "Arch content", verbose=False)
 
-        assert len(result) == 2
+        assert len(result) == 1
         assert result[0]["id"] == "T001"
-        assert result[1]["id"] == "T002"
-        mock_run.assert_called_once()
+        assert result[0]["title"] == "Task 1"
 
     def test_planning_agent_run_and_parse(self):
         """测试 run_and_parse 方法（兼容旧接口）"""
@@ -314,20 +324,241 @@ class TestPlanningAgentIntegration:
 
         agent = PlanningAgent(mock_llm, "/tmp/test", mock_config)
 
-        # Mock prompt_loader 和 run
+        # Mock prompt_loader
         with patch.object(agent.prompt_loader, "load") as mock_load:
             mock_template = MagicMock()
             mock_template.render.return_value = "plan this"
             mock_load.return_value = mock_template
 
+            # Mock 阶段1 llm.invoke：提取模块
+            mock_module_resp = MagicMock()
+            mock_module_resp.content = '{"modules": [{"name": "backend", "description": "后端"}]}'
+            mock_llm.invoke.return_value = mock_module_resp
+
             with patch.object(agent, "run") as mock_run:
-                # 模拟任务被添加
-                agent._task_graph_ref["tasks"] = [
-                    {"id": "T001", "title": "Task 1"},
-                ]
+                def side_effect(*args, **kwargs):
+                    agent._task_graph_ref["tasks"] = [
+                        {"id": "B_001", "title": "Task 1", "type": "backend", "dependencies": []},
+                    ]
+                mock_run.side_effect = side_effect
+
+                # Mock 阶段3 llm.invoke
+                mock_deps_resp = MagicMock()
+                mock_deps_resp.content = '{"tasks": [{"id": "T001", "title": "Task 1", "type": "backend", "description": "", "dependencies": []}]}'
+                mock_llm.invoke.return_value = mock_deps_resp
 
                 result = agent.run_and_parse("PRD content", "Arch content", verbose=False)
 
         assert len(result) == 1
         assert result[0]["id"] == "T001"
-        mock_run.assert_called_once()
+
+
+# ========== 新增：分阶段规划方法测试 ==========
+
+class TestPlanningAgentStagedMethods:
+    """测试分阶段规划的各个辅助方法"""
+
+    def _create_agent(self):
+        """创建测试用 PlanningAgent 实例"""
+        from core.agents.planning_agent import PlanningAgent
+
+        mock_llm = MagicMock()
+        mock_config = MagicMock()
+        mock_config.prompts_dir = None
+        mock_config.max_iterations = 10
+
+        return PlanningAgent(mock_llm, tempfile.mkdtemp(), mock_config)
+
+    def test_clear_task_graph(self):
+        """测试 _clear_task_graph 清空任务图"""
+        agent = self._create_agent()
+        agent._task_graph_ref["tasks"] = [{"id": "T001", "title": "Test"}]
+        agent._task_graph_ref["validated"] = True
+
+        agent._clear_task_graph()
+
+        assert agent._task_graph_ref["tasks"] == []
+        assert agent._task_graph_ref["validated"] is False
+
+    def test_extract_modules_success(self):
+        """测试 _extract_modules 成功解析模块列表"""
+        agent = self._create_agent()
+
+        # Mock prompt_loader 和 llm.invoke
+        with patch.object(agent.prompt_loader, "load") as mock_load:
+            mock_template = MagicMock()
+            mock_template.render.return_value = "prompt"
+            mock_load.return_value = mock_template
+
+            mock_resp = MagicMock()
+            mock_resp.content = '''{"modules": [
+                {"name": "backend", "description": "后端服务"},
+                {"name": "frontend", "description": "前端应用"}
+            ]}'''
+            agent.llm.invoke.return_value = mock_resp
+
+            modules = agent._extract_modules("PRD", "ARCH")
+
+        assert len(modules) == 2
+        assert modules[0]["name"] == "backend"
+        assert modules[0]["prefix"] == "B"
+        assert modules[1]["name"] == "frontend"
+        assert modules[1]["prefix"] == "F"
+
+    def test_extract_modules_with_code_block(self):
+        """测试 _extract_modules 解析带 ```json 包裹的响应"""
+        agent = self._create_agent()
+
+        with patch.object(agent.prompt_loader, "load") as mock_load:
+            mock_template = MagicMock()
+            mock_template.render.return_value = "prompt"
+            mock_load.return_value = mock_template
+
+            mock_resp = MagicMock()
+            mock_resp.content = '''```json
+            {"modules": [{"name": "database", "description": "数据库"}]}
+            ```'''
+            agent.llm.invoke.return_value = mock_resp
+
+            modules = agent._extract_modules("PRD", "ARCH")
+
+        assert len(modules) == 1
+        assert modules[0]["name"] == "database"
+        assert modules[0]["prefix"] == "D"
+
+    def test_extract_modules_fallback(self):
+        """测试 _extract_modules LLM 失败时，直接从架构文档解析"""
+        agent = self._create_agent()
+
+        with patch.object(agent.prompt_loader, "load") as mock_load:
+            mock_template = MagicMock()
+            mock_template.render.return_value = "prompt"
+            mock_load.return_value = mock_template
+
+            mock_resp = MagicMock()
+            mock_resp.content = "invalid json"  # LLM 返回无效内容
+            agent.llm.invoke.return_value = mock_resp
+
+            # 但架构文档本身是合法 JSON（Coordinator 已保证）
+            arch_json = '{"backend": {"framework": "FastAPI"}, "frontend": {"framework": "React"}}'
+            modules = agent._extract_modules("PRD", arch_json)
+
+        # 应该能从架构文档直接解析出模块
+        assert len(modules) == 2
+        names = {m["name"] for m in modules}
+        assert "backend" in names
+        assert "frontend" in names
+        assert modules[0]["prefix"] == "B"
+        assert modules[1]["prefix"] == "F"
+
+    def test_extract_modules_architecture_fallback(self):
+        """测试 _extract_modules 直接从架构 JSON 解析"""
+        agent = self._create_agent()
+
+        with patch.object(agent.prompt_loader, "load") as mock_load:
+            mock_template = MagicMock()
+            mock_template.render.return_value = "prompt"
+            mock_load.return_value = mock_template
+
+            mock_resp = MagicMock()
+            mock_resp.content = "invalid json"
+            agent.llm.invoke.return_value = mock_resp
+
+            # 传入包含 backend 的架构 JSON
+            arch_json = '{"backend": {"framework": "FastAPI"}, "frontend": {"framework": "React"}}'
+            modules = agent._extract_modules("PRD", arch_json)
+
+        assert len(modules) == 2
+        names = {m["name"] for m in modules}
+        assert "backend" in names
+        assert "frontend" in names
+
+    def test_plan_module_tasks(self):
+        """测试 _plan_module_tasks 规划单个模块任务"""
+        agent = self._create_agent()
+        module = {"name": "backend", "description": "后端", "prefix": "B"}
+
+        with patch.object(agent.prompt_loader, "load") as mock_load:
+            mock_template = MagicMock()
+            mock_template.render.return_value = "prompt"
+            mock_load.return_value = mock_template
+
+            with patch.object(agent, "run") as mock_run:
+                def side_effect(*args, **kwargs):
+                    agent._task_graph_ref["tasks"] = [
+                        {"id": "B_001", "title": "数据库模型", "type": "backend", "dependencies": []},
+                        {"id": "B_002", "title": "API 路由", "type": "backend", "dependencies": ["B_001"]},
+                    ]
+                mock_run.side_effect = side_effect
+
+                tasks = agent._plan_module_tasks(module, "PRD", "ARCH", verbose=False)
+
+        assert len(tasks) == 2
+        assert tasks[0]["id"] == "B_001"
+        assert tasks[1]["dependencies"] == ["B_001"]
+
+    def test_resolve_cross_module_deps_success(self):
+        """测试 _resolve_cross_module_deps 成功解析跨模块依赖"""
+        agent = self._create_agent()
+
+        all_tasks = [
+            {"id": "D_001", "title": "数据库模型", "type": "database", "description": "", "dependencies": []},
+            {"id": "B_001", "title": "后端 API", "type": "backend", "description": "", "dependencies": ["D_001"]},
+            {"id": "F_001", "title": "前端页面", "type": "frontend", "description": "", "dependencies": ["B_001"]},
+        ]
+
+        with patch.object(agent.prompt_loader, "load") as mock_load:
+            mock_template = MagicMock()
+            mock_template.render.return_value = "prompt"
+            mock_load.return_value = mock_template
+
+            mock_resp = MagicMock()
+            mock_resp.content = '''{"tasks": [
+                {"id": "T001", "title": "数据库模型", "type": "database", "description": "", "dependencies": []},
+                {"id": "T002", "title": "后端 API", "type": "backend", "description": "", "dependencies": ["T001"]},
+                {"id": "T003", "title": "前端页面", "type": "frontend", "description": "", "dependencies": ["T002"]}
+            ]}'''
+            agent.llm.invoke.return_value = mock_resp
+
+            result = agent._resolve_cross_module_deps(all_tasks, "PRD", "ARCH")
+
+        assert len(result) == 3
+        assert result[0]["id"] == "T001"
+        assert result[1]["dependencies"] == ["T001"]
+        assert result[2]["dependencies"] == ["T002"]
+
+    def test_resolve_cross_module_deps_fallback(self):
+        """测试 _resolve_cross_module_deps 解析失败走简单编号兜底"""
+        agent = self._create_agent()
+
+        all_tasks = [
+            {"id": "B_001", "title": "任务1", "type": "backend", "description": "", "dependencies": []},
+            {"id": "B_002", "title": "任务2", "type": "backend", "description": "", "dependencies": ["B_001"]},
+        ]
+
+        with patch.object(agent.prompt_loader, "load") as mock_load:
+            mock_template = MagicMock()
+            mock_template.render.return_value = "prompt"
+            mock_load.return_value = mock_template
+
+            mock_resp = MagicMock()
+            mock_resp.content = "invalid json"
+            agent.llm.invoke.return_value = mock_resp
+
+            result = agent._resolve_cross_module_deps(all_tasks, "PRD", "ARCH")
+
+        # 兜底应该能正确重编号和转换依赖
+        assert len(result) == 2
+        assert result[0]["id"] == "T001"
+        assert result[1]["id"] == "T002"
+        assert result[1]["dependencies"] == ["T001"]
+
+    def test_module_prefix_map(self):
+        """测试模块前缀映射表"""
+        from core.agents.planning_agent import _MODULE_PREFIX_MAP
+
+        assert _MODULE_PREFIX_MAP["backend"] == "B"
+        assert _MODULE_PREFIX_MAP["frontend"] == "F"
+        assert _MODULE_PREFIX_MAP["database"] == "D"
+        assert _MODULE_PREFIX_MAP["shared"] == "S"
+        assert _MODULE_PREFIX_MAP["infrastructure"] == "I"
