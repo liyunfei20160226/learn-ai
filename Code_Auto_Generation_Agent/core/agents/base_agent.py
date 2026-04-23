@@ -15,14 +15,7 @@ from prompts import PromptTemplate, get_prompt_loader
 
 from ..config import AgentConfig, get_config
 
-# 配置日志：默认输出到控制台，命令行用户可见
 logger = logging.getLogger(__name__)
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", "%H:%M:%S")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
 
 
 class BaseAgentState(TypedDict, total=False):
