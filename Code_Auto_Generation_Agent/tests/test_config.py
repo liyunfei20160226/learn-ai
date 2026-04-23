@@ -42,7 +42,7 @@ def test_agent_config_defaults(monkeypatch):
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
 
     config = AgentConfig()
-    assert config.openai_timeout == 120
+    assert config.openai_timeout == 300
     assert config.openai_max_retries == 3
     assert config.openai_temperature == 0.0
     assert config.max_iterations == 50

@@ -24,15 +24,40 @@ LOG_DIR = PROJECT_ROOT / "log"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "codegen_agent.log"
 
-# 配置日志：同时输出到文件和控制台
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),  # 同时输出到控制台
-    ],
-)
+# 清除默认配置（避免重复输出）
+root_logger = logging.getLogger()
+root_logger.handlers.clear()
+
+# 统一日志格式
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+# ========== 控制台输出（给用户看：简洁，只输出 INFO+，过滤第三方库日志） ==========
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.INFO)
+
+# 控制台日志 Filter：只显示业务日志，不输出异常堆栈
+class UserLogFilter(logging.Filter):
+    def filter(self, record):
+        # 只显示我们代码的日志
+        if not record.name.startswith(("__main__", "core.", "prompts.")):
+            return False
+        # 不输出异常堆栈到控制台（只写到文件）
+        if record.exc_info is not None:
+            return False
+        return True
+
+console_handler.addFilter(UserLogFilter())
+root_logger.addHandler(console_handler)
+
+# ========== 文件输出（给排查用：详细，DEBUG+，包含所有日志） ==========
+file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.DEBUG)  # 文件记录更详细
+root_logger.addHandler(file_handler)
+
+root_logger.setLevel(logging.DEBUG)
+
 logger = logging.getLogger(__name__)
 logger.info(f"日志文件位置: {LOG_FILE}")
 
@@ -211,7 +236,8 @@ def main():
             return 130
         except Exception as e:
             print(f"\n\n❌ 执行失败: {e}")
-            logger.exception("执行失败")
+            # 堆栈只输出到日志文件（console_handler 的 Filter 会过滤掉），用于排查问题
+            logger.exception("执行失败详情")
             return 1
 
     except ValueError as e:

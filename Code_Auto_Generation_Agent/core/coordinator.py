@@ -308,10 +308,10 @@ class CodegenCoordinator:
         all_tasks = list(self.manifest.tasks.values())
         sorted_tasks = self._topological_sort(all_tasks)
 
-        # 过滤已完成的任务
+        # 过滤已完成的任务（status == "success" 表示已完成）
         pending_sorted = [
             t for t in sorted_tasks
-            if t.id not in self.manifest.completed_tasks
+            if t.status != "success"
         ]
 
         if max_stories:

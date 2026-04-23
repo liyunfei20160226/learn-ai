@@ -36,7 +36,7 @@ class AgentConfig(BaseSettings):
     openai_api_key: OptionalStr = Field(None, description="OpenAI API Key")
     openai_base_url: OptionalStr = Field(None, description="OpenAI API Base URL")
     openai_model: str = Field("gpt-4o", description="Default model name")
-    openai_timeout: int = Field(120, description="API timeout in seconds")
+    openai_timeout: int = Field(300, description="API timeout in seconds")
     openai_max_retries: int = Field(3, description="Maximum API retry count")
     openai_max_tokens: OptionalInt = Field(None, description="Maximum tokens per request")
     openai_temperature: float = Field(0.0, description="Sampling temperature (0.0 = deterministic)")
