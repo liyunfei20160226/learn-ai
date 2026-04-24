@@ -1,7 +1,9 @@
 [project]
 name = "code-agent-cli"
 version = "0.1.0"
-description = "Add your description here"
+description = "Code Agent CLI 实现"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
+
+# uv 会自动发现 src/ 目录下的包，不需要额外配置
