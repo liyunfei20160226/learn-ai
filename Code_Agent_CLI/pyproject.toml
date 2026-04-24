@@ -6,4 +6,38 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
 
+[dependency-groups]
+dev = [
+    "ruff>=0.15.11",
+]
+
 # uv 会自动发现 src/ 目录下的包，不需要额外配置
+
+[tool.ruff]
+# 单行最大长度（默认 88，120 更适合现代宽屏）
+line-length = 120
+
+# 不需要检查的文件和目录
+exclude = [
+    "__pycache__",
+    ".venv",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+    ".git",
+    "node_modules",
+]
+
+# 推荐开启的规则集（可选，默认已经包含大部分）
+# select = [
+#     "E",  # pycodestyle 错误
+#     "W",  # pycodestyle 警告
+#     "F",  # pyflakes（未使用的导入/变量）
+#     "I",  # import 排序
+#     "B",  # flake8-bugbear（常见 bug 检测）
+# ]
+
+# 需要忽略的特定规则（可选）
+# ignore = [
+#     "E501",  # 行太长（line-length 已经处理，一般不需要）
+# ]
