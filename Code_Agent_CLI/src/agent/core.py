@@ -132,6 +132,19 @@ class Agent:
                 }
             }
 
+        # 关键词：搜索、grep、查找
+        elif any(keyword in last_user_message for keyword in ["搜", "搜索", "grep", "查找"]):
+            # 简单实现：取最后一个词当搜索模式
+            search_pattern = last_user_message.split()[-1]
+            return {
+                "action": "tool",
+                "tool_name": "grep",
+                "tool_args": {
+                    "pattern": search_pattern,
+                    "path": "."
+                }
+            }
+
         # 关键词：文件列表、list、有什么
         elif any(keyword in last_user_message for keyword in ["列表", "list", "文件", "目录"]):
             return {
