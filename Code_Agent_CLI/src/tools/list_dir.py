@@ -22,6 +22,19 @@ class ListDirTool(BaseTool):
     def description(self) -> str:
         return "列出指定目录下的文件和子目录。参数：path（目录路径，可选，默认当前目录）"
 
+    @property
+    def input_schema(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "目录路径，相对于当前工作目录，可选，默认 .",
+                },
+            },
+            "required": [],
+        }
+
     async def run(self, args: Dict[str, Any]) -> str:
         """执行目录列出"""
         path = args.get("path", ".")

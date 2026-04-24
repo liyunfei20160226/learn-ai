@@ -25,6 +25,27 @@ class WriteTool(BaseTool):
     def description(self) -> str:
         return "写入内容到本地文件。参数：path（文件路径，必填），content（要写入的内容，必填），append（是否追加，可选，默认覆盖）"
 
+    @property
+    def input_schema(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "文件路径，相对于当前工作目录",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "要写入的内容",
+                },
+                "append": {
+                    "type": "boolean",
+                    "description": "是否追加到文件末尾，默认 False（覆盖）",
+                },
+            },
+            "required": ["path", "content"],
+        }
+
     async def run(self, args: Dict[str, Any]) -> str:
         """
         执行文件写入

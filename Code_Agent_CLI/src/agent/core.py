@@ -6,10 +6,17 @@ Agent 核心 - 实现思考-行动循环
 1. 维护消息历史（上下文）
 2. 实现思考-行动循环
 3. 调度工具调用
+
+关键设计：依赖注入
+- Agent 不直接依赖具体的 LLM（Claude、OpenAI）
+- 而是依赖抽象的 LLMProvider 接口
+- 这样可以轻松切换不同的 LLM，不需要改 Agent 代码
 """
-from typing import List, Dict, Any
+import os
+from typing import List, Dict, Any, Optional
 from tools.registry import ToolRegistry
 from tools.base import ToolError
+from llm.base import LLMProvider, LLMResponse, ToolCall
 
 
 class Agent:
@@ -18,183 +25,183 @@ class Agent:
 
     负责：
     - 保存对话历史
-    - 思考：分析用户输入，决定怎么做
+    - 思考：调用 LLM 分析，决定怎么做
     - 行动：如果需要，调用工具
     - 循环：直到得出最终答案
+
+    依赖注入：通过构造函数传入 LLMProvider，而不是在内部直接创建
     """
 
-    def __init__(self):
-        # 消息历史 - 记录所有对话，Agent 思考的依据
-        # 格式: [{"role": "user", "type": "user_input", "content": "xxx"}, ...]
+    def __init__(self, llm_provider: LLMProvider, max_iterations: int = 5):
+        """
+        初始化 Agent
+
+        Args:
+            llm_provider: LLM 提供商实例（依赖注入）
+            max_iterations: 最大工具调用轮数（防止无限循环）
+        """
+        self.llm = llm_provider
+        self.max_iterations = max_iterations
+
+        # 消息历史 - Claude 原生格式
         self.messages: List[Dict[str, Any]] = []
 
+        # 工具描述缓存（只生成一次）
+        self._tool_descriptions: Optional[List[Dict[str, Any]]] = None
+
+        # 加载系统提示词
+        self._load_system_prompt()
+
+    def _load_system_prompt(self):
+        """
+        从 prompts/system.md 加载系统提示词
+        系统提示词作为第一条消息，给模型设定角色和规则
+        """
+        current_dir = os.path.dirname(os.path.abspath(__file__))  # agent/
+        prompts_dir = os.path.join(os.path.dirname(current_dir), "prompts")  # prompts/
+        system_prompt_path = os.path.join(prompts_dir, "system.md")
+
+        if os.path.exists(system_prompt_path):
+            with open(system_prompt_path, "r", encoding="utf-8") as f:
+                system_content = f.read().strip()
+
+            # 系统提示词放在第一条消息（user 角色，Claude 没有 system 角色）
+            self.messages.append({
+                "role": "user",
+                "content": system_content,
+            })
+
+            # Assistant 确认，让对话格式完整
+            self.messages.append({
+                "role": "assistant",
+                "content": "好的，我理解了！我会根据情况决定是否调用工具。",
+            })
+
+    def get_tool_descriptions(self) -> List[Dict[str, Any]]:
+        """
+        获取所有已注册工具的描述，格式符合 Claude API 要求
+
+        缓存机制：只在第一次调用时生成
+        """
+        if self._tool_descriptions is None:
+            self._tool_descriptions = []
+            for tool_name in ToolRegistry.list_names():
+                tool = ToolRegistry.get(tool_name)
+                self._tool_descriptions.append({
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.input_schema,
+                })
+        return self._tool_descriptions
+
     def add_user_message(self, content: str):
-        """
-        添加用户消息到历史
-
-        Args:
-            content: 用户说的话
-        """
+        """添加用户消息到历史"""
         self.messages.append({
             "role": "user",
-            "type": "user_input",  # 标记：这是用户输入
-            "content": content
+            "content": content,
         })
 
-    def add_tool_result_message(self, content: str):
-        """
-        添加工具结果到历史
-
-        Args:
-            content: 工具返回的结果
-        """
+    def add_tool_result_message(self, tool_use_id: str, content: str):
+        """添加工具结果到历史"""
         self.messages.append({
             "role": "user",
-            "type": "tool_result",  # 标记：这是工具结果
-            "content": content
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": content,
+                }
+            ],
         })
 
-    def add_assistant_message(self, content: str):
-        """
-        添加 Assistant 消息到历史
-
-        Args:
-            content: Agent 说的话
-        """
-        self.messages.append({
-            "role": "assistant",
-            "content": content
-        })
-
-    def get_last_user_input(self) -> str:
-        """
-        找到最后一条真正的用户输入（不是工具结果）
-
-        Returns:
-            最后一条用户输入的内容
-        """
-        # 从后往前找，找到第一个 type 是 user_input 的消息
-        for msg in reversed(self.messages):
-            if msg.get("type") == "user_input":
-                return msg["content"]
-        return ""
+    def add_assistant_message(self, content: str, tool_calls: Optional[List[ToolCall]] = None):
+        """添加 Assistant 消息到历史"""
+        if tool_calls:
+            # 有工具调用的情况
+            content_blocks = []
+            if content:
+                content_blocks.append({
+                    "type": "text",
+                    "text": content,
+                })
+            for tc in tool_calls:
+                content_blocks.append({
+                    "type": "tool_use",
+                    "id": tc.id,
+                    "name": tc.name,
+                    "input": tc.arguments,
+                })
+            self.messages.append({
+                "role": "assistant",
+                "content": content_blocks,
+            })
+        else:
+            # 纯文本回答
+            self.messages.append({
+                "role": "assistant",
+                "content": content,
+            })
 
     async def think(self) -> Dict[str, Any]:
         """
-        🧠 思考阶段 - 分析历史，决定下一步做什么
+        🧠 思考阶段 - 调用 LLM 分析历史，决定下一步做什么
 
-        这是 Agent 的大脑！
-        现在先用硬编码逻辑，后面换成真正的 LLM。
-
-        Returns:
-            决定结果:
-            {
-                "action": "tool" 或 "answer",  # 要行动还是直接回答
-                "tool_name": "read",           # 如果是行动，调用哪个工具
-                "tool_args": {"path": "xxx"},  # 工具参数
-                "content": "最终回答"          # 如果直接回答，回答内容
-            }
+        返回格式：
+            {"action": "answer", "content": "..."}
+            {"action": "tool", "tool_calls": [...], "content": "..."}
         """
-        # ========== 关键判断：先看有没有工具结果 ==========
-        # 如果上一条消息是工具结果，说明工具已经调用完了
-        # 这时候应该直接回答，不要再调用工具了！
-        # （这是防止死循环的核心逻辑）
-        last_msg = self.messages[-1]
-        if last_msg.get("type") == "tool_result":
-            return {
-                "action": "answer",
-                "content": f"工具执行完成，结果：\n{last_msg['content']}"
-            }
+        response: LLMResponse = await self.llm.chat_completion(
+            messages=self.messages,
+            tools=self.get_tool_descriptions(),
+        )
 
-        # ========== 还没有工具结果，继续判断要不要调用工具 ==========
-        last_user_message = self.get_last_user_input().lower()
+        # 过滤不存在的工具（防止幻觉）
+        valid_tool_calls = []
+        available_tools = ToolRegistry.list_names()
+        if response.tool_calls:
+            for tc in response.tool_calls:
+                if tc.name in available_tools:
+                    valid_tool_calls.append(tc)
+                else:
+                    print(f"   ⚠️  模型尝试调用不存在的工具：'{tc.name}'（可用工具：{available_tools}）")
 
-        # 关键词：读文件、read、看一下
-        if any(keyword in last_user_message for keyword in ["读", "read", "看一下", "打开"]):
-            return {
-                "action": "tool",
-                "tool_name": "read",
-                "tool_args": {
-                    "path": last_user_message.split()[-1]  # 简单提取最后一个词当文件名
-                }
-            }
-
-        # 关键词：写文件、write、保存
-        elif any(keyword in last_user_message for keyword in ["写", "write", "保存", "新建"]):
-            # 简单实现：取最后一个词当文件名，写固定内容
-            # （真正的 LLM 会智能提取 path 和 content 参数）
+        if valid_tool_calls:
             return {
                 "action": "tool",
-                "tool_name": "write",
-                "tool_args": {
-                    "path": last_user_message.split()[-1],
-                    "content": "# 测试文件\n# 这是 WriteTool 生成的测试内容\nprint('Hello World!')\n"
-                }
+                "tool_calls": valid_tool_calls,
+                "content": response.text,
             }
-
-        # 关键词：搜索、grep、查找
-        elif any(keyword in last_user_message for keyword in ["搜", "搜索", "grep", "查找"]):
-            # 简单实现：取最后一个词当搜索模式
-            search_pattern = last_user_message.split()[-1]
-            return {
-                "action": "tool",
-                "tool_name": "grep",
-                "tool_args": {
-                    "pattern": search_pattern,
-                    "path": "."
-                }
-            }
-
-        # 关键词：文件列表、list、有什么
-        elif any(keyword in last_user_message for keyword in ["列表", "list", "文件", "目录"]):
-            return {
-                "action": "tool",
-                "tool_name": "list",
-                "tool_args": {
-                    "path": "."
-                }
-            }
-
-        # 其他情况：直接回答
         else:
+            # 没有有效工具调用，直接回答
             return {
                 "action": "answer",
-                "content": f"我收到了你的消息：「{last_user_message}」"
+                "content": response.text,
             }
 
-    async def execute_tool(self, tool_name: str, tool_args: Dict) -> str:
+    async def execute_tool(self, tool_call: ToolCall) -> str:
         """
-        🔧 行动阶段 - 执行工具调用
-
-        通过 ToolRegistry 查找工具，真正执行！
+        🔧 行动阶段 - 执行单个工具调用
 
         Args:
-            tool_name: 工具名称
-            tool_args: 工具参数
+            tool_call: LLM 返回的工具调用对象
 
         Returns:
             工具执行结果
         """
-        print(f"   [工具调用] 名称: {tool_name}, 参数: {tool_args}")
+        print(f"   [工具调用] 名称: {tool_call.name}, 参数: {tool_call.arguments}")
 
         try:
-            # 1. 从注册表找到工具类，创建实例
-            tool = ToolRegistry.get(tool_name)
-
-            # 2. 执行工具（异步调用）
-            result = await tool.run(tool_args)
-
+            tool = ToolRegistry.get(tool_call.name)
+            result = await tool.run(tool_call.arguments)
             print(f"   [工具执行成功] 结果长度: {len(result)} 字符")
             return result
 
         except ToolError as e:
-            # 工具自己抛出的已知错误
             error_msg = f"工具执行失败：{e}"
             print(f"   [工具错误] {error_msg}")
             return error_msg
 
         except Exception as e:
-            # 意料之外的错误
             error_msg = f"工具执行发生未知错误：{type(e).__name__}: {e}"
             print(f"   [工具异常] {error_msg}")
             return error_msg
@@ -203,47 +210,46 @@ class Agent:
         """
         🚀 运行一次完整的思考-行动循环
 
-        这是对外的主接口，main.py 会调用这个方法。
-
         Args:
             user_input: 用户最新的输入
 
         Returns:
             Agent 的最终回答
         """
-        # 1. 把用户的最新输入加入历史
         self.add_user_message(user_input)
 
-        # 2. 思考-行动循环
-        while True:
-            print("\n[Agent 正在思考...]")
+        iteration = 0
 
-            # 🧠 第一步：思考（异步调用，将来这里会调用 LLM API）
+        while iteration < self.max_iterations:
+            iteration += 1
+            print(f"\n[Agent 正在思考... 第 {iteration} 轮]")
+
             decision = await self.think()
 
-            # 情况 A：不需要工具，直接给出最终答案
             if decision["action"] == "answer":
                 final_answer = decision["content"]
                 self.add_assistant_message(final_answer)
                 return final_answer
 
-            # 情况 B：需要调用工具
             elif decision["action"] == "tool":
-                tool_name = decision["tool_name"]
-                tool_args = decision["tool_args"]
+                tool_calls = decision["tool_calls"]
+                text_before = decision.get("content", "")
 
-                # 🔧 第二步：执行工具（异步调用）
-                tool_result = await self.execute_tool(tool_name, tool_args)
+                # 先把 Assistant 的消息（包括工具调用）加入历史
+                self.add_assistant_message(text_before, tool_calls)
 
-                # 📝 第三步：把工具结果加到消息历史
-                # 关键修复：用专门的 add_tool_result_message，而不是 add_user_message
-                self.add_tool_result_message(tool_result)
+                if text_before:
+                    print(f"\n🤖 Agent: {text_before}")
 
-                # 🔄 第四步：循环回去，继续思考
-                # （while True 会自动回到 loop 开头）
+                # 执行所有工具（支持并行调用，但这里顺序执行）
+                for tool_call in tool_calls:
+                    tool_result = await self.execute_tool(tool_call)
+                    self.add_tool_result_message(tool_call.id, tool_result)
 
-            # 其他情况：出错了
+                # 循环回去继续思考
             else:
                 error_msg = f"不知道要做什么: {decision}"
                 self.add_assistant_message(error_msg)
                 return error_msg
+
+        return f"已达到最大工具调用次数 ({self.max_iterations})，停止执行。"

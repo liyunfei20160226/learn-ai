@@ -24,6 +24,27 @@ class ReadTool(BaseTool):
     def description(self) -> str:
         return "读取本地文件的内容。参数：path（文件路径，必填），offset（起始行号，可选），limit（读取行数，可选）"
 
+    @property
+    def input_schema(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "文件路径，相对于当前工作目录",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "起始行号（从 0 开始），可选",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "读取行数，可选，默认全读",
+                },
+            },
+            "required": ["path"],
+        }
+
     async def run(self, args: Dict[str, Any]) -> str:
         """
         执行文件读取

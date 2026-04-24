@@ -25,6 +25,27 @@ class GrepTool(BaseTool):
     def description(self) -> str:
         return "在文件中搜索文本内容，支持正则表达式。参数：pattern（搜索模式，必填），path（搜索路径，可选，默认当前目录），case_sensitive（是否区分大小写，可选，默认False）"
 
+    @property
+    def input_schema(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "搜索模式，支持正则表达式",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "搜索起始路径，可选，默认当前目录",
+                },
+                "case_sensitive": {
+                    "type": "boolean",
+                    "description": "是否区分大小写，默认 False",
+                },
+            },
+            "required": ["pattern"],
+        }
+
     async def run(self, args: Dict[str, Any]) -> str:
         """执行搜索"""
         # 1. 校验必填参数

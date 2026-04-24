@@ -19,6 +19,7 @@ class BaseTool(ABC):
     每个具体的工具都必须继承这个类，并实现以下属性和方法：
     - name: 工具名称（必须是唯一的）
     - description: 工具描述（告诉 Agent 这个工具是干嘛的）
+    - input_schema: 工具参数的 JSON Schema（告诉 Agent 参数格式）
     - async run(): 执行工具逻辑
     """
 
@@ -34,6 +35,23 @@ class BaseTool(ABC):
     @abstractmethod
     def description(self) -> str:
         """工具描述（给 Agent 看的，告诉它什么时候用这个工具）"""
+        pass
+
+    @property
+    @abstractmethod
+    def input_schema(self) -> Dict[str, Any]:
+        """
+        工具参数的 JSON Schema
+
+        返回格式示例：
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文件路径"},
+            },
+            "required": ["path"]
+        }
+        """
         pass
 
     # ========== 子类必须实现这个方法 ==========

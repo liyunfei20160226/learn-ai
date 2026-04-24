@@ -4,17 +4,25 @@ Code Agent - 命令行入口
 这是整个程序的入口点，实现了最基本的 REPL 循环：
 Read（读取输入） → Eval（Agent 处理） → Print（输出） → Loop（循环）
 
-现在集成了完整的 Agent 思考-行动循环！
+集成了可插拔的 LLM Provider 架构，通过 .env 配置切换不同的 LLM。
 """
 import asyncio
+from dotenv import load_dotenv
+
 from agent.core import Agent
 from tools.loader import register_all_tools, print_registered_tools
+from llm.factory import get_llm_provider
 
 
 async def main():
     """程序主入口"""
 
     # ========== 系统初始化 ==========
+
+    # 0. 加载环境变量（从 .env 文件）
+    # 必须在创建 LLM Provider 之前加载
+    load_dotenv()
+
     # 1. 注册所有可用工具
     register_all_tools()
 
@@ -22,19 +30,27 @@ async def main():
     print_registered_tools()
     print()
 
-    # 3. 创建 Agent 实例（整个会话共用一个 Agent，保留上下文）
-    agent = Agent()
+    # 3. 创建 LLM Provider（工厂模式）
+    # 根据 .env 中的 LLM_PROVIDER 配置自动选择
+    print("正在初始化 LLM Provider...")
+    llm = get_llm_provider()
+    print(f"✅ 已连接: {llm.provider_name} - 模型: {llm.model}")
+    print()
+
+    # 4. 创建 Agent 实例（整个会话共用一个 Agent，保留上下文）
+    # 依赖注入：把 LLM Provider 传给 Agent，而不是 Agent 内部创建
+    agent = Agent(llm_provider=llm)
 
     # 欢迎信息
     print("=" * 60)
-    print("🤖 Code Agent - 带思考-行动循环")
+    print("🤖 Code Agent - 基于 LLM 的智能编程助手")
     print("=" * 60)
-    print("试试这些关键词:")
-    print("  - 「读」、「read」、「看一下」 → 触发读文件工具")
-    print("  - 「列表」、「list」、「文件」 → 触发列目录工具")
-    print("  - 其他文字 → 直接回应")
-    print("输入 'exit' 或 'quit' 退出")
-    print()
+    print("支持的能力:")
+    print("  - 列出目录内容")
+    print("  - 读取文件内容")
+    print("  - 写入文件")
+    print("  - 搜索文件内容")
+    print("\n输入 'exit' 或 'quit' 退出\n")
 
     # REPL 循环
     while True:
