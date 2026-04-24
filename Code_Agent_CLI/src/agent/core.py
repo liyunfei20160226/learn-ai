@@ -8,6 +8,8 @@ Agent 核心 - 实现思考-行动循环
 3. 调度工具调用
 """
 from typing import List, Dict, Any
+from tools.registry import ToolRegistry
+from tools.base import ToolError
 
 
 class Agent:
@@ -138,8 +140,7 @@ class Agent:
         """
         🔧 行动阶段 - 执行工具调用
 
-        现在先用伪实现，后面会接上真正的工具类。
-        设计成异步是因为：真正的工具可能需要 IO 操作（读文件、执行命令、网络请求等）。
+        通过 ToolRegistry 查找工具，真正执行！
 
         Args:
             tool_name: 工具名称
@@ -150,17 +151,27 @@ class Agent:
         """
         print(f"   [工具调用] 名称: {tool_name}, 参数: {tool_args}")
 
-        # ========== 硬编码的工具实现 ==========
-        # 后面会改成真实的工具类
+        try:
+            # 1. 从注册表找到工具类，创建实例
+            tool = ToolRegistry.get(tool_name)
 
-        if tool_name == "read":
-            return f"假装读取了文件: {tool_args.get('path', '未知文件')}"
+            # 2. 执行工具（异步调用）
+            result = await tool.run(tool_args)
 
-        elif tool_name == "list":
-            return "假装列出了目录，文件有: main.py, pyproject.toml"
+            print(f"   [工具执行成功] 结果长度: {len(result)} 字符")
+            return result
 
-        else:
-            return f"未知工具: {tool_name}"
+        except ToolError as e:
+            # 工具自己抛出的已知错误
+            error_msg = f"工具执行失败：{e}"
+            print(f"   [工具错误] {error_msg}")
+            return error_msg
+
+        except Exception as e:
+            # 意料之外的错误
+            error_msg = f"工具执行发生未知错误：{type(e).__name__}: {e}"
+            print(f"   [工具异常] {error_msg}")
+            return error_msg
 
     async def run(self, user_input: str) -> str:
         """

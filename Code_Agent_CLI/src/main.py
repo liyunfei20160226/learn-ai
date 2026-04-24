@@ -8,12 +8,21 @@ Read（读取输入） → Eval（Agent 处理） → Print（输出） → Loop
 """
 import asyncio
 from agent.core import Agent
+from tools.loader import register_all_tools, print_registered_tools
 
 
 async def main():
-    """程序主入口 - 现在是异步的，因为 Agent 要调用异步工具"""
+    """程序主入口"""
 
-    # 创建 Agent 实例（整个会话共用一个 Agent，保留上下文）
+    # ========== 系统初始化 ==========
+    # 1. 注册所有可用工具
+    register_all_tools()
+
+    # 2. 打印已注册的工具（调试用）
+    print_registered_tools()
+    print()
+
+    # 3. 创建 Agent 实例（整个会话共用一个 Agent，保留上下文）
     agent = Agent()
 
     # 欢迎信息
