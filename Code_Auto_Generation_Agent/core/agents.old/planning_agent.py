@@ -270,6 +270,7 @@ class PlanningAgent(BaseAgent):
         prompt = template.render(
             module_id=module_id,
             module_name=module["name"],
+            module_type=module["type"],  # 显式传入模块类型：backend/frontend/database/shared/infrastructure
             module_description=module["description"],
             module_directory=module["directory"],
             files_json=json.dumps(module.get("files", []), ensure_ascii=False, indent=2),
@@ -277,7 +278,8 @@ class PlanningAgent(BaseAgent):
         )
 
         callback = self.default_tool_callback if verbose else None
-        self.run(prompt, tool_callback=callback)
+        # 单个模块规划限制 15 次迭代，防止验证失败后无限添加任务
+        self.run(prompt, recursion_limit=15, tool_callback=callback)
 
         tasks = self.get_task_graph()
 
