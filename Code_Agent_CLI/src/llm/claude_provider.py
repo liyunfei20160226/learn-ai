@@ -37,17 +37,21 @@ class ClaudeProvider(LLMProvider):
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        system: Optional[str] = None,
     ) -> LLMResponse:
         """调用 Claude API
 
         Claude 的消息格式和我们内部格式完全一致！
-        不需要任何转换，直接传就行。
+        System prompt 作为单独的 system 参数传递。
         """
         kwargs = {
             "model": self.model,
             "messages": messages,
             "max_tokens": 4096,
         }
+
+        if system:
+            kwargs["system"] = system
 
         if tools:
             kwargs["tools"] = tools

@@ -52,6 +52,7 @@ class LLMProvider(ABC):
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        system: Optional[str] = None,
     ) -> LLMResponse:
         """
         对话补全（异步）
@@ -61,6 +62,7 @@ class LLMProvider(ABC):
                 {"role": "user", "content": "..."}
                 {"role": "assistant", "content": "..."}
             tools: 工具描述列表（JSON Schema 格式）
+            system: 系统提示词（可选，作为单独参数传递给 LLM）
 
         Returns:
             LLMResponse: 统一格式的响应

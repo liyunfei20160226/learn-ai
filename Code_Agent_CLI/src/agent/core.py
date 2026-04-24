@@ -43,8 +43,11 @@ class Agent:
         self.llm = llm_provider
         self.max_iterations = max_iterations
 
-        # 消息历史 - Claude 原生格式
+        # 消息历史 - 只包含真正的对话，不包含 system prompt
         self.messages: List[Dict[str, Any]] = []
+
+        # 系统提示词 - 单独保存，作为单独参数传给 LLM
+        self.system_prompt: str = ""
 
         # 工具描述缓存（只生成一次）
         self._tool_descriptions: Optional[List[Dict[str, Any]]] = None
@@ -55,7 +58,7 @@ class Agent:
     def _load_system_prompt(self):
         """
         从 prompts/system.md 加载系统提示词
-        系统提示词作为第一条消息，给模型设定角色和规则
+        System prompt 不放在消息历史中，而是作为单独参数传给 LLM
         """
         current_dir = os.path.dirname(os.path.abspath(__file__))  # agent/
         prompts_dir = os.path.join(os.path.dirname(current_dir), "prompts")  # prompts/
@@ -63,19 +66,7 @@ class Agent:
 
         if os.path.exists(system_prompt_path):
             with open(system_prompt_path, "r", encoding="utf-8") as f:
-                system_content = f.read().strip()
-
-            # 系统提示词放在第一条消息（user 角色，Claude 没有 system 角色）
-            self.messages.append({
-                "role": "user",
-                "content": system_content,
-            })
-
-            # Assistant 确认，让对话格式完整
-            self.messages.append({
-                "role": "assistant",
-                "content": "好的，我理解了！我会根据情况决定是否调用工具。",
-            })
+                self.system_prompt = f.read().strip()
 
     def get_tool_descriptions(self) -> List[Dict[str, Any]]:
         """
@@ -153,6 +144,7 @@ class Agent:
         response: LLMResponse = await self.llm.chat_completion(
             messages=self.messages,
             tools=self.get_tool_descriptions(),
+            system=self.system_prompt,
         )
 
         # 过滤不存在的工具（防止幻觉）

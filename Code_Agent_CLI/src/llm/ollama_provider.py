@@ -115,15 +115,22 @@ class OllamaProvider(LLMProvider):
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        system: Optional[str] = None,
     ) -> LLMResponse:
         """
         调用 Ollama 完成对话
 
         注意：工具调用能力取决于具体模型，有些小模型可能不支持官方 tool_calls 协议
         """
+        formatted_messages = self._format_messages(messages)
+
+        # Ollama 把 system 作为 role: "system" 的消息（和 OpenAI 一样）
+        if system:
+            formatted_messages.insert(0, {"role": "system", "content": system})
+
         kwargs = {
             "model": self._model,
-            "messages": self._format_messages(messages),
+            "messages": formatted_messages,
         }
 
         if tools:

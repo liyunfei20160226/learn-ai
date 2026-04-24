@@ -6,6 +6,7 @@ Read（读取输入） → Eval（Agent 处理） → Print（输出） → Loop
 
 集成了可插拔的 LLM Provider 架构，通过 .env 配置切换不同的 LLM。
 """
+import os
 import asyncio
 from dotenv import load_dotenv
 
@@ -39,7 +40,8 @@ async def main():
 
     # 4. 创建 Agent 实例（整个会话共用一个 Agent，保留上下文）
     # 依赖注入：把 LLM Provider 传给 Agent，而不是 Agent 内部创建
-    agent = Agent(llm_provider=llm)
+    max_iterations = int(os.getenv("MAX_ITERATIONS", "20"))  # 默认 20 次
+    agent = Agent(llm_provider=llm, max_iterations=max_iterations)
 
     # 欢迎信息
     print("=" * 60)

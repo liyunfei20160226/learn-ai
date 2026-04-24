@@ -122,11 +122,18 @@ class OpenAIProvider(LLMProvider):
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        system: Optional[str] = None,
     ) -> LLMResponse:
         """调用 OpenAI API"""
+        formatted_messages = self._format_messages(messages)
+
+        # OpenAI 把 system 作为 role: "system" 的消息
+        if system:
+            formatted_messages.insert(0, {"role": "system", "content": system})
+
         kwargs = {
             "model": self.model,
-            "messages": self._format_messages(messages),
+            "messages": formatted_messages,
         }
 
         if tools:
