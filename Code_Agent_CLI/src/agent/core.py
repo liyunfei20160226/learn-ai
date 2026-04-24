@@ -119,6 +119,19 @@ class Agent:
                 }
             }
 
+        # 关键词：写文件、write、保存
+        elif any(keyword in last_user_message for keyword in ["写", "write", "保存", "新建"]):
+            # 简单实现：取最后一个词当文件名，写固定内容
+            # （真正的 LLM 会智能提取 path 和 content 参数）
+            return {
+                "action": "tool",
+                "tool_name": "write",
+                "tool_args": {
+                    "path": last_user_message.split()[-1],
+                    "content": "# 测试文件\n# 这是 WriteTool 生成的测试内容\nprint('Hello World!')\n"
+                }
+            }
+
         # 关键词：文件列表、list、有什么
         elif any(keyword in last_user_message for keyword in ["列表", "list", "文件", "目录"]):
             return {
