@@ -11,6 +11,7 @@ from .list_dir import ListDirTool
 from .write import WriteTool
 from .grep import GrepTool
 from .bash import BashTool
+from utils.console import Console
 
 
 def register_all_tools() -> None:
@@ -29,6 +30,6 @@ def register_all_tools() -> None:
 
 def print_registered_tools() -> None:
     """打印所有已注册的工具（调试用）"""
-    print(f"已注册工具：{ToolRegistry.list_names()}")
+    Console.info(f"已注册工具：{ToolRegistry.list_names()}")
     for tool in ToolRegistry.list_all():
-        print(f"  - {tool.name}: {tool.description}")
+        Console.info(f"  - {tool.name}")

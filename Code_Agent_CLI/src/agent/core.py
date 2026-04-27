@@ -17,6 +17,7 @@ from typing import List, Dict, Any, Optional
 from tools.registry import ToolRegistry
 from tools.base import ToolError
 from llm.base import LLMProvider, LLMResponse, ToolCall
+from utils.console import Console
 
 
 class Agent:
@@ -149,8 +150,7 @@ class Agent:
             full_text = ""
             tool_calls = []
 
-            print()
-            print("🤖 Agent: ", end="", flush=True)
+            Console.answer_prefix()
 
             async for chunk in self.llm.chat_completion_stream(
                 messages=self.messages,
@@ -158,12 +158,12 @@ class Agent:
                 system=self.system_prompt,
             ):
                 if chunk["type"] == "text":
-                    print(chunk["content"], end="", flush=True)
+                    Console.answer_text(chunk["content"])
                     full_text += chunk["content"]
                 elif chunk["type"] == "tool_call":
                     tool_calls.append(chunk["tool_call"])
 
-            print()  # 换行
+            Console.answer_end()  # 换行
 
             # 过滤不存在的工具（防止幻觉）
             valid_tool_calls = []
@@ -172,7 +172,7 @@ class Agent:
                 if tc.name in available_tools:
                     valid_tool_calls.append(tc)
                 else:
-                    print(f"   ⚠️  模型尝试调用不存在的工具：'{tc.name}'（可用工具：{available_tools}）")
+                    Console.tool_warning(f"模型尝试调用不存在的工具：'{tc.name}'（可用工具：{available_tools}）")
 
             if valid_tool_calls:
                 return {
@@ -202,7 +202,7 @@ class Agent:
                     if tc.name in available_tools:
                         valid_tool_calls.append(tc)
                     else:
-                        print(f"   ⚠️  模型尝试调用不存在的工具：'{tc.name}'（可用工具：{available_tools}）")
+                        Console.tool_warning(f"模型尝试调用不存在的工具：'{tc.name}'（可用工具：{available_tools}）")
 
             if valid_tool_calls:
                 return {
@@ -226,22 +226,31 @@ class Agent:
         Returns:
             工具执行结果
         """
-        print(f"   [工具调用] 名称: {tool_call.name}, 参数: {tool_call.arguments}")
+        Console.tool_call(tool_call.name, tool_call.arguments)
 
         try:
             tool = ToolRegistry.get(tool_call.name)
+
+            # 启动进度动画
+            await Console.start_spinner(f"执行 {tool_call.name}...")
+
             result = await tool.run(tool_call.arguments)
-            print(f"   [工具执行成功] 结果长度: {len(result)} 字符")
+
+            # 停止动画并显示成功
+            await Console.stop_spinner(success=True, result_length=len(result))
+
             return result
 
         except ToolError as e:
             error_msg = f"工具执行失败：{e}"
-            print(f"   [工具错误] {error_msg}")
+            await Console.stop_spinner(success=False)
+            Console.tool_error(error_msg)
             return error_msg
 
         except Exception as e:
             error_msg = f"工具执行发生未知错误：{type(e).__name__}: {e}"
-            print(f"   [工具异常] {error_msg}")
+            await Console.stop_spinner(success=False)
+            Console.tool_error(error_msg)
             return error_msg
 
     async def run(self, user_input: str) -> str:
@@ -260,7 +269,7 @@ class Agent:
 
         while iteration < self.max_iterations:
             iteration += 1
-            print(f"\n[Agent 正在思考... 第 {iteration} 轮]")
+            Console.think(iteration)
 
             decision = await self.think()
 
@@ -284,7 +293,10 @@ class Agent:
                 # 循环回去继续思考
             else:
                 error_msg = f"不知道要做什么: {decision}"
+                Console.error(error_msg)
                 self.add_assistant_message(error_msg)
                 return error_msg
 
-        return f"已达到最大工具调用次数 ({self.max_iterations})，停止执行。"
+        max_reached_msg = f"已达到最大工具调用次数 ({self.max_iterations})，停止执行。"
+        Console.tool_warning(max_reached_msg)
+        return max_reached_msg

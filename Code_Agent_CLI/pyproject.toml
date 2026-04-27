@@ -10,6 +10,7 @@ dependencies = [
     "ollama>=0.3.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.9.0",
+    "colorama>=0.4.6",
 ]
 
 [dependency-groups]
