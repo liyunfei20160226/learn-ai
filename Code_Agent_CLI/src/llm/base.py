@@ -6,7 +6,7 @@ LLM Provider 抽象基类
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 
 
 @dataclass
@@ -55,10 +55,10 @@ class LLMProvider(ABC):
         system: Optional[str] = None,
     ) -> LLMResponse:
         """
-        对话补全（异步）
+        对话补全（异步，非流式）
 
         Args:
-            messages: 消息历史，Claude 格式：
+            messages: 消息历史，Claude 格式
                 {"role": "user", "content": "..."}
                 {"role": "assistant", "content": "..."}
             tools: 工具描述列表（JSON Schema 格式）
@@ -68,3 +68,25 @@ class LLMProvider(ABC):
             LLMResponse: 统一格式的响应
         """
         pass
+
+    async def chat_completion_stream(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        system: Optional[str] = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        对话补全（流式）
+
+        流式生成内容，逐个 token 返回。
+        默认实现：先非流式获取完整结果，再模拟流式（子类应该重写此方法）。
+
+        Yields:
+            {"type": "text", "content": "..."} - 文本片段
+            {"type": "tool_call", "tool_call": ToolCall} - 工具调用（流式结束时）
+        """
+        response = await self.chat_completion(messages, tools, system)
+        if response.text:
+            yield {"type": "text", "content": response.text}
+        for tc in response.tool_calls:
+            yield {"type": "tool_call", "tool_call": tc}

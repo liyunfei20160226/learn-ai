@@ -69,11 +69,9 @@ async def main():
             continue
 
         # 2. Eval - Agent 处理（思考-行动循环）
-        answer = await agent.run(user_input)
+        await agent.run(user_input)
 
-        # 3. Print - 输出最终回答
-        print()
-        print(f"🤖 Agent: {answer}")
+        # 3. Print - 换行分隔（流式输出已在 Agent.think() 中打印）
         print()
 
     # 4. Loop - 回到循环开头

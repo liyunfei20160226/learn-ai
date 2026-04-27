@@ -133,42 +133,88 @@ class Agent:
                 "content": content,
             })
 
-    async def think(self) -> Dict[str, Any]:
+    async def think(self, stream: bool = True) -> Dict[str, Any]:
         """
         🧠 思考阶段 - 调用 LLM 分析历史，决定下一步做什么
+
+        Args:
+            stream: 是否流式输出（打字机效果）
 
         返回格式：
             {"action": "answer", "content": "..."}
             {"action": "tool", "tool_calls": [...], "content": "..."}
         """
-        response: LLMResponse = await self.llm.chat_completion(
-            messages=self.messages,
-            tools=self.get_tool_descriptions(),
-            system=self.system_prompt,
-        )
+        # 流式输出
+        if stream:
+            full_text = ""
+            tool_calls = []
 
-        # 过滤不存在的工具（防止幻觉）
-        valid_tool_calls = []
-        available_tools = ToolRegistry.list_names()
-        if response.tool_calls:
-            for tc in response.tool_calls:
+            print()
+            print("🤖 Agent: ", end="", flush=True)
+
+            async for chunk in self.llm.chat_completion_stream(
+                messages=self.messages,
+                tools=self.get_tool_descriptions(),
+                system=self.system_prompt,
+            ):
+                if chunk["type"] == "text":
+                    print(chunk["content"], end="", flush=True)
+                    full_text += chunk["content"]
+                elif chunk["type"] == "tool_call":
+                    tool_calls.append(chunk["tool_call"])
+
+            print()  # 换行
+
+            # 过滤不存在的工具（防止幻觉）
+            valid_tool_calls = []
+            available_tools = ToolRegistry.list_names()
+            for tc in tool_calls:
                 if tc.name in available_tools:
                     valid_tool_calls.append(tc)
                 else:
                     print(f"   ⚠️  模型尝试调用不存在的工具：'{tc.name}'（可用工具：{available_tools}）")
 
-        if valid_tool_calls:
-            return {
-                "action": "tool",
-                "tool_calls": valid_tool_calls,
-                "content": response.text,
-            }
+            if valid_tool_calls:
+                return {
+                    "action": "tool",
+                    "tool_calls": valid_tool_calls,
+                    "content": full_text,
+                }
+            else:
+                return {
+                    "action": "answer",
+                    "content": full_text,
+                }
+
+        # 非流式（备用）
         else:
-            # 没有有效工具调用，直接回答
-            return {
-                "action": "answer",
-                "content": response.text,
-            }
+            response: LLMResponse = await self.llm.chat_completion(
+                messages=self.messages,
+                tools=self.get_tool_descriptions(),
+                system=self.system_prompt,
+            )
+
+            # 过滤不存在的工具（防止幻觉）
+            valid_tool_calls = []
+            available_tools = ToolRegistry.list_names()
+            if response.tool_calls:
+                for tc in response.tool_calls:
+                    if tc.name in available_tools:
+                        valid_tool_calls.append(tc)
+                    else:
+                        print(f"   ⚠️  模型尝试调用不存在的工具：'{tc.name}'（可用工具：{available_tools}）")
+
+            if valid_tool_calls:
+                return {
+                    "action": "tool",
+                    "tool_calls": valid_tool_calls,
+                    "content": response.text,
+                }
+            else:
+                return {
+                    "action": "answer",
+                    "content": response.text,
+                }
 
     async def execute_tool(self, tool_call: ToolCall) -> str:
         """
@@ -229,9 +275,6 @@ class Agent:
 
                 # 先把 Assistant 的消息（包括工具调用）加入历史
                 self.add_assistant_message(text_before, tool_calls)
-
-                if text_before:
-                    print(f"\n🤖 Agent: {text_before}")
 
                 # 执行所有工具（支持并行调用，但这里顺序执行）
                 for tool_call in tool_calls:

@@ -5,7 +5,7 @@ Claude Provider - Anthropic API 实现
 和我们的消息格式完全兼容，不需要转换。
 """
 import os
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 from anthropic import AsyncAnthropic
 from .base import LLMProvider, LLMResponse, ToolCall
 
@@ -77,3 +77,41 @@ class ClaudeProvider(LLMProvider):
             tool_calls=tool_calls,
             raw_response=response,
         )
+
+    async def chat_completion_stream(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        system: Optional[str] = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """流式调用 Claude API"""
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": 4096,
+        }
+
+        if system:
+            kwargs["system"] = system
+
+        if tools:
+            kwargs["tools"] = tools
+
+        # Claude 流式 API：直接用最终消息（兼容不同 SDK 版本）
+        # 流式过程中逐字符输出，结束时返回完整结果
+        async with self.client.messages.stream(**kwargs) as stream:
+            async for text in stream.text_stream:
+                yield {"type": "text", "content": text}
+
+            # 消息结束，从最终消息获取工具调用
+            message = await stream.get_final_message()
+            for block in message.content:
+                if block.type == "tool_use":
+                    yield {
+                        "type": "tool_call",
+                        "tool_call": ToolCall(
+                            id=block.id,
+                            name=block.name,
+                            arguments=block.input,
+                        ),
+                    }

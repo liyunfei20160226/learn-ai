@@ -10,6 +10,7 @@ from .read import ReadTool
 from .list_dir import ListDirTool
 from .write import WriteTool
 from .grep import GrepTool
+from .bash import BashTool
 
 
 def register_all_tools() -> None:
@@ -23,6 +24,7 @@ def register_all_tools() -> None:
     ToolRegistry.register(ListDirTool)
     ToolRegistry.register(WriteTool)
     ToolRegistry.register(GrepTool)
+    ToolRegistry.register(BashTool)
 
 
 def print_registered_tools() -> None:
