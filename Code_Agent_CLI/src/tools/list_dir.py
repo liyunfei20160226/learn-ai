@@ -20,7 +20,7 @@ class ListDirTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "列出指定目录下的文件和子目录。参数：path（目录路径，可选，默认当前目录）"
+        return "查看目录下有哪些文件和子目录。这是获取目录内容的唯一正确工具，不要用 read 工具读取目录！参数：path（目录路径，可选，默认当前目录）"
 
     @property
     def input_schema(self) -> Dict[str, Any]:

@@ -3,7 +3,7 @@ Agent 核心 - 实现思考-行动循环
 
 这是整个 Agent 系统的核心！
 主要职责：
-1. 维护消息历史（上下文）
+1. 维护消息历史（上下文）- 现在由 ContextManager 分层管理
 2. 实现思考-行动循环
 3. 调度工具调用
 
@@ -13,7 +13,9 @@ Agent 核心 - 实现思考-行动循环
 - 这样可以轻松切换不同的 LLM，不需要改 Agent 代码
 """
 import os
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
+
+from context import ContextManager
 from tools.registry import ToolRegistry
 from tools.base import ToolError
 from llm.base import LLMProvider, LLMResponse, ToolCall
@@ -25,7 +27,7 @@ class Agent:
     Agent 核心类
 
     负责：
-    - 保存对话历史
+    - 保存对话历史（通过 ContextManager 分层管理）
     - 思考：调用 LLM 分析，决定怎么做
     - 行动：如果需要，调用工具
     - 循环：直到得出最终答案
@@ -33,28 +35,46 @@ class Agent:
     依赖注入：通过构造函数传入 LLMProvider，而不是在内部直接创建
     """
 
-    def __init__(self, llm_provider: LLMProvider, max_iterations: int = 5):
+    def __init__(
+        self,
+        llm_provider: LLMProvider,
+        max_iterations: int = 5,
+        context_config: Optional[dict] = None,
+    ):
         """
         初始化 Agent
 
         Args:
             llm_provider: LLM 提供商实例（依赖注入）
             max_iterations: 最大工具调用轮数（防止无限循环）
+            context_config: 上下文管理配置（从 .env 读取）
         """
         self.llm = llm_provider
         self.max_iterations = max_iterations
 
-        # 消息历史 - 只包含真正的对话，不包含 system prompt
-        self.messages: List[Dict[str, Any]] = []
+        # 使用传入的配置，否则用默认值
+        if context_config is None:
+            context_config = {}
 
-        # 系统提示词 - 单独保存，作为单独参数传给 LLM
+        # 上下文管理器 - 分层管理对话历史和工具结果
+        self.context = ContextManager(
+            total_budget=context_config.get("total_budget", 150000),
+            working_window_size=context_config.get("working_window_size", 10),
+            working_max_tokens=context_config.get("working_max_tokens", 50000),
+            tool_buffer_max_tokens=context_config.get("tool_buffer_max_tokens", 80000),
+            tool_small_threshold=context_config.get("tool_small_threshold", 1000),
+            tool_large_threshold=context_config.get("tool_large_threshold", 5000),
+        )
+
+        # 系统提示词 - 单独保存
         self.system_prompt: str = ""
 
         # 工具描述缓存（只生成一次）
-        self._tool_descriptions: Optional[List[Dict[str, Any]]] = None
+        self._tool_descriptions: Optional[list[Dict[str, Any]]] = None
 
         # 加载系统提示词
         self._load_system_prompt()
+        self.context.set_system_prompt(self.system_prompt)
 
     def _load_system_prompt(self):
         """
@@ -69,7 +89,7 @@ class Agent:
             with open(system_prompt_path, "r", encoding="utf-8") as f:
                 self.system_prompt = f.read().strip()
 
-    def get_tool_descriptions(self) -> List[Dict[str, Any]]:
+    def get_tool_descriptions(self) -> list[Dict[str, Any]]:
         """
         获取所有已注册工具的描述，格式符合 Claude API 要求
 
@@ -88,51 +108,42 @@ class Agent:
 
     def add_user_message(self, content: str):
         """添加用户消息到历史"""
-        self.messages.append({
-            "role": "user",
-            "content": content,
-        })
+        self.context.add_user_message(content)
 
-    def add_tool_result_message(self, tool_use_id: str, content: str):
-        """添加工具结果到历史"""
-        self.messages.append({
-            "role": "user",
-            "content": [
-                {
-                    "type": "tool_result",
-                    "tool_use_id": tool_use_id,
-                    "content": content,
-                }
-            ],
-        })
+    def add_tool_result_message(self, tool_use_id: str, tool_name: str, content: str):
+        """
+        添加工具结果到历史
 
-    def add_assistant_message(self, content: str, tool_calls: Optional[List[ToolCall]] = None):
+        重要：工具结果不直接存入工作记忆，而是进入 ToolResultBuffer
+        进行分级处理，避免大结果撑爆上下文。
+        """
+        # 添加到工具结果缓冲层（自动分级截断）
+        display_info = self.context.add_tool_result(
+            tool_call_id=tool_use_id,
+            tool_name=tool_name,
+            result=content,
+            metadata={},
+        )
+        # 显示截断信息给用户
+        if "已截断" in display_info or "已深度截断" in display_info:
+            Console.info(f"   ℹ️  {display_info}")
+
+    def add_assistant_message(self, content: str, tool_calls: Optional[list[ToolCall]] = None):
         """添加 Assistant 消息到历史"""
         if tool_calls:
-            # 有工具调用的情况
-            content_blocks = []
-            if content:
-                content_blocks.append({
-                    "type": "text",
-                    "text": content,
-                })
-            for tc in tool_calls:
-                content_blocks.append({
-                    "type": "tool_use",
+            # 有工具调用的情况 - 转换为 dict 格式
+            tool_calls_dicts = [
+                {
                     "id": tc.id,
                     "name": tc.name,
                     "input": tc.arguments,
-                })
-            self.messages.append({
-                "role": "assistant",
-                "content": content_blocks,
-            })
+                }
+                for tc in tool_calls
+            ]
+            self.context.add_assistant_message(content, tool_calls_dicts)
         else:
             # 纯文本回答
-            self.messages.append({
-                "role": "assistant",
-                "content": content,
-            })
+            self.context.add_assistant_message(content)
 
     async def think(self, stream: bool = True) -> Dict[str, Any]:
         """
@@ -145,6 +156,9 @@ class Agent:
             {"action": "answer", "content": "..."}
             {"action": "tool", "tool_calls": [...], "content": "..."}
         """
+        # 从 ContextManager 获取完整上下文
+        messages = self.context.build_context_with_tool_results()
+
         # 流式输出
         if stream:
             full_text = ""
@@ -153,7 +167,7 @@ class Agent:
             Console.answer_prefix()
 
             async for chunk in self.llm.chat_completion_stream(
-                messages=self.messages,
+                messages=messages,
                 tools=self.get_tool_descriptions(),
                 system=self.system_prompt,
             ):
@@ -189,7 +203,7 @@ class Agent:
         # 非流式（备用）
         else:
             response: LLMResponse = await self.llm.chat_completion(
-                messages=self.messages,
+                messages=messages,
                 tools=self.get_tool_descriptions(),
                 system=self.system_prompt,
             )
@@ -288,7 +302,7 @@ class Agent:
                 # 执行所有工具（支持并行调用，但这里顺序执行）
                 for tool_call in tool_calls:
                     tool_result = await self.execute_tool(tool_call)
-                    self.add_tool_result_message(tool_call.id, tool_result)
+                    self.add_tool_result_message(tool_call.id, tool_call.name, tool_result)
 
                 # 循环回去继续思考
             else:
@@ -300,3 +314,13 @@ class Agent:
         max_reached_msg = f"已达到最大工具调用次数 ({self.max_iterations})，停止执行。"
         Console.tool_warning(max_reached_msg)
         return max_reached_msg
+
+    def show_context_stats(self) -> None:
+        """显示上下文使用统计"""
+        print()
+        print(self.context.format_stats_for_display())
+        print()
+
+    def clear_context(self) -> None:
+        """清空所有上下文"""
+        self.context.clear()

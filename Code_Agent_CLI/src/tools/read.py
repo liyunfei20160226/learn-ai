@@ -22,7 +22,7 @@ class ReadTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "读取本地文件的内容。参数：path（文件路径，必填），offset（起始行号，可选），limit（读取行数，可选）"
+        return "读取单个文件的内容。⚠️ 注意：只能用于文件，不能用于目录！查看目录内容请用 list 工具。参数：path（文件路径，必填），offset（起始行号，可选），limit（读取行数，可选）"
 
     @property
     def input_schema(self) -> Dict[str, Any]:

@@ -303,6 +303,11 @@ class Console:
         print(cls.color("error") + message + cls.RESET)
 
     @classmethod
+    def warning(cls, message: str) -> None:
+        """打印警告信息"""
+        print(cls.color("tool") + "⚠️  " + message + cls.RESET)
+
+    @classmethod
     def user_prompt(cls) -> str:
         """获取用户输入"""
         print()
