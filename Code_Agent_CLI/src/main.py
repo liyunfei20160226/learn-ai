@@ -41,6 +41,15 @@ async def main():
     Console.info("正在初始化 LLM Provider...")
     llm = get_llm_provider()
 
+    # Ollama 本地模型警告
+    if llm.provider_name == "Ollama":
+        print()
+        print(Console.color("tool") + "⚠️  重要提示：当前使用的是 Ollama 本地模型" + Console.RESET)
+        print(Console.color("info") + "   本地小模型目前对工具调用（tool use）的支持还不够完善" + Console.RESET)
+        print(Console.color("info") + "   可能会影响 Agent 的工具使用功能，如文件读取、搜索等" + Console.RESET)
+        print(Console.color("info") + "   我们将在后续版本中针对本地小模型进行专门优化" + Console.RESET)
+        print()
+
     # 5. 创建 Agent 实例（整个会话共用一个 Agent，保留上下文）
     # 依赖注入：把 LLM Provider 传给 Agent，而不是 Agent 内部创建
     max_iterations = int(os.getenv("MAX_ITERATIONS", "20"))  # 默认 20 次
