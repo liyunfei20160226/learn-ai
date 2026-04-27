@@ -14,6 +14,7 @@ from agent.core import Agent
 from tools.loader import register_all_tools, print_registered_tools
 from llm.factory import get_llm_provider
 from utils.console import Console
+from utils.command_handler import handler  # 命令处理器
 
 
 async def main():
@@ -90,33 +91,8 @@ async def main():
             continue
 
         # ===== 特殊命令：在 REPL 层面拦截，不传给 Agent =====
-        input_lower = user_input.lower().strip()
-
-        # /stats - 显示上下文统计
-        if input_lower == "/stats":
-            agent.show_context_stats()
-            continue
-
-        # /clear - 清空上下文
-        if input_lower == "/clear":
-            agent.clear_context()
-            Console.success("✅ 上下文已清空")
-            continue
-
-        # /help - 显示帮助
-        if input_lower == "/help":
-            print()
-            Console.info("📖 可用命令：")
-            Console.info("   /stats   - 显示上下文 Token 使用统计")
-            Console.info("   /clear  - 清空当前上下文（开始新对话）")
-            Console.info("   /help   - 显示此帮助")
-            Console.info("   exit    - 退出程序")
-            print()
-            continue
-
-        # 未知 / 开头的命令
-        if input_lower.startswith("/"):
-            Console.warning(f"未知命令 '{user_input}'，输入 /help 查看可用命令")
+        # 所有命令逻辑都封装在 command_handler 中
+        if handler.handle(agent, user_input):
             continue
         # ==================================================
 
