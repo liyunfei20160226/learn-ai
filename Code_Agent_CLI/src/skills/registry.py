@@ -2,31 +2,28 @@
 Skill 注册表 - 管理所有可用的 Skill
 
 设计模式：单例模式 + 工厂模式（和 ToolRegistry 保持一致）
+
+注意：现在 Skill 也会同时注册到 ToolRegistry，LLM 可以直接调用 Skill！
+这个 SkillRegistry 主要用于：
+- 给 /skills 命令显示已加载的 Skill 列表
+- 不参与工具调用流程了（全走 ToolRegistry）
 """
 from typing import Dict, Type, List
-from .base import BaseSkill
+from tools.base import BaseTool
 
 
 class SkillRegistry:
     """
     Skill 注册表 - 全局唯一
 
-    使用方法：
-        # 注册
-        SkillRegistry.register(AnalyzeProjectSkill)
-
-        # 查找
-        skill = SkillRegistry.get("analyze_project")
-
-        # 执行
-        result = await skill.execute(args, context)
+    用途：给 /skills 命令显示已加载的 Skill 列表
     """
 
     # 存储所有注册的 Skill 类：{名称: Skill 类}
-    _skills: Dict[str, Type[BaseSkill]] = {}
+    _skills: Dict[str, Type[BaseTool]] = {}
 
     @classmethod
-    def register(cls, skill_class: Type[BaseSkill]) -> bool:
+    def register(cls, skill_class: Type[BaseTool]) -> bool:
         """
         注册一个 Skill 类（幂等：重复注册不报错）
 
@@ -46,7 +43,7 @@ class SkillRegistry:
         return True
 
     @classmethod
-    def get(cls, name: str) -> BaseSkill:
+    def get(cls, name: str) -> BaseTool:
         """
         根据名称获取 Skill 实例
 
@@ -69,49 +66,3 @@ class SkillRegistry:
     def list_names(cls) -> List[str]:
         """获取所有已注册的 Skill 名称"""
         return list(cls._skills.keys())
-
-    @classmethod
-    def get_descriptions(cls) -> List[Dict]:
-        """
-        获取所有已注册 Skill 的描述，格式符合 LLM tool call 要求
-
-        这样 Agent 就能像调用普通工具一样调用 Skill！
-        """
-        descriptions = []
-        for name in cls._skills.keys():
-            skill = cls.get(name)
-            descriptions.append({
-                "name": f"skill_{skill.name}",  # 加 skill_ 前缀，和普通工具区分
-                "description": skill.description,
-                "input_schema": skill.input_schema,
-            })
-        return descriptions
-
-    @classmethod
-    def is_skill_call(cls, tool_name: str) -> bool:
-        """
-        判断是不是一个 Skill 调用
-
-        Args:
-            tool_name: 工具调用的名称
-
-        Returns:
-            bool: 如果是 Skill 调用返回 True
-        """
-        return tool_name.startswith("skill_")
-
-    @classmethod
-    def extract_skill_name(cls, tool_name: str) -> str:
-        """
-        从工具调用名称中提取 Skill 名称
-
-        Args:
-            tool_name: 工具调用名称，如 "skill_analyze_project"
-
-        Returns:
-            Skill 名称，如 "analyze_project"
-        """
-        if not cls.is_skill_call(tool_name):
-            raise ValueError(f"不是 Skill 调用：{tool_name}")
-
-        return tool_name[len("skill_"):]

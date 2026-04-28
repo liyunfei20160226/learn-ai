@@ -59,6 +59,9 @@ async def main():
         "tool_buffer_max_tokens": int(os.getenv("CONTEXT_TOOL_BUFFER_MAX_TOKENS", "80000")),
         "tool_small_threshold": int(os.getenv("CONTEXT_TOOL_SMALL_THRESHOLD", "1000")),
         "tool_large_threshold": int(os.getenv("CONTEXT_TOOL_LARGE_THRESHOLD", "5000")),
+        # Skill 阈值 - 操作手册需要尽量完整 ✨
+        "skill_small_threshold": int(os.getenv("CONTEXT_SKILL_SMALL_THRESHOLD", "100000")),
+        "skill_large_threshold": int(os.getenv("CONTEXT_SKILL_LARGE_THRESHOLD", "100000")),
     }
 
     # 6. 创建 Agent 实例（整个会话共用一个 Agent，保留上下文）

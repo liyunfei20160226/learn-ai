@@ -54,6 +54,17 @@ class BaseTool(ABC):
         """
         pass
 
+    @property
+    def tool_type(self) -> str:
+        """
+        工具类型：
+        - "standard": 普通工具（read, list, grep, bash 等）
+        - "skill": Skill 类型（操作手册）
+
+        Skill 的结果通常需要更大的阈值，因为它是完整的操作指南。
+        """
+        return "standard"
+
     # ========== 子类必须实现这个方法 ==========
 
     @abstractmethod

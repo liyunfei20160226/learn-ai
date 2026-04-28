@@ -31,6 +31,8 @@ class ToolRegistry:
 
     # 存储所有注册的工具类：{工具名称: 工具类}
     _tools: Dict[str, Type[BaseTool]] = {}
+    # 存储每个工具的类型：{工具名称: 工具类型}
+    _tool_types: Dict[str, str] = {}
 
     @classmethod
     def register(cls, tool_class: Type[BaseTool]) -> bool:
@@ -52,6 +54,7 @@ class ToolRegistry:
             return False  # 已存在，静默跳过
 
         cls._tools[name] = tool_class
+        cls._tool_types[name] = dummy.tool_type  # 记录工具类型
         return True
 
     @classmethod
@@ -73,6 +76,11 @@ class ToolRegistry:
             raise ValueError(f"未知工具：{name}。可用工具：{list(cls._tools.keys())}")
 
         return tool_class()  # 每次都创建新实例，保证状态隔离
+
+    @classmethod
+    def get_tool_type(cls, name: str) -> str:
+        """获取工具类型（standard 或 skill）"""
+        return cls._tool_types.get(name, "standard")
 
     @classmethod
     def list_names(cls) -> List[str]:

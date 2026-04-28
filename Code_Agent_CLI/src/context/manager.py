@@ -27,6 +27,9 @@ class ContextManager:
         tool_buffer_max_tokens: int = 80000,
         tool_small_threshold: int = 1000,
         tool_large_threshold: int = 5000,
+        # Skill 阈值 - 操作手册需要尽量完整
+        skill_small_threshold: int = 100000,
+        skill_large_threshold: int = 100000,
     ):
         """
         初始化上下文管理器
@@ -36,8 +39,10 @@ class ContextManager:
             working_window_size: 工作记忆窗口大小（回合数）
             working_max_tokens: 工作记忆最大 Token 数
             tool_buffer_max_tokens: 工具结果缓冲最大 Token 数
-            tool_small_threshold: 工具结果小阈值（字符数，以下完整保留）
-            tool_large_threshold: 工具结果大阈值（字符数，以上深度截断）
+            tool_small_threshold: 普通工具结果小阈值（字符数，以下完整保留）
+            tool_large_threshold: 普通工具结果大阈值（字符数，以上深度截断）
+            skill_small_threshold: Skill 小阈值（字符数，默认 100k，几乎不截断）
+            skill_large_threshold: Skill 大阈值
         """
         self.total_budget = total_budget
         self.system_prompt: str = ""
@@ -51,6 +56,8 @@ class ContextManager:
             max_total_tokens=tool_buffer_max_tokens,
             small_threshold=tool_small_threshold,
             large_threshold=tool_large_threshold,
+            skill_small_threshold=skill_small_threshold,
+            skill_large_threshold=skill_large_threshold,
         )
 
     def set_system_prompt(self, prompt: str) -> None:

@@ -7,6 +7,10 @@
 - 大型 (>5k chars): 仅元数据 + 可召回标记
 
 这样可以避免一个大文件撑爆整个上下文。
+
+差异化阈值：
+- 普通工具（read/list/grep/bash）：严格截断，保护上下文
+- Skill 工具（操作手册）：大阈值，尽量完整保留指南内容
 """
 import time
 from dataclasses import dataclass, field
@@ -14,6 +18,7 @@ from typing import Any, Optional
 
 from .base import BaseLayer
 from .token_counter import estimate_tokens
+from tools.registry import ToolRegistry
 
 
 @dataclass
@@ -54,6 +59,9 @@ class ToolResultBufferLayer(BaseLayer):
         max_results: int = 20,
         small_threshold: int = 1000,
         large_threshold: int = 5000,
+        # Skill 阈值 - 操作手册需要尽量完整
+        skill_small_threshold: int = 100000,
+        skill_large_threshold: int = 100000,
     ):
         """
         初始化工具结果缓冲层
@@ -61,13 +69,22 @@ class ToolResultBufferLayer(BaseLayer):
         Args:
             max_total_tokens: 工具结果总 Token 预算
             max_results: 最多保留的工具结果数量
-            small_threshold: 小阈值（字符数，以下完整保留）
-            large_threshold: 大阈值（字符数，以上深度截断）
+            small_threshold: 普通工具小阈值（字符数，以下完整保留）
+            large_threshold: 普通工具大阈值（字符数，以上深度截断）
+            skill_small_threshold: Skill 小阈值（默认 100k，几乎不截断）
+            skill_large_threshold: Skill 大阈值
         """
         self.max_total_tokens = max_total_tokens
         self.max_results = max_results
-        self.THRESHOLD_FULL = small_threshold    # < N: 完整保留
-        self.THRESHOLD_MEDIUM = large_threshold   # N-M: 中等截断 / >M: 深度截断
+
+        # 普通工具阈值 - 严格保护上下文
+        self.TOOL_SMALL = small_threshold
+        self.TOOL_LARGE = large_threshold
+
+        # Skill 阈值 - Skill 是操作手册，尽量完整 ✨
+        self.SKILL_SMALL = skill_small_threshold
+        self.SKILL_LARGE = skill_large_threshold
+
         self._cache: dict[str, CachedToolResult] = {}
 
     def add(
@@ -165,11 +182,23 @@ class ToolResultBufferLayer(BaseLayer):
         """
         size = entry.size_chars
 
-        if size <= self.THRESHOLD_FULL:
+        # ✅ 根据工具类型选择阈值
+        tool_type = ToolRegistry.get_tool_type(entry.tool_name)
+
+        if tool_type == "skill":
+            # Skill：操作手册，用大阈值，尽量完整保留
+            threshold_full = self.SKILL_SMALL
+            threshold_medium = self.SKILL_LARGE
+        else:
+            # 普通工具：严格截断，保护上下文
+            threshold_full = self.TOOL_SMALL
+            threshold_medium = self.TOOL_LARGE
+
+        if size <= threshold_full:
             # 小结果：完整保留
             processed_content = entry.full_result
 
-        elif size <= self.THRESHOLD_MEDIUM:
+        elif size <= threshold_medium:
             # 中等结果：保留前后 + 截断标记
             first_part = entry.full_result[:self.MEDIUM_FIRST_CHARS]
             last_part = entry.full_result[-self.MEDIUM_LAST_CHARS:]
@@ -213,9 +242,19 @@ class ToolResultBufferLayer(BaseLayer):
         - 上下文版本是给 LLM 看的，保留更多信息
         """
         size = entry.size_chars
-        if size <= self.THRESHOLD_FULL:
+
+        # 根据工具类型选择阈值
+        tool_type = ToolRegistry.get_tool_type(entry.tool_name)
+        if tool_type == "skill":
+            threshold_full = self.SKILL_SMALL
+            threshold_medium = self.SKILL_LARGE
+        else:
+            threshold_full = self.TOOL_SMALL
+            threshold_medium = self.TOOL_LARGE
+
+        if size <= threshold_full:
             return f"完整结果 ({size} 字符)"
-        elif size <= self.THRESHOLD_MEDIUM:
+        elif size <= threshold_medium:
             return f"中等大小 ({size} 字符，已部分截断)"
         else:
             return f"大结果 ({size} 字符，已深度截断，可召回完整内容)"

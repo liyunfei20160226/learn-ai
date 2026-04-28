@@ -6,25 +6,27 @@ Skill 自动加载器 - 兼容 Claude 官方 Skill 格式
 - SKILL.md 包含：YAML frontmatter + Markdown 使用指南
 - Skill 本质是给 LLM 看的"操作手册"，在需要时注入上下文
 
-使用方法：
-1. 把官方 Skill 目录拷贝到 skills/ 目录下
-2. 确保目录中有 SKILL.md 文件
-3. 重启程序，自动发现并加载！
+架构改造：Skill 现在直接作为 Tool 注册到 ToolRegistry！
+- LLM 自己决定什么时候调用哪个 Skill
+- 不再需要 skill_ 前缀和特殊判断逻辑
+- 统一的工具调用机制
 """
 import os
 import re
 from pathlib import Path
 from typing import List, Dict, Any
 
-from .base import BaseSkill, SkillContext
+from tools.base import BaseTool
 from .registry import SkillRegistry
+from tools.registry import ToolRegistry
 
 
-class OfficialSkill(BaseSkill):
+class OfficialSkill(BaseTool):
     """
     官方 Skill 包装类
 
-    把官方格式的 Skill（目录 + SKILL.md）适配成 BaseSkill 接口
+    把官方格式的 Skill（目录 + SKILL.md）适配成 BaseTool 接口
+    这样 Skill 就可以直接被 LLM 调用，和普通工具没有区别！
     """
 
     def __init__(self, skill_dir: str):
@@ -70,6 +72,11 @@ class OfficialSkill(BaseSkill):
         return self._description
 
     @property
+    def tool_type(self) -> str:
+        """Skill 类型，使用更大的阈值来避免操作手册被截断"""
+        return "skill"
+
+    @property
     def input_schema(self) -> Dict[str, Any]:
         return {
             "type": "object",
@@ -83,7 +90,7 @@ class OfficialSkill(BaseSkill):
             "required": [],
         }
 
-    async def execute(self, args: Dict[str, Any], context: SkillContext) -> str:
+    async def run(self, args: Dict[str, Any]) -> str:
         """
         核心机制：把 Skill 的使用指南返回给 LLM
 
@@ -126,7 +133,7 @@ class SkillLoader:
     @classmethod
     def load_all(cls, skills_dir: str = None) -> List[str]:
         """
-        自动加载所有官方格式的 Skill
+        自动加载所有官方格式的 Skill，并直接注册到 ToolRegistry
 
         Args:
             skills_dir: Skill 所在目录，默认是项目根目录下的 skills/ 目录
@@ -161,24 +168,29 @@ class SkillLoader:
                         skill = OfficialSkill(skill_dir)
                         skill_name = skill.name
 
-                        # 检查是否已注册
-                        if skill_name in SkillRegistry.list_names():
-                            print(f"  ⏭️  跳过 Skill: {skill_name} (已注册)")
+                        # 检查是否已注册（检查 ToolRegistry）
+                        if skill_name in ToolRegistry.list_names():
+                            print(f"  ⏭️  跳过 Skill: {skill_name} (已注册为 Tool)")
                             continue
 
                         # 动态创建包装类（因为注册表需要的是类，不是实例）
-                        class WrapperSkill(BaseSkill):
+                        class WrapperSkill(BaseTool):
                             name = skill.name
                             description = skill.description
+                            tool_type = skill.tool_type  # ✅ 传递工具类型标记
                             input_schema = skill.input_schema
 
-                            async def execute(self, args, context):
+                            async def run(self, args):
                                 s = OfficialSkill(skill_dir)
-                                return await s.execute(args, context)
+                                return await s.run(args)
 
+                        # 🎯 直接注册到 ToolRegistry！Skill 现在就是 Tool！
+                        ToolRegistry.register(WrapperSkill)
+                        # 同时也注册到 SkillRegistry（给 /skills 命令显示用）
                         SkillRegistry.register(WrapperSkill)
+
                         loaded_skills.append(skill_name)
-                        print(f"  ✅ 加载 Skill: {skill_name}")
+                        print(f"  ✅ 加载 Skill: {skill_name} (已注册为 Tool)")
 
                     except Exception as e:
                         print(f"  ❌ 加载目录 Skill {item.name} 失败: {e}")
