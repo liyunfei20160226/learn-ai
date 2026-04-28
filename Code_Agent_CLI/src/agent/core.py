@@ -18,6 +18,7 @@ from typing import Dict, Any, Optional
 from context import ContextManager
 from tools.registry import ToolRegistry
 from tools.base import ToolError
+from skills import SkillRegistry, SkillContext
 from llm.base import LLMProvider, LLMResponse, ToolCall
 from utils.console import Console
 
@@ -95,12 +96,19 @@ class Agent:
 
     def get_tool_descriptions(self) -> list[Dict[str, Any]]:
         """
-        获取所有已注册工具的描述，格式符合 Claude API 要求
+        获取所有已注册工具 + Skill 的描述，格式符合 Claude API 要求
+
+        说明：
+        - 普通工具（如 read、list）直接给 LLM 调用
+        - Skill 会加 skill_ 前缀（如 skill_analyze_project）
+          让 LLM 知道这是更高阶的复合能力
 
         缓存机制：只在第一次调用时生成
         """
         if self._tool_descriptions is None:
             self._tool_descriptions = []
+
+            # 1. 添加普通工具
             for tool_name in ToolRegistry.list_names():
                 tool = ToolRegistry.get(tool_name)
                 self._tool_descriptions.append({
@@ -108,6 +116,11 @@ class Agent:
                     "description": tool.description,
                     "input_schema": tool.input_schema,
                 })
+
+            # 2. 添加 Skill（加 skill_ 前缀区分）
+            for skill_desc in SkillRegistry.get_descriptions():
+                self._tool_descriptions.append(skill_desc)
+
         return self._tool_descriptions
 
     def add_user_message(self, content: str):
@@ -223,7 +236,11 @@ class Agent:
             valid_tool_calls = []
             available_tools = ToolRegistry.list_names()
             for tc in tool_calls:
-                if tc.name in available_tools:
+                # Skill 调用（skill_ 开头）或 普通工具
+                is_skill = SkillRegistry.is_skill_call(tc.name)
+                is_regular_tool = tc.name in available_tools
+
+                if is_skill or is_regular_tool:
                     valid_tool_calls.append(tc)
                 else:
                     Console.tool_warning(f"模型尝试调用不存在的工具：'{tc.name}'（可用工具：{available_tools}）")
@@ -253,7 +270,11 @@ class Agent:
             available_tools = ToolRegistry.list_names()
             if response.tool_calls:
                 for tc in response.tool_calls:
-                    if tc.name in available_tools:
+                    # Skill 调用（skill_ 开头）或 普通工具
+                    is_skill = SkillRegistry.is_skill_call(tc.name)
+                    is_regular_tool = tc.name in available_tools
+
+                    if is_skill or is_regular_tool:
                         valid_tool_calls.append(tc)
                     else:
                         Console.tool_warning(f"模型尝试调用不存在的工具：'{tc.name}'（可用工具：{available_tools}）")
@@ -272,28 +293,57 @@ class Agent:
 
     async def execute_tool(self, tool_call: ToolCall) -> str:
         """
-        🔧 行动阶段 - 执行单个工具调用
+        🔧 行动阶段 - 执行单个工具调用或 Skill 调用
+
+        支持两种调用：
+        1. 普通工具：如 read(path="xxx.py")
+        2. Skill 调用：如 skill_analyze_project(path=".")（带 skill_ 前缀）
 
         Args:
             tool_call: LLM 返回的工具调用对象
 
         Returns:
-            工具执行结果
+            工具/Skill 执行结果
         """
         Console.tool_call(tool_call.name, tool_call.arguments)
 
         try:
-            tool = ToolRegistry.get(tool_call.name)
+            # ========== 判断是 Skill 还是普通工具 ==========
+            if SkillRegistry.is_skill_call(tool_call.name):
+                skill_name = SkillRegistry.extract_skill_name(tool_call.name)
+                skill = SkillRegistry.get(skill_name)
 
-            # 启动进度动画
-            await Console.start_spinner(f"执行 {tool_call.name}...")
+                # Skill 可能需要执行很久，启动进度动画
+                await Console.start_spinner(f"执行 Skill: {skill_name}...")
 
-            result = await tool.run(tool_call.arguments)
+                # 准备 Skill 上下文
+                context = SkillContext(
+                    llm=self.llm,
+                    tool_registry=ToolRegistry,
+                    working_dir=".",
+                )
 
-            # 停止动画并显示成功
-            await Console.stop_spinner(success=True, result_length=len(result))
+                # 执行 Skill（内部可以多轮调用工具）
+                result = await skill.execute(tool_call.arguments, context)
 
-            return result
+                # 停止动画
+                await Console.stop_spinner(success=True, result_length=len(result))
+
+                return result
+
+            else:
+                # ========== 普通工具调用 ==========
+                tool = ToolRegistry.get(tool_call.name)
+
+                # 启动进度动画
+                await Console.start_spinner(f"执行 {tool_call.name}...")
+
+                result = await tool.run(tool_call.arguments)
+
+                # 停止动画并显示成功
+                await Console.stop_spinner(success=True, result_length=len(result))
+
+                return result
 
         except ToolError as e:
             error_msg = f"工具执行失败：{e}"
@@ -302,7 +352,7 @@ class Agent:
             return error_msg
 
         except Exception as e:
-            error_msg = f"工具执行发生未知错误：{type(e).__name__}: {e}"
+            error_msg = f"工具/Skill 执行发生未知错误：{type(e).__name__}: {e}"
             await Console.stop_spinner(success=False)
             Console.tool_error(error_msg)
             return error_msg

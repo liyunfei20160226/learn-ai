@@ -11,6 +11,7 @@ from typing import Dict, Callable, List
 from dataclasses import dataclass
 
 from utils.console import Console
+from skills import SkillRegistry
 
 
 @dataclass
@@ -131,4 +132,35 @@ def cmd_clear(agent):
 def cmd_help(_agent):
     print()
     print(handler.get_help_text())
+    print()
+
+
+# -------- 注册 /skills 命令 --------
+@handler.register("skills", "显示所有已加载的 Skill 列表")
+def cmd_skills(_agent):
+    print()
+    print(Console.color("thinking") + "📦 已加载的 Skill 列表" + Console.RESET)
+    print()
+
+    skill_names = SkillRegistry.list_names()
+
+    if not skill_names:
+        print(Console.color("info") + "   没有加载任何 Skill" + Console.RESET)
+        print()
+        return
+
+    for name in skill_names:
+        # 直接从注册表获取 Skill 实例的 description
+        skill = SkillRegistry.get(name)
+        description = skill.description if skill else ""
+
+        # 截取前 80 个字符的描述
+        short_desc = description[:80] + "..." if len(description) > 80 else description
+
+        print(f"   {Console.color('success')}✅{Console.RESET} {name}")
+        if short_desc:
+            print(f"      {Console.color('info')}{short_desc}{Console.RESET}")
+        print()
+
+    print(f"   共 {len(skill_names)} 个 Skill")
     print()

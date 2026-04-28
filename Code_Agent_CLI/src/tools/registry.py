@@ -33,15 +33,15 @@ class ToolRegistry:
     _tools: Dict[str, Type[BaseTool]] = {}
 
     @classmethod
-    def register(cls, tool_class: Type[BaseTool]) -> None:
+    def register(cls, tool_class: Type[BaseTool]) -> bool:
         """
-        注册一个工具类
+        注册一个工具类（幂等：重复注册不报错）
 
         Args:
             tool_class: 工具类（不是实例！是类本身）
 
-        Raises:
-            ValueError: 如果名称重复了
+        Returns:
+            bool: 新注册成功返回 True，已存在返回 False
         """
         # 先实例化一下，拿到 name
         # （因为 name 是 property，必须实例化才能访问）
@@ -49,9 +49,10 @@ class ToolRegistry:
         name = dummy.name
 
         if name in cls._tools:
-            raise ValueError(f"工具名称冲突：{name} 已经被注册了")
+            return False  # 已存在，静默跳过
 
         cls._tools[name] = tool_class
+        return True
 
     @classmethod
     def get(cls, name: str) -> BaseTool:
