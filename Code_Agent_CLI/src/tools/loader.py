@@ -6,10 +6,6 @@
 - 新加工具时，只需要在这里加一行 import 和 register 就行
 """
 from .registry import ToolRegistry
-from .read import ReadTool
-from .list_dir import ListDirTool
-from .write import WriteTool
-from .grep import GrepTool
 from .bash import BashTool
 from utils.console import Console
 
@@ -18,13 +14,10 @@ def register_all_tools() -> None:
     """
     注册所有可用的工具
 
-    新加工具时，在这里加一行：
-        ToolRegistry.register(NewTool)
+    注意：文件操作工具（read/list/write/grep）已由 MCP filesystem server 替代
+    只需保留 BashTool 作为通用命令执行工具
     """
-    ToolRegistry.register(ReadTool)
-    ToolRegistry.register(ListDirTool)
-    ToolRegistry.register(WriteTool)
-    ToolRegistry.register(GrepTool)
+    # 只注册 BashTool，文件操作由 MCP filesystem server 提供
     ToolRegistry.register(BashTool)
 
 

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from utils.console import Console
 from skills import SkillRegistry
+from mcp_client import mcp_manager
 
 
 @dataclass
@@ -164,3 +165,9 @@ def cmd_skills(_agent):
 
     print(f"   共 {len(skill_names)} 个 Skill")
     print()
+
+
+# -------- 注册 /mcps 命令 --------
+@handler.register("mcps", "显示 MCP Server 连接状态和可用工具列表")
+def cmd_mcps(_agent):
+    mcp_manager.print_status()

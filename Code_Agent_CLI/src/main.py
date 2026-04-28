@@ -5,9 +5,11 @@ Code Agent - 命令行入口
 Read（读取输入） → Eval（Agent 处理） → Print（输出） → Loop（循环）
 
 集成了可插拔的 LLM Provider 架构，通过 .env 配置切换不同的 LLM。
+集成了 MCP (Model Context Protocol) 支持标准化工具调用。
 """
 import os
 import asyncio
+import atexit
 from dotenv import load_dotenv
 
 from agent.core import Agent
@@ -15,6 +17,7 @@ from tools.loader import register_all_tools, print_registered_tools
 from llm.factory import get_llm_provider
 from utils.console import Console
 from utils.command_handler import handler  # 命令处理器
+from mcp_client import mcp_manager  # MCP Server 管理器
 
 
 async def main():
@@ -29,12 +32,30 @@ async def main():
     # 1. 注册所有可用工具
     register_all_tools()
 
-    # 2. 颜色主题选择
+    # 2. 配置 MCP Servers（从环境变量读取）
+    mcp_manager.configure_from_env()
+
+    # 3. 连接所有 MCP Servers
+    await mcp_manager.connect_all()
+
+    # 4. 注册退出时自动清理 MCP 进程
+    def cleanup_mcp():
+        """程序退出时清理 MCP 进程（同步包装异步）"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(mcp_manager.disconnect_all())
+        finally:
+            loop.close()
+
+    atexit.register(cleanup_mcp)
+
+    # 5. 颜色主题选择
     has_saved_theme = Console.load_theme()
     if not has_saved_theme:
         Console.show_theme_selector()
 
-    # 3. 打印已注册的工具（调试用）
+    # 6. 打印已注册的工具（调试用）
     print_registered_tools()
 
     # 4. 创建 LLM Provider（工厂模式）
