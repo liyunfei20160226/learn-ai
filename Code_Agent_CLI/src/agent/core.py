@@ -52,6 +52,10 @@ class Agent:
         self.llm = llm_provider
         self.max_iterations = max_iterations
 
+        # 🛡️ 轻量失败追踪：给 LLM 善意提醒，不阻止执行
+        # key: "tool_name:path", value: 连续失败次数
+        self._failure_tracker = {}
+
         # 使用传入的配置，否则用默认值
         if context_config is None:
             context_config = {}
@@ -110,6 +114,39 @@ class Agent:
         """添加用户消息到历史"""
         self.context.add_user_message(content)
 
+    def _update_failure_tracker(self, tool_name: str, content: str) -> str:
+        """
+        🛡️ 轻量失败追踪：给 LLM 善意提醒，不阻止执行
+        如果连续失败 >= 2 次，在结果末尾加入提示
+        """
+        # 简单的错误判断关键词
+        error_keywords = ["失败", "错误", "不存在", "not found", "error", "failed"]
+        is_error = any(kw in content.lower() for kw in error_keywords)
+
+        # 生成追踪 key（对 read/list/write，路径是关键参数）
+        key = tool_name
+
+        if is_error:
+            self._failure_tracker[key] = self._failure_tracker.get(key, 0) + 1
+        else:
+            # 成功了，重置计数
+            self._failure_tracker[key] = 0
+
+        # 连续失败 >= 2 次，加入善意提醒
+        fail_count = self._failure_tracker.get(key, 0)
+        if fail_count >= 2:
+            hint = f"""
+
+⚠️ 提示：这是你连续第 {fail_count} 次调用 {tool_name} 遇到相同问题。
+建议：
+1. 仔细阅读上面的错误信息
+2. 考虑换一种方法试试（比如先用 list 确认路径）
+3. 如果一直失败，可以停下来向用户说明困难
+"""
+            return content + hint
+
+        return content
+
     def add_tool_result_message(self, tool_use_id: str, tool_name: str, content: str):
         """
         添加工具结果到历史
@@ -117,11 +154,14 @@ class Agent:
         重要：工具结果不直接存入工作记忆，而是进入 ToolResultBuffer
         进行分级处理，避免大结果撑爆上下文。
         """
+        # 🛡️ 失败提醒：如果连续失败，加入善意提示
+        content_with_hint = self._update_failure_tracker(tool_name, content)
+
         # 添加到工具结果缓冲层（自动分级截断）
         display_info = self.context.add_tool_result(
             tool_call_id=tool_use_id,
             tool_name=tool_name,
-            result=content,
+            result=content_with_hint,
             metadata={},
         )
         # 显示截断信息给用户
