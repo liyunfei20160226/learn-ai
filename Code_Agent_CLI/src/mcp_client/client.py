@@ -110,7 +110,12 @@ class MCPClient:
             Console.info(f"正在启动 MCP Server: {self.name}...")
 
             # 启动子进程
-            # Windows 上 npx 需要用 shell=True，或者指定完整的 .cmd 路径
+            # 强制所有输出用 UTF-8 编码，避免 Windows GBK 编码问题
+            env = os.environ.copy()
+            env["PYTHONIOENCODING"] = "utf-8"
+            env["PYTHONLEGACYWINDOWSSTDIO"] = "0"
+            env["LANG"] = "en_US.UTF-8"
+
             if os.name == "nt":
                 # Windows：使用 shell=True 来处理 .cmd/.bat 文件
                 cmd_line = " ".join([self.command] + self.args)
@@ -119,7 +124,7 @@ class MCPClient:
                     stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
-                    env=os.environ.copy(),
+                    env=env,
                 )
             else:
                 # Linux/Mac：直接执行
@@ -129,7 +134,7 @@ class MCPClient:
                     stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
-                    env=os.environ.copy(),
+                    env=env,
                 )
 
             # 等待进程启动
@@ -137,7 +142,8 @@ class MCPClient:
 
             if self.process.returncode is not None:
                 stderr = await self.process.stderr.read() if self.process.stderr else b""
-                Console.error(f"MCP Server {self.name} 启动失败: {stderr.decode()}")
+                error_msg = stderr.decode("utf-8", errors="replace").strip()
+                Console.error(f"MCP Server {self.name} 启动失败: {error_msg}")
                 return False
 
             # 发送初始化请求
@@ -188,12 +194,23 @@ class MCPClient:
         """断开连接并清理进程"""
         if self.process:
             try:
+                # 先关闭所有管道（Windows 特别需要）
+                for pipe in [self.process.stdin, self.process.stdout, self.process.stderr]:
+                    if pipe and not pipe.is_closing():
+                        pipe.close()
+
+                # 终止进程
                 self.process.terminate()
-                await asyncio.wait_for(self.process.wait(), timeout=5)
+                await asyncio.wait_for(self.process.wait(), timeout=3)
             except asyncio.TimeoutError:
+                # 不配合就强杀
                 self.process.kill()
-                await self.process.wait()
+                try:
+                    await asyncio.wait_for(self.process.wait(), timeout=2)
+                except Exception:
+                    pass
             except Exception:
+                # 清理阶段出错也没关系，反正程序要退出了
                 pass
             self.process = None
         self._connected = False

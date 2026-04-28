@@ -96,3 +96,12 @@ class BaseTool(ABC):
 class ToolError(Exception):
     """工具执行失败的异常"""
     pass
+
+
+class UserCancelledError(Exception):
+    """用户主动取消操作的异常
+
+    当用户在执行前确认环节选择取消时抛出。
+    Agent 收到此异常应该中止当前思考循环，将控制权交还给用户。
+    """
+    pass

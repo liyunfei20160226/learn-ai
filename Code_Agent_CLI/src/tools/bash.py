@@ -12,7 +12,7 @@ import os
 import asyncio
 import platform
 from typing import Dict, Any
-from .base import BaseTool, ToolError
+from .base import BaseTool, ToolError, UserCancelledError
 
 
 class BashTool(BaseTool):
@@ -74,19 +74,30 @@ class BashTool(BaseTool):
         timeout = args.get("timeout", default_timeout)
         shell = self._get_shell()
 
+        # 是否需要用户确认（默认需要，可以通过 BASH_CONFIRM=false 关闭）
+        need_confirm = os.getenv("BASH_CONFIRM", "true").lower() != "false"
+
         # 安全检查：不允许跳出当前目录
         real_cwd = os.path.realpath(cwd)
         base_dir = os.path.realpath(".")
         if not real_cwd.startswith(base_dir):
             raise ToolError(f"安全限制：不允许访问目录之外的路径：{cwd}")
 
-        # 执行前提示（给用户安全感）
+        # 执行前提示
         print(f"\n{'='*60}")
         print(f"⚠️  将要执行 {shell} 命令:")
         print(f"   $ {command}")
         print(f"   工作目录: {real_cwd}")
         print(f"   超时时间: {timeout} 秒")
-        print(f"{'='*60}\n")
+        print(f"{'='*60}")
+
+        # 用户确认（可通过 BASH_CONFIRM=false 关闭）
+        if need_confirm:
+            confirm = input("\n✅ 确认执行? ([Y]/n): ").strip().lower()
+            if confirm in ["n", "no", "否"]:
+                print("❌ 用户取消了命令执行\n")
+                raise UserCancelledError(f"用户取消执行命令: {command}")
+        print()
 
         try:
             if platform.system() == "Windows":

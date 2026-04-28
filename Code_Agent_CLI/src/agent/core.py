@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional
 
 from context import ContextManager
 from tools.registry import ToolRegistry
-from tools.base import ToolError
+from tools.base import ToolError, UserCancelledError
 from llm.base import LLMProvider, LLMResponse, ToolCall
 from utils.console import Console
 
@@ -307,6 +307,11 @@ class Agent:
 
             return result
 
+        except UserCancelledError:
+            # 用户主动取消：不包装，直接向上抛出，中止整个循环
+            await Console.stop_spinner(success=False)
+            raise
+
         except ToolError as e:
             error_msg = f"工具执行失败：{e}"
             await Console.stop_spinner(success=False)
@@ -352,9 +357,16 @@ class Agent:
                 self.add_assistant_message(text_before, tool_calls)
 
                 # 执行所有工具（支持并行调用，但这里顺序执行）
-                for tool_call in tool_calls:
-                    tool_result = await self.execute_tool(tool_call)
-                    self.add_tool_result_message(tool_call.id, tool_call.name, tool_result)
+                try:
+                    for tool_call in tool_calls:
+                        tool_result = await self.execute_tool(tool_call)
+                        self.add_tool_result_message(tool_call.id, tool_call.name, tool_result)
+                except UserCancelledError:
+                    # 用户主动取消了工具调用，中止整个思考循环
+                    cancel_msg = "用户取消了命令执行，停止当前操作。请给出新的指示。"
+                    Console.tool_warning(cancel_msg)
+                    self.add_assistant_message(cancel_msg)
+                    return cancel_msg
 
                 # 循环回去继续思考
             else:

@@ -8,9 +8,17 @@ Read（读取输入） → Eval（Agent 处理） → Print（输出） → Loop
 集成了 MCP (Model Context Protocol) 支持标准化工具调用。
 """
 import os
+import sys
 import asyncio
 import atexit
+import warnings
 from dotenv import load_dotenv
+
+# Windows asyncio 子进程清理时会产生烦人的 "unclosed transport" 警告
+# 这是 Python 已知 Bug，无害但难看，主动抑制
+if sys.platform == "win32":
+    warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed transport")
+    warnings.filterwarnings("ignore", category=UserWarning, message="unclosed transport")
 
 from agent.core import Agent
 from tools.loader import register_all_tools, print_registered_tools
@@ -38,17 +46,50 @@ async def main():
     # 3. 连接所有 MCP Servers
     await mcp_manager.connect_all()
 
-    # 4. 注册退出时自动清理 MCP 进程
+    # 4. Windows 终极防警告：最后阶段静默 stderr
+    # 注意：atexit 是后进先出，所以先注册的会后运行
+    if sys.platform == "win32":
+
+        @atexit.register
+        def swallow_asyncio_bug_warnings():
+            """
+            Python Windows asyncio 已知 Bug：子进程 transport GC 时会打印丑陋的错误信息。
+            这是无害但难看的，我们在最后阶段把 stderr 吞掉。
+            """
+            import gc
+            from io import StringIO
+
+            # 替换 stderr，所有后续错误都进黑洞（不打算恢复）
+            sys.stderr = StringIO()
+
+            try:
+                # 强制 GC，让 Transport __del__ 现在就被调用
+                gc.collect()
+            except Exception:
+                pass  # GC 时发生任何错误都忽略
+            finally:
+                # 注意：这里不恢复 stderr 了，因为程序马上就要退出了
+                # 这样最后阶段的任何其他输出也会被吞掉
+                pass
+
+    # 5. 注册退出时自动清理 MCP 进程（兜底用，正常退出会在 break 前主动清理）
+    # 注意：这个后注册，所以会先运行（断开 MCP），然后才运行上面的防警告函数
     def cleanup_mcp():
-        """程序退出时清理 MCP 进程（同步包装异步）"""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        """程序退出时清理 MCP 进程（兜底，静默失败）"""
         try:
-            loop.run_until_complete(mcp_manager.disconnect_all())
-        finally:
-            loop.close()
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(mcp_manager.disconnect_all())
+            finally:
+                loop.close()
+        except Exception:
+            # 退出阶段，清理失败也没关系，静默忽略
+            pass
 
     atexit.register(cleanup_mcp)
+    cleanup_mcp_handler = cleanup_mcp
 
     # 5. 颜色主题选择
     has_saved_theme = Console.load_theme()
@@ -108,6 +149,11 @@ async def main():
         # 处理退出命令
         if user_input.lower() in ["exit", "quit", "退出"]:
             Console.goodbye()
+            # 在事件循环还在时，先正常断开 MCP 连接（避免 Windows atexit 问题）
+            await mcp_manager.disconnect_all()
+            # 主动断开成功，注销 atexit 兜底，避免二次断开
+            atexit.unregister(cleanup_mcp_handler)
+
             break
 
         # 空输入不处理
