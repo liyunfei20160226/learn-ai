@@ -9,9 +9,11 @@ import sys
 import time
 from colorama import init, Fore, Style
 
-# 修复 Windows 终端编码问题 - 强制使用 UTF-8
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', line_buffering=True)
+# 修复 Windows 终端编码问题 - 仅在 Windows 上强制使用 UTF-8
+# macOS/Linux 不需要，否则会导致 ANSI 颜色码显示异常
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', line_buffering=True)
 
 # 初始化 colorama（Windows 自动启用 ANSI 支持）
 init(autoreset=True)
@@ -32,7 +34,7 @@ THEMES = {
             "success": Fore.LIGHTGREEN_EX,
             "error": Fore.LIGHTRED_EX,
             "thinking": Fore.LIGHTBLUE_EX,
-            "info": Fore.LIGHTBLACK_EX,
+            "info": Fore.LIGHTWHITE_EX,
             "accent": Fore.LIGHTCYAN_EX,
         }
     },
@@ -45,7 +47,7 @@ THEMES = {
             "success": Fore.LIGHTGREEN_EX,
             "error": Fore.LIGHTRED_EX,
             "thinking": Fore.MAGENTA,
-            "info": Fore.LIGHTBLACK_EX,
+            "info": Fore.LIGHTWHITE_EX,
             "accent": Fore.LIGHTMAGENTA_EX,
         }
     },
@@ -58,7 +60,7 @@ THEMES = {
             "success": Fore.GREEN,
             "error": Fore.LIGHTRED_EX,
             "thinking": Fore.LIGHTYELLOW_EX,
-            "info": Fore.LIGHTBLACK_EX,
+            "info": Fore.LIGHTWHITE_EX,
             "accent": Fore.LIGHTGREEN_EX,
         }
     },
@@ -71,7 +73,7 @@ THEMES = {
             "success": Fore.GREEN,
             "error": Fore.RED,
             "thinking": Fore.BLUE,
-            "info": Fore.LIGHTBLACK_EX,
+            "info": Fore.LIGHTWHITE_EX,
             "accent": Fore.CYAN,
         }
     },
@@ -84,7 +86,7 @@ THEMES = {
             "success": Fore.GREEN,
             "error": Fore.RED,
             "thinking": Fore.BLUE,
-            "info": Fore.LIGHTBLACK_EX,
+            "info": Fore.LIGHTWHITE_EX,
             "accent": Fore.YELLOW,
         }
     },
@@ -97,7 +99,7 @@ THEMES = {
             "success": Fore.LIGHTGREEN_EX,
             "error": Fore.LIGHTRED_EX,
             "thinking": Fore.LIGHTBLUE_EX,
-            "info": Fore.LIGHTBLACK_EX,
+            "info": Fore.LIGHTWHITE_EX,
             "accent": Fore.BLUE,
         }
     },

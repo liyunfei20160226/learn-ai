@@ -26,5 +26,12 @@
       "Bash(dir C:\\\\work\\\\learn-ai\\\\andrej-karpathy-skills\\\\skills *)",
       "Bash(dir C:\\\\work\\\\learn-ai\\\\andrej-karpathy-skills\\\\skills\\\\karpathy-guidelines *)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "baidu-search-mcp",
+    "sequential-thinking",
+    "memory-mcp",
+    "filesystem",
+    "puppeteer"
+  ]
 }
