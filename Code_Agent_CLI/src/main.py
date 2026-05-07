@@ -96,8 +96,8 @@ async def main():
     if not has_saved_theme:
         Console.show_theme_selector()
 
-    # 6. 打印已注册的工具（调试用）
-    print_registered_tools()
+    # 6. 打印已注册的工具（调试用，默认关闭）
+    # print_registered_tools()
 
     # 4. 创建 LLM Provider（工厂模式）
     # 根据 .env 中的 LLM_PROVIDER 配置自动选择

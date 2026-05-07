@@ -263,6 +263,94 @@ npx @modelcontextprotocol/server-filesystem .
 
 ---
 
+### 🐙 GitHub MCP Server 详细说明
+
+GitHub MCP Server 让编程助手直接与 GitHub 交互，实现完整的开发流程管理。
+
+#### 支持的功能
+
+| 功能 | 说明 |
+|------|------|
+| **Pull Requests** | 查看、创建、修改 PR，添加评论，合并 PR |
+| **Issues** | 查看、创建 issue，管理标签和里程碑 |
+| **代码搜索** | 搜索仓库代码，查看文件内容 |
+| **评论管理** | 查看、提交 PR/issue 评论 |
+| **Actions** | 查看 GitHub Actions 工作流状态 |
+| **分支管理** | 查看分支信息，对比代码差异 |
+
+#### 前置条件
+
+1. **获取 GitHub Personal Access Token**
+
+   访问 [GitHub Token 设置页面](https://github.com/settings/tokens?type=beta) 创建 Fine-grained token：
+
+   | 设置项 | 推荐值 |
+   |--------|--------|
+   | Token name | `code-agent-mcp` |
+   | Expiration | 90 天（定期轮换更安全） |
+   | Repository access | `All repositories` 或指定仓库 |
+
+   **必需的权限（Repository permissions）**：
+   - `Contents` → `Read and write`
+   - `Pull requests` → `Read and write`
+   - `Issues` → `Read and write`
+   - `Metadata` → `Read-only`（自动开启）
+
+   **可选权限（根据需要）**：
+   - `Commit statuses` → `Read-only`
+   - `Actions` → `Read-only`
+   - `Discussions` → `Read-only`
+
+2. **保存 Token**
+
+   点击 `Generate token` 后**立即复制保存**，Token 只显示一次！
+
+   - Fine-grained token 格式：`github_pat_xxxxxxxxxx`
+   - Classic token 格式：`ghp_xxxxxxxxxx`
+
+#### 配置方式
+
+在 `.env` 文件中添加配置：
+
+```ini
+MCP_SERVER_GITHUB="npx @modelcontextprotocol/server-github --token github_pat_your_token_here"
+```
+
+#### 验证安装
+
+在 Code Agent 中输入 `/mcps` 命令查看状态：
+
+```
+📦 MCP Server 状态
+  ✅ github: 已连接
+      - create_pull_request: [MCP:github] Create a pull request...
+      - get_pull_request: [MCP:github] Get a pull request by number...
+      - list_issues: [MCP:github] List issues in a repository...
+      ...（共 10+ 个工具）
+```
+
+看到 `✅` 表示连接成功！
+
+#### 安全提示
+
+| 警告 | 说明 |
+|------|------|
+| ⚠️ 不要提交 Token | 永远不要把 Token 提交到公开代码仓库 |
+| ⚠️ 最小权限原则 | 只授予实际需要的权限范围 |
+| ⚠️ 定期轮换 | 建议每 90 天重新生成 Token |
+| ⚠️ 泄露处理 | 如果 Token 泄露，立即在 GitHub 上 Revoke |
+
+#### 常见问题排查
+
+| 问题 | 原因 | 解决方法 |
+|------|------|---------|
+| ❌ github 未连接 | Token 格式错误 | 检查 Token 是否完整复制 |
+| ❌ github 未连接 | 权限不足 | 确保开启了必需的 Repository permissions |
+| 工具调用 404 错误 | 仓库不存在或无权限 | 检查 Token 的仓库访问范围 |
+| 工具调用 403 错误 | 权限不足 | 在 GitHub Token 设置中增加相应权限 |
+
+---
+
 ## 📦 Skill 系统
 
 **Skill 是给 LLM 看的「操作手册」**，它告诉 Agent 如何正确地完成某一类任务。
