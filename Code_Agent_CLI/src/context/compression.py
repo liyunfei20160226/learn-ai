@@ -179,8 +179,8 @@ class CompressionLayer:
         """
         后台异步生成摘要（不阻塞主流程）
         """
-        # 已经有缓存了，跳过
-        if tool_call_id in self._cache:
+        # 已经有缓存了（从全局注册表检查）
+        if get_compressed_content(tool_call_id) is not None:
             return
 
         # 检查是否已经在运行
@@ -244,7 +244,6 @@ class CompressionLayer:
                 compressed_content=truncated_content,
                 content_type="tool_result",
             )
-            self._cache[tool_call_id] = truncated
             self.stats.add(truncated)
             register_compressed_content(truncated)
             return truncated_content, True
@@ -363,8 +362,8 @@ class CompressionLayer:
                     compressed_content=summary,
                     content_type="conversation",
                 )
-                self._cache[summary_id] = compressed
                 self.stats.add(compressed)
+                register_compressed_content(compressed)
 
                 result = [compressed_message] + new_messages
                 saved_chars = original_size - len(str(compressed_message))
