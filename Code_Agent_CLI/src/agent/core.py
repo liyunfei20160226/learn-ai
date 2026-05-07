@@ -56,6 +56,10 @@ class Agent:
         # key: "tool_name:path", value: 连续失败次数
         self._failure_tracker = {}
 
+        # ⚡ 工具调用计数 + 限制：防止无限调用工具导致性能问题
+        self._tool_call_count = 0
+        self._max_tool_calls_per_task = 8  # 每任务最多 8 次工具调用
+
         # 使用传入的配置，否则用默认值
         if context_config is None:
             context_config = {}
@@ -66,8 +70,11 @@ class Agent:
             working_window_size=context_config.get("working_window_size", 10),
             working_max_tokens=context_config.get("working_max_tokens", 50000),
             tool_buffer_max_tokens=context_config.get("tool_buffer_max_tokens", 80000),
-            tool_small_threshold=context_config.get("tool_small_threshold", 1000),
-            tool_large_threshold=context_config.get("tool_large_threshold", 5000),
+            tool_small_threshold=context_config.get("tool_small_threshold", 500),
+            tool_large_threshold=context_config.get("tool_large_threshold", 2000),
+            # Phase 6：Compression 层配置
+            enable_compression=context_config.get("enable_compression", True),
+            llm_provider=llm_provider,  # 把 LLM 传给压缩层用于摘要
         )
 
         # 系统提示词 - 单独保存
@@ -203,8 +210,8 @@ class Agent:
             {"action": "answer", "content": "..."}
             {"action": "tool", "tool_calls": [...], "content": "..."}
         """
-        # 从 ContextManager 获取完整上下文
-        messages = self.context.build_context_with_tool_results()
+        # 从 ContextManager 获取完整上下文（Phase 6：现在是异步的）
+        messages = await self.context.build_context_with_tool_results()
 
         # 流式输出
         if stream:
@@ -336,6 +343,9 @@ class Agent:
         """
         self.add_user_message(user_input)
 
+        # ⚡ 新任务开始，重置工具调用计数器
+        self._tool_call_count = 0
+
         iteration = 0
 
         while iteration < self.max_iterations:
@@ -359,7 +369,23 @@ class Agent:
                 # 执行所有工具（支持并行调用，但这里顺序执行）
                 try:
                     for tool_call in tool_calls:
+                        # ⚡ 检查工具调用上限，超过直接回答
+                        if self._tool_call_count >= self._max_tool_calls_per_task:
+                            stop_msg = (
+                                f"⚠️ 已达到工具调用上限 ({self._max_tool_calls_per_task} 次)。"
+                                "基于已获取的信息直接回答，不再继续调用工具。"
+                            )
+                            Console.tool_warning(stop_msg)
+                            self.add_assistant_message(stop_msg)
+
+                            # 强制做一次无工具的思考，直接回答
+                            decision = await self.think(stream=True)
+                            final_answer = decision["content"]
+                            self.add_assistant_message(final_answer)
+                            return final_answer
+
                         tool_result = await self.execute_tool(tool_call)
+                        self._tool_call_count += 1  # ⚡ 计数
                         self.add_tool_result_message(tool_call.id, tool_call.name, tool_result)
                 except UserCancelledError:
                     # 用户主动取消了工具调用，中止整个思考循环

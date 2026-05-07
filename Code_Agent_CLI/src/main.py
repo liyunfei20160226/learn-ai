@@ -21,7 +21,7 @@ if sys.platform == "win32":
     warnings.filterwarnings("ignore", category=UserWarning, message="unclosed transport")
 
 from agent.core import Agent
-from tools.loader import register_all_tools, print_registered_tools
+from tools.loader import register_all_tools
 from llm.factory import get_llm_provider
 from utils.console import Console
 from utils.command_handler import handler  # 命令处理器

@@ -8,6 +8,7 @@ from typing import Any, Optional
 from .tool_buffer import ToolResultBufferLayer
 from .working import WorkingMemoryLayer
 from .token_counter import estimate_tokens
+from .compression import CompressionLayer, CompressionStrategy
 
 
 class ContextManager:
@@ -25,11 +26,15 @@ class ContextManager:
         working_window_size: int = 10,
         working_max_tokens: int = 50000,
         tool_buffer_max_tokens: int = 80000,
-        tool_small_threshold: int = 1000,
-        tool_large_threshold: int = 5000,
+        tool_small_threshold: int = 500,   # ⚡ 更激进的截断：小阈值 500 chars
+        tool_large_threshold: int = 2000,  # ⚡ 更激进的截断：大阈值 2000 chars
         # Skill 阈值 - 操作手册需要尽量完整
         skill_small_threshold: int = 100000,
         skill_large_threshold: int = 100000,
+        # Compression 层配置
+        enable_compression: bool = True,
+        llm_provider: Optional[Any] = None,
+        compression_strategy: Optional[CompressionStrategy] = None,
     ):
         """
         初始化上下文管理器
@@ -43,6 +48,9 @@ class ContextManager:
             tool_large_threshold: 普通工具结果大阈值（字符数，以上深度截断）
             skill_small_threshold: Skill 小阈值（字符数，默认 100k，几乎不截断）
             skill_large_threshold: Skill 大阈值
+            enable_compression: 是否启用智能压缩层
+            llm_provider: LLM 提供商（用于摘要，不传则压缩层用简单截断）
+            compression_strategy: 压缩策略配置
         """
         self.total_budget = total_budget
         self.system_prompt: str = ""
@@ -59,6 +67,19 @@ class ContextManager:
             skill_small_threshold=skill_small_threshold,
             skill_large_threshold=skill_large_threshold,
         )
+
+        # Compression 层 - 智能压缩（Phase 6 新增）
+        self.enable_compression = enable_compression
+        self.compression: Optional[CompressionLayer] = None
+        if enable_compression:
+            self.compression = CompressionLayer(
+                llm_provider=llm_provider,
+                strategy=compression_strategy,
+            )
+            # 🔗 把压缩层引用传给 tool_buffer，用于触发后台异步摘要
+            self.tool_buffer.set_compression_layer(self.compression)
+        # 压缩统计
+        self._compression_saved_chars: int = 0
 
     def set_system_prompt(self, prompt: str) -> None:
         """设置系统提示词"""
@@ -135,18 +156,62 @@ class ContextManager:
 
         return messages
 
-    def build_context_with_tool_results(self) -> list[dict[str, Any]]:
+    async def build_context_with_tool_results(self) -> list[dict[str, Any]]:
         """
-        构建包含工具结果的完整上下文
+        构建包含工具结果的完整上下文（支持压缩）
 
-        这是 build_context 的替代方案，会将工具结果显式插入到
-        对应的 tool_use 之后。
+        🔧 消息格式修复（解决 HIGH 级别 Bug）：
+        每条 tool_result 必须紧跟在对应的 tool_use 消息后面，而不是都放在末尾。
         """
-        # Phase 1 简化：直接拼接工具结果到最后
-        # 更精确的对齐留到 Phase 2
+        # 获取工作记忆中的消息
         messages = self.build_context()
-        messages.extend(self.tool_buffer.get_active_results())
-        return messages
+
+        # Phase 6：压缩旧对话
+        if self.enable_compression and self.compression:
+            messages, saved_chars = await self.compression.process_old_messages(
+                messages
+            )
+            self._compression_saved_chars += saved_chars
+
+        # 获取工具结果
+        tool_results_map: dict[str, dict[str, Any]] = {}
+        for result in self.tool_buffer.get_active_results():
+            content = result.get("content", [])
+            if isinstance(content, list) and len(content) > 0:
+                item = content[0]
+                if isinstance(item, dict) and item.get("type") == "tool_result":
+                    tool_call_id = item.get("tool_use_id", "unknown")
+
+                    # Phase 6：如果有缓存摘要，替换内容
+                    if self.enable_compression and self.compression:
+                        if self.compression.has_cached_summary(tool_call_id):
+                            cached_summary = self.compression.get_cached_summary(tool_call_id)
+                            if cached_summary:
+                                item["content"] = cached_summary
+
+                    tool_results_map[tool_call_id] = result
+
+        # ✅ 修复：构建正确的消息序列
+        # 遍历所有消息，遇到 tool_use 时在后面插入对应的 tool_result
+        final_messages: list[dict[str, Any]] = []
+        for msg in messages:
+            final_messages.append(msg)
+
+            # 如果这条消息包含 tool_use，在后面插入对应的 tool_result
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        tool_id = block.get("id")
+                        if tool_id in tool_results_map:
+                            final_messages.append(tool_results_map[tool_id])
+                            del tool_results_map[tool_id]  # 移除，避免重复
+
+        # 剩下没有找到对应 tool_use 的工具结果，附加到末尾（兜底）
+        for remaining_result in tool_results_map.values():
+            final_messages.append(remaining_result)
+
+        return final_messages
 
     def count_total_tokens(self) -> int:
         """估算完整上下文的 Token 总数"""
@@ -171,11 +236,40 @@ class ContextManager:
             }
         """
         total = self.count_total_tokens()
+
+        compression_stats = None
+        if self.compression:
+            compression_stats = {
+                "enabled": True,
+                "total_compressed": self.compression.stats.total_compressed,
+                "saved_chars": self.compression.stats.total_saved_chars,
+                "saved_percent": self.compression.stats.overall_ratio,
+                "items": [
+                    {
+                        "id": item.original_id,
+                        "type": item.compression_type,
+                        "original_size": item.original_size_chars,
+                        "compressed_size": item.compressed_size_chars,
+                        "ratio": item.saving_percent,
+                    }
+                    for item in self.compression.stats.compressed_items
+                ],
+            }
+        else:
+            compression_stats = {
+                "enabled": False,
+                "total_compressed": 0,
+                "saved_chars": 0,
+                "saved_percent": 0,
+                "items": [],
+            }
+
         return {
             "total_tokens_used": total,
             "total_budget": self.total_budget,
             "remaining": self.total_budget - total,
             "utilization": f"{(total / self.total_budget * 100):.1f}%",
+            "compression": compression_stats,
             "layers": {
                 "system": {
                     "tokens": estimate_tokens(self.system_prompt),
@@ -207,6 +301,28 @@ class ContextManager:
             f"  📭 剩余可用: {stats['remaining']:,} tokens",
         ]
 
+        # Phase 6：显示压缩统计
+        comp = stats["compression"]
+        if comp["enabled"] and comp["total_compressed"] > 0:
+            lines.append("")
+            lines.append(
+                f"  ✨ 智能压缩: 已压缩 {comp['total_compressed']} 项，"
+                f"节省 {comp['saved_chars']:,} 字符 ({comp['saved_percent']:.1f}%)"
+            )
+            if comp["items"]:
+                lines.append("     最近压缩项:")
+                for item in comp["items"][-3:]:
+                    lines.append(
+                        f"       - [{item['type']}] {item['id'][:20]}: "
+                        f"{item['original_size']:,} → {item['compressed_size']:,} "
+                        f"({item['ratio']:.0f}%节省)"
+                    )
+                if len(comp["items"]) > 3:
+                    lines.append(f"       ... 还有 {len(comp['items']) - 3} 项")
+        elif comp["enabled"]:
+            lines.append("")
+            lines.append("  ✨ 智能压缩: 已启用，暂无压缩内容")
+
         # 显示最大的几个工具结果
         cached_tools = layers["tool_buffer"]["cached_tools"]
         if cached_tools:
@@ -226,7 +342,40 @@ class ContextManager:
         """清空所有上下文"""
         self.working.clear()
         self.tool_buffer.clear()
+        if self.compression:
+            self.compression.clear()
+
+        # 同时清空全局压缩内容注册表
+        from context.compression import clear_compressed_registry
+        clear_compressed_registry()
 
     def clear_tool_results(self) -> None:
         """只清空工具结果缓存"""
         self.tool_buffer.clear()
+
+    def recall_content(self, content_id: str) -> Optional[str]:
+        """
+        召回被压缩的内容的完整版本
+
+        Args:
+            content_id: 压缩时生成的内容 ID
+
+        Returns:
+            完整内容，如果找不到返回 None
+        """
+        if self.compression:
+            return self.compression.recall_full_content(content_id)
+        return None
+
+    def list_compressed_items(self) -> list[str]:
+        """列出所有被压缩的内容 ID"""
+        if self.compression:
+            return self.compression.list_compressed_ids()
+        return []
+
+    def toggle_compression(self, enabled: bool) -> None:
+        """开关压缩功能"""
+        self.enable_compression = enabled
+        if not enabled and self.compression:
+            # 关闭时清空压缩缓存
+            self.compression.clear()

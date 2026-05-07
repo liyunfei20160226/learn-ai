@@ -7,6 +7,7 @@
 """
 from .registry import ToolRegistry
 from .bash import BashTool
+from .recall import RecallContentTool
 from utils.console import Console
 
 
@@ -17,8 +18,11 @@ def register_all_tools() -> None:
     注意：文件操作工具（read/list/write/grep）已由 MCP filesystem server 替代
     只需保留 BashTool 作为通用命令执行工具
     """
-    # 只注册 BashTool，文件操作由 MCP filesystem server 提供
+    # 基础工具
     ToolRegistry.register(BashTool)
+
+    # Compression 层配套工具：LLM 自主召回被压缩的完整内容
+    ToolRegistry.register(RecallContentTool)
 
 
 def print_registered_tools() -> None:

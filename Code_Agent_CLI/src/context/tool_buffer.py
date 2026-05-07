@@ -12,6 +12,7 @@
 - 普通工具（read/list/grep/bash）：严格截断，保护上下文
 - Skill 工具（操作手册）：大阈值，尽量完整保留指南内容
 """
+import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -47,11 +48,11 @@ class ToolResultBufferLayer(BaseLayer):
     对工具执行结果进行分级管理，避免大结果撑爆上下文。
     """
 
-    # 保留策略（字符数）
-    KEEP_FIRST_CHARS = 800     # 深度截断时保留开头字符数
-    KEEP_LAST_CHARS = 400      # 深度截断时保留末尾字符数
-    MEDIUM_FIRST_CHARS = 1500  # 中等截断保留开头
-    MEDIUM_LAST_CHARS = 800    # 中等截断保留末尾
+    # 保留策略（字符数）- ⚡ 更激进的截断优化性能
+    KEEP_FIRST_CHARS = 300     # 深度截断时保留开头字符数
+    KEEP_LAST_CHARS = 150      # 深度截断时保留末尾字符数
+    MEDIUM_FIRST_CHARS = 500   # 中等截断保留开头
+    MEDIUM_LAST_CHARS = 250    # 中等截断保留末尾
 
     def __init__(
         self,
@@ -86,6 +87,35 @@ class ToolResultBufferLayer(BaseLayer):
         self.SKILL_LARGE = skill_large_threshold
 
         self._cache: dict[str, CachedToolResult] = {}
+        self._compression_layer: Optional[Any] = None  # 压缩层引用，用于后台异步摘要
+
+    def set_compression_layer(self, compression_layer: Any) -> None:
+        """设置压缩层引用，用于触发后台异步摘要"""
+        self._compression_layer = compression_layer
+
+    def _should_summarize(self, tool_name: str, result: str) -> bool:
+        """
+        判断是否需要对这个工具结果做智能摘要
+
+        Returns:
+            True = 可以在后台做摘要，False = 不需要
+        """
+        # ❌ recall_content 永远不做摘要，它的目的就是返回完整内容
+        if tool_name == "recall_content":
+            return False
+
+        size = len(result)
+
+        # ❌ 太小，没必要
+        if size <= 1000:
+            return False
+
+        # ❌ 太大，调用 LLM 太慢也费钱，直接让用户召回
+        if size > 20000:
+            return False
+
+        # ✅ 1000-20000 字符之间，可以做智能摘要
+        return True
 
     def add(
         self,
@@ -114,6 +144,28 @@ class ToolResultBufferLayer(BaseLayer):
             metadata=metadata or {},
         )
         self._cache[tool_call_id] = entry
+
+        # 📝 所有工具结果都注册到全局注册表（不管是否压缩！）
+        # 这样 recall_content 总能拿到完整内容
+        from context.compression import register_compressed_content, CompressedContent
+        register_compressed_content(CompressedContent(
+            original_id=tool_call_id,
+            compression_type="full",  # 标记为完整未压缩
+            original_size_chars=len(result),
+            compressed_size_chars=len(result),
+            original_content=result,
+            compressed_content=result,
+            content_type="tool_result",
+        ))
+
+        # 🚀 启动后台智能摘要任务（不阻塞！）
+        if self._compression_layer and self._should_summarize(tool_name, result):
+            # 注意：这里不 await，让它在后台跑
+            asyncio.create_task(
+                self._compression_layer.summarize_in_background(
+                    tool_name, tool_call_id, result
+                )
+            )
 
         # 如果超过最大数量，清理最旧的
         while len(self._cache) > self.max_results:
@@ -182,6 +234,20 @@ class ToolResultBufferLayer(BaseLayer):
         """
         size = entry.size_chars
 
+        # ✅ 特殊工具：recall_content - 永远不截断，因为它就是用来返回完整内容的
+        if entry.tool_name == "recall_content":
+            processed_content = entry.full_result
+            return {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": entry.tool_call_id,
+                        "content": processed_content,
+                    }
+                ],
+            }
+
         # ✅ 根据工具类型选择阈值
         tool_type = ToolRegistry.get_tool_type(entry.tool_name)
 
@@ -205,8 +271,9 @@ class ToolResultBufferLayer(BaseLayer):
             truncated_count = size - self.MEDIUM_FIRST_CHARS - self.MEDIUM_LAST_CHARS
             processed_content = (
                 f"{first_part}\n\n"
-                f"... [已截断中间 {truncated_count} 字符，共 {size} 字符] ...\n\n"
-                f"{last_part}"
+                f"... [已截断中间 {truncated_count} 字符，共 {size} 字符，内容ID: {entry.tool_call_id}] ...\n\n"
+                f"{last_part}\n\n"
+                f"[如需查看完整内容，请调用 recall_content 工具，参数 content_id = \"{entry.tool_call_id}\"]"
             )
 
         else:
@@ -215,11 +282,12 @@ class ToolResultBufferLayer(BaseLayer):
             last_part = entry.full_result[-self.KEEP_LAST_CHARS:]
             truncated_count = size - self.KEEP_FIRST_CHARS - self.KEEP_LAST_CHARS
             processed_content = (
-                f"[工具结果已截断] 工具: {entry.tool_name}, 总大小: {size} 字符\n\n"
+                f"[工具结果已截断] 工具: {entry.tool_name}, 总大小: {size} 字符\n"
+                f"内容ID: {entry.tool_call_id}\n\n"
                 f"{first_part}\n\n"
                 f"... [已省略中间 {truncated_count} 字符] ...\n\n"
                 f"{last_part}\n\n"
-                f"[如需查看完整内容，请要求我展示此工具的完整结果]"
+                f"[重要: 如需查看完整内容，请调用 recall_content 工具，参数 content_id = \"{entry.tool_call_id}\"]"
             )
 
         return {
@@ -242,6 +310,10 @@ class ToolResultBufferLayer(BaseLayer):
         - 上下文版本是给 LLM 看的，保留更多信息
         """
         size = entry.size_chars
+
+        # ⚠️ recall_content：永远显示"完整结果"
+        if entry.tool_name == "recall_content":
+            return f"完整结果 ({size} 字符)"
 
         # 根据工具类型选择阈值
         tool_type = ToolRegistry.get_tool_type(entry.tool_name)
