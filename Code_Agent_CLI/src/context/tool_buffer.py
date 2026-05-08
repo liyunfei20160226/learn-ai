@@ -432,7 +432,9 @@ class ToolResultBufferLayer(BaseLayer):
         self.SKILL_SMALL = data.get("skill_small_threshold", 100000)
         self.SKILL_LARGE = data.get("skill_large_threshold", 100000)
 
-        # 恢复缓存
+        # 恢复缓存，并注册到全局压缩注册表
+        from context.compression import register_compressed_content, CompressedContent
+
         cache_data = data.get("cache", [])
         for entry_data in cache_data:
             entry = CachedToolResult(
@@ -444,3 +446,16 @@ class ToolResultBufferLayer(BaseLayer):
             entry.timestamp = entry_data.get("timestamp", entry.timestamp)
             entry.access_count = entry_data.get("access_count", 0)
             self._cache[entry.tool_call_id] = entry
+
+            # 注册到全局压缩注册表，确保 recall_content 能找到
+            full_result = entry.full_result
+            compressed = CompressedContent(
+                original_id=entry.tool_call_id,
+                compression_type="full",
+                original_size_chars=len(full_result),
+                compressed_size_chars=len(full_result),
+                original_content=full_result,
+                compressed_content=full_result,
+                content_type="tool_result",
+            )
+            register_compressed_content(compressed)

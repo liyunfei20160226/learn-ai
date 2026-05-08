@@ -190,9 +190,13 @@ class CompressionLayer:
         async def _task():
             try:
                 await self.process_tool_result(tool_name, tool_call_id, full_result)
-            except Exception:
-                # 后台任务失败不影响主流程，静默处理
-                pass
+            except asyncio.CancelledError:
+                # 任务被取消，正常退出
+                raise
+            except Exception as e:
+                # 后台任务失败不影响主流程，但记录日志便于调试
+                from utils.logger import Logger
+                Logger.debug(f"后台摘要任务失败: {tool_name}, {type(e).__name__}: {e}")
             finally:
                 self._pending_tasks.pop(tool_call_id, None)
 
@@ -388,7 +392,13 @@ class CompressionLayer:
         return list_all_compressed_ids()
 
     def clear(self) -> None:
-        """清空压缩缓存（全局注册表是唯一存储）"""
+        """清空压缩缓存和所有待处理任务"""
+        # 取消所有正在运行的后台任务
+        for task in self._pending_tasks.values():
+            if not task.done():
+                task.cancel()
+        self._pending_tasks.clear()
+
         self.stats = CompressionStats()
         clear_compressed_registry()
 

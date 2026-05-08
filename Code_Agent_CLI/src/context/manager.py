@@ -181,7 +181,24 @@ class ContextManager:
         Returns:
             实际回退的轮数
         """
+        total_turns = len(self.memory._turns)
+        if total_turns == 0 or turns <= 0:
+            return 0
+
+        # 先收集将被删除的回合的工具调用 ID
+        actual_rewind = min(turns, total_turns)
+        removed_tool_call_ids: set[str] = set()
+        for turn in self.memory._turns[-actual_rewind:]:
+            removed_tool_call_ids.update(turn.tool_results.keys())
+
+        # 执行回退
         actual = self.memory.rewind(turns)
+
+        # 同步清理 tool_buffer 中对应的工具结果
+        if actual > 0 and removed_tool_call_ids:
+            for tool_call_id in list(self.tool_buffer._cache.keys()):
+                if tool_call_id in removed_tool_call_ids:
+                    del self.tool_buffer._cache[tool_call_id]
 
         # 更新 next_turn_id：回退后的回合数 + 1
         self._next_turn_id = len(self.memory._turns) + 1
