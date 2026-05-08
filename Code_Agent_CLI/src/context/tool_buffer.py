@@ -391,3 +391,56 @@ class ToolResultBufferLayer(BaseLayer):
                 for e in self._cache.values()
             ],
         }
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        序列化到字典（供 SessionManager 使用）
+
+        保存所有缓存的工具结果，加载后可以直接召回。
+        """
+        return {
+            "max_total_tokens": self.max_total_tokens,
+            "max_results": self.max_results,
+            "tool_small_threshold": self.TOOL_SMALL,
+            "tool_large_threshold": self.TOOL_LARGE,
+            "skill_small_threshold": self.SKILL_SMALL,
+            "skill_large_threshold": self.SKILL_LARGE,
+            "cache": [
+                {
+                    "tool_call_id": entry.tool_call_id,
+                    "tool_name": entry.tool_name,
+                    "full_result": entry.full_result,
+                    "metadata": entry.metadata,
+                    "timestamp": entry.timestamp,
+                    "access_count": entry.access_count,
+                }
+                for entry in self._cache.values()
+            ],
+        }
+
+    def from_dict(self, data: dict[str, Any]) -> None:
+        """
+        从字典反序列化（供 SessionManager 使用）
+        """
+        self.clear()
+
+        # 恢复配置
+        self.max_total_tokens = data.get("max_total_tokens", 80000)
+        self.max_results = data.get("max_results", 20)
+        self.TOOL_SMALL = data.get("tool_small_threshold", 1000)
+        self.TOOL_LARGE = data.get("tool_large_threshold", 5000)
+        self.SKILL_SMALL = data.get("skill_small_threshold", 100000)
+        self.SKILL_LARGE = data.get("skill_large_threshold", 100000)
+
+        # 恢复缓存
+        cache_data = data.get("cache", [])
+        for entry_data in cache_data:
+            entry = CachedToolResult(
+                tool_call_id=entry_data["tool_call_id"],
+                tool_name=entry_data["tool_name"],
+                full_result=entry_data["full_result"],
+                metadata=entry_data.get("metadata", {}),
+            )
+            entry.timestamp = entry_data.get("timestamp", entry.timestamp)
+            entry.access_count = entry_data.get("access_count", 0)
+            self._cache[entry.tool_call_id] = entry

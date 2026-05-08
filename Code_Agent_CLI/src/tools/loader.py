@@ -7,7 +7,7 @@
 """
 from .registry import ToolRegistry
 from .bash import BashTool
-from .recall import RecallContentTool
+from .recall import RecallContentTool, RecallTurnTool
 from utils.console import Console
 
 
@@ -23,6 +23,9 @@ def register_all_tools() -> None:
 
     # Compression 层配套工具：LLM 自主召回被压缩的完整内容
     ToolRegistry.register(RecallContentTool)
+
+    # MemoryLayer 配套工具：LLM 自主召回历史回合的完整内容
+    ToolRegistry.register(RecallTurnTool)
 
 
 def print_registered_tools() -> None:

@@ -95,6 +95,14 @@ class CommandHandler:
             return self._handle_recall(agent, args)
         if cmd_name == "compression":
             return self._handle_compression_toggle(agent, args)
+        if cmd_name == "rewind":
+            return self._handle_rewind(agent, args)
+        if cmd_name == "save":
+            return self._handle_save_session(agent, args)
+        if cmd_name == "load":
+            return self._handle_load_session(agent, args)
+        if cmd_name == "delete":
+            return self._handle_delete_session(agent, args)
 
         # 查找并执行无参数命令
         if cmd_name in self._commands:
@@ -180,6 +188,63 @@ class CommandHandler:
 
         # 无效参数
         Console.warning("用法: /compression on|off|status")
+        return True
+
+    def _handle_rewind(self, agent, args: str) -> bool:
+        """处理 /rewind 命令（时光机）"""
+        # 解析回退轮数（默认 1 轮）
+        if args and args.isdigit():
+            turns = int(args)
+        else:
+            turns = 1
+
+        actual = agent.context.rewind(turns)
+        if actual > 0:
+            Console.success(f"⏪ 已回退 {actual} 轮对话")
+            Console.info(f"当前共 {len(agent.context.memory._turns)} 轮对话")
+        else:
+            Console.warning("没有对话可以回退")
+        return True
+
+    def _handle_save_session(self, agent, args: str) -> bool:
+        """处理 /save 命令（给会话起名）"""
+        if not args:
+            Console.warning("请输入会话名称，例如：/save 分析项目架构")
+            return True
+
+        session_id = agent.context.save_session(args)
+        Console.success(f"✅ 已将会话命名为：{args}")
+        Console.info(f"Session ID: {session_id}")
+        Console.info("提示：数据已自动保存，/save 只是方便以后识别")
+        return True
+
+    def _handle_load_session(self, agent, args: str) -> bool:
+        """处理 /load 命令（加载历史会话）"""
+        if not args:
+            Console.warning("请输入 Session ID，例如：/load abc123")
+            Console.info("提示：输入 /sessions 查看所有历史会话")
+            return True
+
+        success = agent.context.load_session(args)
+        if success:
+            Console.success(f"✅ 已加载会话：{agent.context.session_name}")
+            Console.info(f"当前共 {len(agent.context.memory._turns)} 轮对话")
+        else:
+            Console.warning(f"加载失败，找不到 Session ID: {args}")
+        return True
+
+    def _handle_delete_session(self, agent, args: str) -> bool:
+        """处理 /delete 命令（删除历史会话）"""
+        if not args:
+            Console.warning("请输入 Session ID，例如：/delete abc123")
+            Console.info("提示：输入 /sessions 查看所有历史会话")
+            return True
+
+        success = agent.context.delete_session(args)
+        if success:
+            Console.success(f"✅ 已删除会话: {args}")
+        else:
+            Console.warning(f"删除失败，找不到 Session ID: {args}")
         return True
 
     def get_help_text(self) -> str:
@@ -287,3 +352,74 @@ def cmd_compressed(agent):
     print()
     Console.info("  输入 /recall <序号> 查看完整内容")
     print()
+
+
+# -------- 注册 /resume 命令（Phase 7：Session） --------
+@handler.register("resume", "继续上次中断的会话")
+def cmd_resume(agent):
+    success = agent.context.resume_last_session()
+    if success:
+        Console.success(f"✅ 已恢复上次会话：{agent.context.session_name}")
+        Console.info(f"当前共 {len(agent.context.memory._turns)} 轮对话")
+    else:
+        Console.warning("没有找到历史会话")
+
+
+# -------- 注册 /sessions 命令（Phase 7：Session） --------
+@handler.register("sessions", "列出所有历史会话")
+def cmd_sessions(agent):
+    sessions = agent.context.list_sessions()
+    if not sessions:
+        Console.info("  暂无历史会话")
+        return
+
+    print()
+    Console.section(f"📜 历史会话（共 {len(sessions)} 个）")
+    print()
+
+    for idx, s in enumerate(sessions, 1):
+        name = s.get("name", "未命名会话")
+        session_id = s.get("session_id", "")
+        cwd = s.get("cwd", "")
+
+        if idx == 1:
+            latest_marker = "  ⭐"
+        else:
+            latest_marker = "   "
+
+        print(f"{latest_marker} [{session_id}] {name}")
+        if cwd:
+            print(f"      工作目录: {cwd}")
+        print()
+
+    Console.info("  输入 /load <session_id> 加载指定会话")
+    Console.info("  输入 /delete <session_id> 删除指定会话")
+    print()
+
+
+# -------- 注册 /rewind 命令（Phase 7：Session） --------
+@handler.register("rewind", "回退指定轮数的对话（用法：/rewind [n]，默认 1 轮）")
+def cmd_rewind(agent, *args):
+    # 占位：实际在 handle 方法中调用 _handle_rewind
+    pass
+
+
+# -------- 注册 /save 命令（Phase 7：Session） --------
+@handler.register("save", "给当前会话起个好记的名字（用法：/save <名称>）")
+def cmd_save(agent, *args):
+    # 占位：实际在 handle 方法中调用 _handle_save_session
+    pass
+
+
+# -------- 注册 /load 命令（Phase 7：Session） --------
+@handler.register("load", "加载历史会话（用法：/load <session_id>）")
+def cmd_load(agent, *args):
+    # 占位：实际在 handle 方法中调用 _handle_load_session
+    pass
+
+
+# -------- 注册 /delete 命令（Phase 7：Session） --------
+@handler.register("delete", "删除历史会话（用法：/delete <session_id>）")
+def cmd_delete(agent, *args):
+    # 占位：实际在 handle 方法中调用 _handle_delete_session
+    pass

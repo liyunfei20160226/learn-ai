@@ -13,6 +13,7 @@ Agent 核心 - 实现思考-行动循环
 - 这样可以轻松切换不同的 LLM，不需要改 Agent 代码
 """
 import os
+import time
 from typing import Dict, Any, Optional
 
 from context import ContextManager
@@ -20,6 +21,7 @@ from tools.registry import ToolRegistry
 from tools.base import ToolError, UserCancelledError
 from llm.base import LLMProvider, LLMResponse, ToolCall
 from utils.console import Console
+from utils.logger import Logger
 
 
 class Agent:
@@ -63,11 +65,15 @@ class Agent:
         # 上下文管理器 - 分层管理对话历史和工具结果
         self.context = ContextManager(
             total_budget=context_config.get("total_budget", 150000),
-            working_window_size=context_config.get("working_window_size", 10),
-            working_max_tokens=context_config.get("working_max_tokens", 50000),
+            # Phase 7: MemoryLayer 配置 - 按回合数而不是 Token 数
+            working_turns=context_config.get("working_turns", 3),
+            short_term_turns=context_config.get("short_term_turns", 10),
             tool_buffer_max_tokens=context_config.get("tool_buffer_max_tokens", 80000),
             tool_small_threshold=context_config.get("tool_small_threshold", 500),
             tool_large_threshold=context_config.get("tool_large_threshold", 2000),
+            # Skill 阈值 - 操作手册需要尽量完整
+            skill_small_threshold=context_config.get("skill_small_threshold", 100000),
+            skill_large_threshold=context_config.get("skill_large_threshold", 100000),
             # Phase 6：Compression 层配置
             enable_compression=context_config.get("enable_compression", True),
             llm_provider=llm_provider,  # 把 LLM 传给压缩层用于摘要
@@ -206,8 +212,21 @@ class Agent:
             {"action": "answer", "content": "..."}
             {"action": "tool", "tool_calls": [...], "content": "..."}
         """
-        # 从 ContextManager 获取完整上下文（Phase 6：现在是异步的）
+
+        # 阶段 1：构建上下文
+        t0 = time.time()
+        Logger.debug("开始构建上下文...")
         messages = await self.context.build_context_with_tool_results()
+        t1 = time.time()
+        Logger.debug(f"上下文构建完成，耗时 {(t1 - t0) * 1000:.1f} ms，{len(messages)} 条消息")
+
+        # 调试：记录消息内容摘要（DEBUG 级别）
+        for i, msg in enumerate(messages):
+            role = msg.get("role", "unknown")
+            content = str(msg.get("content", ""))
+            if len(content) > 100:
+                content = content[:100] + "..."
+            Logger.debug(f"Message {i}: role={role}, content={content!r}")
 
         # 流式输出
         if stream:
@@ -216,11 +235,20 @@ class Agent:
 
             Console.answer_prefix()
 
+            # 阶段 2：开始 LLM 调用
+            t2 = time.time()
+            Logger.debug("开始调用 LLM API...")
+            first_chunk = True
+
             async for chunk in self.llm.chat_completion_stream(
                 messages=messages,
                 tools=self.get_tool_descriptions(),
                 system=self.system_prompt,
             ):
+                if first_chunk:
+                    first_chunk = False
+                    t3 = time.time()
+                    Logger.debug(f"LLM 首字节到达，等待时间 {(t3 - t2) * 1000:.1f} ms")
                 if chunk["type"] == "text":
                     Console.answer_text(chunk["content"])
                     full_text += chunk["content"]
@@ -228,6 +256,10 @@ class Agent:
                     tool_calls.append(chunk["tool_call"])
 
             Console.answer_end()  # 换行
+
+            # 阶段 3：LLM 调用完成
+            t4 = time.time()
+            Logger.debug(f"LLM 调用完成，总耗时 {(t4 - t2) * 1000:.1f} ms")
 
             # 过滤不存在的工具（防止幻觉）
             valid_tool_calls = []
@@ -331,13 +363,12 @@ class Agent:
         """
         🚀 运行一次完整的思考-行动循环
 
-        Args:
-            user_input: 用户最新的输入
-
-        Returns:
-            Agent 的最终回答
+        使用 MemoryLayer 生命周期管理：
+        on_turn_start → think()/execute_tool()... → on_turn_end
         """
-        self.add_user_message(user_input)
+        # 🎯 回合开始：初始化记忆层（add_user_message 内部也会调用 on_turn_start？
+        # 不，我们只调用一次就够了）
+        self.context.on_turn_start(user_input)
 
         iteration = 0
 
@@ -350,25 +381,44 @@ class Agent:
             if decision["action"] == "answer":
                 final_answer = decision["content"]
                 self.add_assistant_message(final_answer)
+
+                # 🎯 回合结束：触发压缩决策
+                await self.context.on_turn_end(final_answer)
+
                 return final_answer
 
             elif decision["action"] == "tool":
                 tool_calls = decision["tool_calls"]
                 text_before = decision.get("content", "")
 
-                # 先把 Assistant 的消息（包括工具调用）加入历史
+                # 🎯 记录 Assistant 思考内容
+                if text_before:
+                    self.context.record_assistant_thinking(text_before)
+
+                # 🎯 记录所有工具调用
+                for tool_call in tool_calls:
+                    self.context.record_tool_call(
+                        tool_call.id, tool_call.name, tool_call.arguments
+                    )
+
+                # 先把 Assistant 的消息（包括工具调用）加入历史（旧接口兼容）
                 self.add_assistant_message(text_before, tool_calls)
 
                 # 执行所有工具（支持并行调用，但这里顺序执行）
                 try:
                     for tool_call in tool_calls:
                         tool_result = await self.execute_tool(tool_call)
+                        # 🎯 记录工具结果
                         self.add_tool_result_message(tool_call.id, tool_call.name, tool_result)
                 except UserCancelledError:
                     # 用户主动取消了工具调用，中止整个思考循环
                     cancel_msg = "用户取消了命令执行，停止当前操作。请给出新的指示。"
                     Console.tool_warning(cancel_msg)
                     self.add_assistant_message(cancel_msg)
+
+                    # 🎯 取消也要结束回合
+                    await self.context.on_turn_end(cancel_msg)
+
                     return cancel_msg
 
                 # 循环回去继续思考
@@ -376,10 +426,18 @@ class Agent:
                 error_msg = f"不知道要做什么: {decision}"
                 Console.error(error_msg)
                 self.add_assistant_message(error_msg)
+
+                # 🎯 错误也要结束回合
+                await self.context.on_turn_end(error_msg)
+
                 return error_msg
 
         max_reached_msg = f"已达到最大工具调用次数 ({self.max_iterations})，停止执行。"
         Console.tool_warning(max_reached_msg)
+
+        # 🎯 达到上限也要结束回合
+        await self.context.on_turn_end(max_reached_msg)
+
         return max_reached_msg
 
     def show_context_stats(self) -> None:

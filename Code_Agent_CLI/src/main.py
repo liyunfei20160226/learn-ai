@@ -24,6 +24,7 @@ from agent.core import Agent
 from tools.loader import register_all_tools
 from llm.factory import get_llm_provider
 from utils.console import Console
+from utils.logger import Logger
 from utils.command_handler import handler  # 命令处理器
 from mcp_client import mcp_manager  # MCP Server 管理器
 
@@ -36,6 +37,12 @@ async def main():
     # 0. 加载环境变量（从 .env 文件）
     # 必须在创建 LLM Provider 之前加载
     load_dotenv()
+
+    # 0.1 初始化日志系统
+    log_level = os.getenv("LOG_LEVEL", "INFO")
+    log_prefix = os.getenv("LOG_FILE_PREFIX", "code-agent")
+    Logger.init(log_dir="logs", level=log_level, log_file_prefix=log_prefix)
+    Logger.info(f"日志系统初始化完成，级别: {log_level}")
 
     # 1. 注册所有可用工具
     register_all_tools()
@@ -116,8 +123,9 @@ async def main():
     # 5. 读取上下文管理配置
     context_config = {
         "total_budget": int(os.getenv("CONTEXT_TOTAL_BUDGET", "150000")),
-        "working_window_size": int(os.getenv("CONTEXT_WORKING_WINDOW_SIZE", "10")),
-        "working_max_tokens": int(os.getenv("CONTEXT_WORKING_MAX_TOKENS", "50000")),
+        # Phase 7: MemoryLayer 配置（按回合数，不是 Token 数）
+        "working_turns": int(os.getenv("MEMORY_WORKING_TURNS", "3")),
+        "short_term_turns": int(os.getenv("MEMORY_SHORT_TERM_TURNS", "10")),
         "tool_buffer_max_tokens": int(os.getenv("CONTEXT_TOOL_BUFFER_MAX_TOKENS", "80000")),
         "tool_small_threshold": int(os.getenv("CONTEXT_TOOL_SMALL_THRESHOLD", "1000")),
         "tool_large_threshold": int(os.getenv("CONTEXT_TOOL_LARGE_THRESHOLD", "5000")),

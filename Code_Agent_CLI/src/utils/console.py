@@ -9,6 +9,8 @@ import sys
 import time
 from colorama import init, Fore, Style
 
+from utils.logger import Logger
+
 # 修复 Windows 终端编码问题 - 仅在 Windows 上强制使用 UTF-8
 # macOS/Linux 不需要，否则会导致 ANSI 颜色码显示异常
 if sys.platform == "win32":
@@ -234,9 +236,10 @@ class Console:
 
     @classmethod
     def think(cls, iteration: int = 1) -> None:
-        """打印思考状态"""
+        """打印思考状态 + 写入日志"""
         print()
         print(cls.color("thinking") + f"🧠 思考中... 第 {iteration} 轮" + cls.RESET)
+        Logger.info(f"开始第 {iteration} 轮思考")
 
     @classmethod
     def answer_prefix(cls) -> None:
@@ -256,7 +259,7 @@ class Console:
 
     @classmethod
     def tool_call(cls, tool_name: str, arguments: dict) -> None:
-        """打印工具调用信息"""
+        """打印工具调用信息 + 写入日志"""
         print()
         print(cls.color("tool") + "─────────────────────────────────────────────────────────────" + cls.RESET)
         print(cls.color("tool") + f"🔧 调用工具: {tool_name}" + cls.RESET)
@@ -273,41 +276,52 @@ class Console:
 
         print(cls.color("tool") + "─────────────────────────────────────────────────────────────" + cls.RESET)
 
+        # 日志记录（完整参数，不截断）
+        Logger.info(f"调用工具: {tool_name}, 参数: {arguments}")
+
     @classmethod
     def tool_success(cls, result_length: int, elapsed: float = 0.0) -> None:
-        """打印工具执行成功"""
+        """打印工具执行成功 + 写入日志"""
         elapsed_str = f" 耗时: {elapsed:.2f}s" if elapsed > 0 else ""
-        print(cls.color("success") + f"   ✅ 工具执行完成 - 结果长度: {result_length} 字符{elapsed_str}" + cls.RESET)
+        msg = f"工具执行完成 - 结果长度: {result_length} 字符{elapsed_str}"
+        print(cls.color("success") + f"   ✅ {msg}" + cls.RESET)
+        Logger.info(msg)
 
     @classmethod
     def tool_error(cls, error_msg: str) -> None:
-        """打印工具执行错误"""
+        """打印工具执行错误 + 写入日志"""
         print(cls.color("error") + f"   ❌ {error_msg}" + cls.RESET)
+        Logger.error(f"工具执行失败: {error_msg}")
 
     @classmethod
     def tool_warning(cls, warning_msg: str) -> None:
-        """打印工具警告"""
+        """打印工具警告 + 写入日志"""
         print(cls.color("tool") + f"   ⚠️  {warning_msg}" + cls.RESET)
+        Logger.warning(warning_msg)
 
     @classmethod
     def info(cls, message: str) -> None:
-        """打印普通信息"""
+        """打印普通信息 + 写入日志"""
         print(cls.color("info") + message + cls.RESET)
+        Logger.info(message)
 
     @classmethod
     def success(cls, message: str) -> None:
-        """打印成功信息"""
+        """打印成功信息 + 写入日志"""
         print(cls.color("success") + message + cls.RESET)
+        Logger.info(message)
 
     @classmethod
     def error(cls, message: str) -> None:
-        """打印错误信息"""
+        """打印错误信息 + 写入日志"""
         print(cls.color("error") + message + cls.RESET)
+        Logger.error(message)
 
     @classmethod
     def warning(cls, message: str) -> None:
-        """打印警告信息"""
+        """打印警告信息 + 写入日志"""
         print(cls.color("tool") + "⚠️  " + message + cls.RESET)
+        Logger.warning(message)
 
     @classmethod
     def user_prompt(cls) -> str:
@@ -318,7 +332,7 @@ class Console:
 
     @classmethod
     def welcome(cls, provider_name: str, model: str, tools: list[str]) -> None:
-        """打印欢迎信息"""
+        """打印欢迎信息 + 写入日志"""
         print()
         print(cls.color("accent") + "=" * 60 + cls.RESET)
         print(cls.color("accent") + "🤖 Code Agent - 基于 LLM 的智能编程助手" + cls.RESET)
@@ -329,6 +343,7 @@ class Console:
         print()
         print(cls.color("info") + "   输入 'exit' 或 'quit' 退出" + cls.RESET)
         print()
+        Logger.info(f"Agent 启动 - LLM: {provider_name} ({model}), 可用工具: {len(tools)} 个")
 
     @classmethod
     def goodbye(cls) -> None:
