@@ -491,12 +491,15 @@ class MemoryLayer(BaseLayer):
 
             # 如果有压缩内容，注册到全局注册表
             if turn.is_compressed and turn.compressed_content_id:
+                # 设计决策：回合原始内容存储在 TurnMemory 中
+                # 不需要在 CompressedContent 中重复存储
+                # recall_turn() 直接从 TurnMemory 返回完整内容
                 compressed = CompressedContent(
                     original_id=turn.compressed_content_id,
                     compression_type="turn_summary",
                     original_size_chars=turn.tokens_original,
                     compressed_size_chars=turn.tokens_compressed,
-                    original_content=None,  # FIXME: 完整内容需要保存
+                    original_content=None,
                     compressed_content=turn.summary or "",
                 )
                 register_compressed_content(compressed)
