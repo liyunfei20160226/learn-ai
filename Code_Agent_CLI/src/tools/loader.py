@@ -8,6 +8,7 @@
 from .registry import ToolRegistry
 from .bash import BashTool
 from .recall import RecallContentTool, RecallTurnTool
+from .plan_tool import PlanTool
 from utils.console import Console
 
 
@@ -26,6 +27,9 @@ def register_all_tools() -> None:
 
     # MemoryLayer 配套工具：LLM 自主召回历史回合的完整内容
     ToolRegistry.register(RecallTurnTool)
+
+    # Planner 层工具：生成执行计划
+    ToolRegistry.register(PlanTool)
 
 
 def print_registered_tools() -> None:

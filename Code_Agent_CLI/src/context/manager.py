@@ -102,6 +102,9 @@ class ContextManager:
         self.session_id = self.session_manager.generate_session_id()
         self.session_name: str = f"未命名会话_{self.session_id}"  # 用户可通过 /save 改名
 
+        # Planner 状态（Agent 会把 current_plan 同步到这里用于持久化）
+        self.current_plan: Optional[dict] = None
+
     def set_system_prompt(self, prompt: str) -> None:
         """设置系统提示词"""
         self.system_prompt = prompt
@@ -161,6 +164,7 @@ class ContextManager:
                 name=self.session_name,
                 memory_data=self.memory.to_dict(),
                 tool_buffer_data=self.tool_buffer.to_dict(),
+                plan_data=self.current_plan,  # Planner 状态
                 cwd=str(Path.cwd()),
             )
         except Exception:
@@ -264,6 +268,9 @@ class ContextManager:
         tool_buffer_data = data.get("tool_buffer_state", {})
         if tool_buffer_data:
             self.tool_buffer.from_dict(tool_buffer_data)
+
+        # 恢复 plan 数据（如果有的话，Agent 会从这里读取并重建 Plan 对象）
+        self.current_plan = data.get("plan_data")
 
         # 更新 next_turn_id
         turns = data.get("turns", [])

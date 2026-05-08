@@ -324,6 +324,16 @@ class Console:
         Logger.warning(message)
 
     @classmethod
+    def plan(cls, plan_content: str) -> None:
+        """打印计划内容 + 写入日志"""
+        print()
+        print(cls.color("assistant") + "🤖 " + cls.RESET + cls.color("assistant_text") + "已生成执行计划" + cls.RESET)
+        print()
+        print(plan_content)
+        print()
+        Logger.info(f"生成计划:\n{plan_content}")
+
+    @classmethod
     def user_prompt(cls) -> str:
         """获取用户输入"""
         print()

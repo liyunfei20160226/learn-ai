@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional
 
 from context import ContextManager
 from tools.registry import ToolRegistry
-from tools.base import ToolError, UserCancelledError
+from tools.base import ToolError, UserCancelledError, PlanCreatedPause
 from llm.base import LLMProvider, LLMResponse, ToolCall
 from utils.console import Console
 from utils.logger import Logger
@@ -84,6 +84,23 @@ class Agent:
 
         # 工具描述缓存（只生成一次）
         self._tool_descriptions: Optional[list[Dict[str, Any]]] = None
+
+        # Planner 层状态（通过 property 自动同步到 context 用于持久化）
+        self._current_plan: Optional[Any] = None  # Plan 对象
+
+    @property
+    def current_plan(self) -> Optional[Any]:
+        """获取当前计划"""
+        return self._current_plan
+
+    @current_plan.setter
+    def current_plan(self, value: Optional[Any]) -> None:
+        """设置当前计划，并同步到 context 用于持久化"""
+        self._current_plan = value
+        if value is not None:
+            self.context.current_plan = value.to_dict()
+        else:
+            self.context.current_plan = None
 
         # 加载系统提示词
         self._load_system_prompt()
@@ -347,6 +364,13 @@ class Agent:
             await Console.stop_spinner(success=False)
             raise
 
+        except PlanCreatedPause as e:
+            # 计划创建完成：暂停执行，等待用户确认
+            await Console.stop_spinner(success=True)
+            # 显示计划给用户
+            Console.plan(str(e))
+            raise
+
         except ToolError as e:
             error_msg = f"工具执行失败：{e}"
             await Console.stop_spinner(success=False)
@@ -363,11 +387,179 @@ class Agent:
         """
         🚀 运行一次完整的思考-行动循环
 
-        使用 MemoryLayer 生命周期管理：
-        on_turn_start → think()/execute_tool()... → on_turn_end
+        支持 Plan 模式：
+        1. WAITING_FOR_CONFIRM → 处理用户对计划的反馈
+        2. EXECUTING → 按计划执行下一步
+        3. IDLE → 正常思考-行动循环
         """
-        # 🎯 回合开始：初始化记忆层（add_user_message 内部也会调用 on_turn_start？
-        # 不，我们只调用一次就够了）
+        from planner.state import Plan, PlanMode
+
+        # ========== 会话恢复：从 context 加载 plan ==========
+        if self.current_plan is None and self.context.current_plan is not None:
+            # 从持久化数据恢复 Plan 对象
+            try:
+                self._current_plan = Plan.from_dict(self.context.current_plan)
+            except Exception:
+                # 恢复失败，忽略
+                self.context.current_plan = None
+
+        # ========== 情况 1: 正在等待用户确认计划 ==========
+        if self.current_plan and self.current_plan.mode == PlanMode.WAITING_FOR_CONFIRM:
+            return await self._handle_plan_feedback(user_input)
+
+        # ========== 情况 2: 正在按计划执行 ==========
+        if self.current_plan and self.current_plan.mode == PlanMode.EXECUTING:
+            return await self._execute_next_plan_step()
+
+        # ========== 情况 3: 正常对话 / 生成计划 ==========
+        return await self._normal_run(user_input)
+
+    async def _handle_plan_feedback(self, user_input: str) -> str:
+        """
+        处理用户对计划的反馈
+
+        用户可能：
+        - 确认计划（回车 / "可以" / "好的"）
+        - 修改计划（"跳过第5步" / "增加测试环节"）
+        - 放弃计划（"/abort" / "不用了"）
+        """
+        from planner.state import PlanMode
+
+        # 特殊命令：放弃计划
+        if user_input.lower() in ["/abort", "abort", "取消", "不用了", "算了"]:
+            plan_id = self.current_plan.plan_id
+            self.current_plan = None
+            result = f"已放弃计划 {plan_id}，请给出新的指示。"
+            Console.info(result)
+            return result
+
+        # 用户确认计划
+        confirm_keywords = ["", "ok", "好的", "可以", "确认", "开始", "yes", "y", "行", "没问题"]
+        if user_input.lower() in confirm_keywords:
+            self.current_plan.mode = PlanMode.EXECUTING
+            result = "🚀 好的，开始按计划执行..."
+            Console.success(result)
+            # 立即开始执行第一步
+            return await self._execute_next_plan_step()
+
+        # 用户在提修改意见：让 LLM 根据反馈调整计划
+        revise_prompt = f"""
+用户对计划提出了反馈：{user_input}
+
+当前计划：
+目标：{self.current_plan.goal}
+步骤：
+{chr(10).join([f"{s.step_id}. {s.description}" for s in self.current_plan.steps])}
+
+请根据反馈调整计划，保持相同的 JSON 格式。
+记住：不要开始执行，只输出调整后的计划。
+做完自评估后，如果满意就返回 needs_further_iteration: false。
+"""
+
+        self.context.on_turn_start(user_input)
+        adjusted_text = await self.llm.chat(revise_prompt)
+
+        # 让 PlanTool 重新解析和处理
+        adjusted_text = adjusted_text.strip()
+        if adjusted_text.startswith("```"):
+            adjusted_text = adjusted_text.split("\n", 1)[1].rsplit("\n", 1)[0]
+        if adjusted_text.startswith("```json"):
+            adjusted_text = adjusted_text.split("\n", 1)[1].rsplit("\n", 1)[0]
+
+        import json
+        try:
+            plan_data = json.loads(adjusted_text.strip())
+
+            # 更新计划
+            from planner.state import PlanStep
+            self.current_plan.goal = plan_data["goal"]
+            self.current_plan.steps = [
+                PlanStep(
+                    step_id=i + 1,
+                    description=step["description"],
+                    expected_outcome=step.get("expected_outcome", ""),
+                )
+                for i, step in enumerate(plan_data["steps"])
+            ]
+            self.current_plan.notes = plan_data.get("notes", [])
+            self.current_plan.user_feedback.append(user_input)
+
+            # 重新显示计划
+            display = self._format_plan_for_display(self.current_plan, plan_data)
+            Console.plan(display)
+
+            await self.context.on_turn_end("计划已调整，等待用户确认")
+            return ""  # 返回空，主循环会继续等待用户输入
+
+        except Exception as e:
+            error_msg = f"调整计划失败：{type(e).__name__}: {e}"
+            Console.error(error_msg)
+            await self.context.on_turn_end(error_msg)
+            return error_msg
+
+    async def _execute_next_plan_step(self) -> str:
+        """
+        执行计划中的下一步
+
+        每完成一步，给用户一个自然的停止点，可以选择继续、暂停或调整。
+        """
+
+        plan = self.current_plan
+        step_index = plan.current_step_index
+
+        if step_index >= len(plan.steps):
+            # 所有步骤都完成了
+            summary = f"✅ 计划执行完成！共完成 {len(plan.steps)} 个步骤。\n\n目标：{plan.goal}"
+            Console.success(summary)
+            self.current_plan = None
+            return summary
+
+        step = plan.steps[step_index]
+        step.status = "in_progress"
+
+        # 告诉 LLM 现在执行哪一步
+        step_prompt = f"""
+现在执行计划第 {step.step_id} 步：
+
+步骤描述：{step.description}
+预期结果：{step.expected_outcome}
+
+请专注完成这一步，不要跳步。
+如果需要调用工具就调用，完成后总结结果。
+"""
+
+        # 走正常的思考-工具调用循环完成这一步
+        step_result = await self._normal_run(step_prompt)
+
+        # 标记步骤完成
+        step.status = "done"
+        step.result_summary = step_result[:200] if step_result else ""
+
+        # 前进到下一步
+        plan.current_step_index += 1
+
+        # 检查是否全部完成
+        if plan.current_step_index >= len(plan.steps):
+            self.current_plan = None
+            final_summary = f"✅ 计划全部执行完成！\n\n目标：{plan.goal}\n共完成 {len(plan.steps)} 个步骤。"
+            Console.success(final_summary)
+            return final_summary
+
+        # 返回这一步的结果，然后等待下一轮用户输入
+        next_step = plan.steps[plan.current_step_index]
+        result = (
+            f"✅ 第 {step.step_id} 步完成\n\n"
+            f"下一步：第 {next_step.step_id} 步 - {next_step.description}\n\n"
+            f"（按回车继续，或输入 /replan 重新规划，或直接说你的想法）"
+        )
+        Console.info(result)
+        return result
+
+    async def _normal_run(self, user_input: str) -> str:
+        """
+        正常的思考-行动循环（旧 run 方法的逻辑）
+        """
+        # 🎯 回合开始：初始化记忆层
         self.context.on_turn_start(user_input)
 
         iteration = 0
@@ -420,6 +612,9 @@ class Agent:
                     await self.context.on_turn_end(cancel_msg)
 
                     return cancel_msg
+                except PlanCreatedPause:
+                    # 计划创建完成，暂停执行，等待用户下一次输入
+                    return ""  # 返回空字符串表示暂停了
 
                 # 循环回去继续思考
             else:
@@ -439,6 +634,39 @@ class Agent:
         await self.context.on_turn_end(max_reached_msg)
 
         return max_reached_msg
+
+    def _format_plan_for_display(self, plan, plan_data: dict) -> str:
+        """格式化计划用于控制台显示（PlanTool._format_plan_for_display 的简化版）"""
+        lines = ["📋 调整后的计划：", ""]
+        lines.append(f"🎯 目标：{plan.goal}")
+        lines.append("")
+
+        for step in plan.steps:
+            lines.append(f"  {step.step_id}. ⏳ {step.description}")
+            if step.expected_outcome:
+                lines.append(f"       预期：{step.expected_outcome}")
+            lines.append("")
+
+        if plan.notes:
+            lines.append("⚠️  注意事项：")
+            for note in plan.notes:
+                lines.append(f"  • {note}")
+            lines.append("")
+
+        self_check = plan_data.get("self_check", {})
+        if self_check:
+            lines.append("✨ 自评估：")
+            lines.append(f"  • 需求覆盖：{self_check.get('coverage', 'N/A')}")
+            lines.append(f"  • 步骤顺序：{self_check.get('order', 'N/A')}")
+            lines.append(f"  • 遗漏检查：{self_check.get('missing', 'N/A')}")
+            lines.append("")
+
+        lines.append("❓ 现在可以了吗？")
+        lines.append("   • 直接回车确认开始执行")
+        lines.append("   • 告诉我继续修改")
+        lines.append("   • /abort 放弃计划")
+
+        return "\n".join(lines)
 
     def show_context_stats(self) -> None:
         """显示上下文使用统计"""

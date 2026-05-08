@@ -105,3 +105,13 @@ class UserCancelledError(Exception):
     Agent 收到此异常应该中止当前思考循环，将控制权交还给用户。
     """
     pass
+
+
+class PlanCreatedPause(Exception):
+    """计划创建完成，暂停执行等待用户确认
+
+    当 LLM 调用 create_plan 工具生成计划后，抛出此异常。
+    Agent 收到此异常应该暂停思考循环，将控制权交还给用户，
+    让用户有机会确认或修改计划。
+    """
+    pass

@@ -104,6 +104,14 @@ class CommandHandler:
         if cmd_name == "delete":
             return self._handle_delete_session(agent, args)
 
+        # Planner 相关命令（带参数）
+        if cmd_name == "plan":
+            return self._handle_show_plan(agent)
+        if cmd_name == "skip":
+            return self._handle_skip_step(agent, args)
+        if cmd_name == "add":
+            return self._handle_add_step(agent, args)
+
         # 查找并执行无参数命令
         if cmd_name in self._commands:
             cmd = self._commands[cmd_name]
@@ -423,3 +431,142 @@ def cmd_load(agent, *args):
 def cmd_delete(agent, *args):
     # 占位：实际在 handle 方法中调用 _handle_delete_session
     pass
+
+
+# ============= Planner 相关命令处理函数 =============
+
+def _handle_show_plan(self, agent) -> bool:
+    """处理 /plan 命令 - 显示当前计划"""
+    if not agent.current_plan:
+        Console.info("  当前没有进行中的计划")
+        return True
+
+    plan = agent.current_plan
+    print()
+    Console.section(f"📋 当前计划：{plan.goal}")
+    print()
+
+    for step in plan.steps:
+        status_icon = {
+            "pending": "⏳",
+            "in_progress": "🔄",
+            "done": "✅",
+            "failed": "❌",
+            "skipped": "⏭️"
+        }.get(step.status, "⏳")
+
+        current_marker = " ← 当前步骤" if step.step_id == plan.current_step_index + 1 else ""
+        print(f"   {status_icon} 第 {step.step_id} 步：{step.description}{current_marker}")
+        if step.result_summary:
+            print(f"        结果：{step.result_summary}")
+        print()
+
+    Console.info(f"   模式：{plan.mode.value}")
+    print()
+    return True
+
+def _handle_skip_step(self, agent, args: str) -> bool:
+    """处理 /skip 命令 - 跳过当前步骤"""
+    if not agent.current_plan or agent.current_plan.mode != "executing":
+        Console.warning("  只有在计划执行中才能跳过步骤")
+        return True
+
+    # 解析要跳过的步骤（默认跳过当前步骤）
+    if args and args.isdigit():
+        target_step = int(args)
+        # 找到对应步骤并标记为跳过
+        for step in agent.current_plan.steps:
+            if step.step_id == target_step:
+                step.status = "skipped"
+                agent.current_plan.current_step_index += 1
+                Console.success(f"✅ 已跳过第 {target_step} 步")
+                return True
+        Console.warning(f"  找不到第 {target_step} 步")
+    else:
+        # 跳过当前步骤
+        step = agent.current_plan.steps[agent.current_plan.current_step_index]
+        step.status = "skipped"
+        agent.current_plan.current_step_index += 1
+        Console.success(f"✅ 已跳过第 {step.step_id} 步：{step.description}")
+
+    return True
+
+def _handle_add_step(self, agent, args: str) -> bool:
+    """处理 /add 命令 - 增加步骤"""
+    if not agent.current_plan:
+        Console.warning("  当前没有进行中的计划")
+        return True
+
+    if not args:
+        Console.warning("  请输入步骤描述，例如：/add 运行测试验证功能")
+        return True
+
+    from planner.state import PlanStep
+    new_id = len(agent.current_plan.steps) + 1
+    agent.current_plan.steps.append(PlanStep(
+        step_id=new_id,
+        description=args,
+        status="pending"
+    ))
+    Console.success(f"✅ 已添加第 {new_id} 步：{args}")
+    return True
+
+# 挂载到 handler 实例
+CommandHandler._handle_show_plan = _handle_show_plan
+CommandHandler._handle_skip_step = _handle_skip_step
+CommandHandler._handle_add_step = _handle_add_step
+
+
+# ============= Planner 相关命令注册 =============
+
+# -------- 注册 /plan 命令 --------
+@handler.register("plan", "显示当前执行计划")
+def cmd_plan(agent, *args):
+    # 占位：实际在 handle 方法中调用 _handle_show_plan
+    pass
+
+
+# -------- 注册 /replan 命令 --------
+@handler.register("replan", "重新规划当前任务（放弃现有计划）")
+def cmd_replan(agent):
+    if agent.current_plan:
+        old_goal = agent.current_plan.goal
+        agent.current_plan = None
+        Console.info(f"已放弃现有计划：{old_goal}")
+    Console.info("请描述你的任务，Agent 会重新生成计划")
+
+
+# -------- 注册 /skip 命令 --------
+@handler.register("skip", "跳过当前步骤（用法：/skip [步骤号]）")
+def cmd_skip(agent, *args):
+    # 占位：实际在 handle 方法中调用 _handle_skip_step
+    pass
+
+
+# -------- 注册 /add 命令 --------
+@handler.register("add", "增加执行步骤（用法：/add <步骤描述>）")
+def cmd_add_step(agent, *args):
+    # 占位：实际在 handle 方法中调用 _handle_add_step
+    pass
+
+
+# -------- 注册 /pause 命令 --------
+@handler.register("pause", "暂停计划执行，回到正常对话模式")
+def cmd_pause(agent):
+    if agent.current_plan and agent.current_plan.mode.value == "executing":
+        from planner.state import PlanMode
+        agent.current_plan.mode = PlanMode.WAITING_FOR_CONFIRM
+        Console.success("✅ 计划已暂停，你可以修改计划或直接输入新指令")
+    else:
+        Console.warning("  当前没有正在执行的计划")
+
+
+# -------- 注册 /abort 命令 --------
+@handler.register("abort", "放弃当前执行计划")
+def cmd_abort(agent):
+    if agent.current_plan:
+        goal = agent.current_plan.goal
+        agent.current_plan = None
+        Console.success(f"✅ 已放弃计划：{goal}")
+    else:
+        Console.info("  当前没有进行中的计划")
